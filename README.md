@@ -25,7 +25,7 @@ This script takes an MP4 video file as input, extracts its audio, processes that
 Before running this script, you need to have the following installed:
 
 1.  **UV**
-    *   Run in PowerShell: powershell -c "irm https://astral.sh/uv/install.ps1 | more"
+    *   Run in PowerShell: `powershell -c 'irm https://astral.sh/uv/install.ps1 | more'`
     
     *   After that run these commands
     *   `uv venv --python 3.10.0`
