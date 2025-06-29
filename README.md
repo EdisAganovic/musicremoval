@@ -1,4 +1,4 @@
-# musicremovalThis Python script automates the process of isolating vocals from a video's audio track and then creating a new video with only those vocals, effectively removing background music. It achieves this by leveraging two powerful audio source separation tools, Spleeter and Demucs, and uses FFmpeg for all audio/video manipulation.
+This Python script automates the process of isolating vocals from a video's audio track and then creating a new video with only those vocals, effectively removing background music. It achieves this by leveraging two powerful audio source separation tools, Spleeter and Demucs, and uses FFmpeg for all audio/video manipulation.
 
 A key design choice in this specific version of the script is the **extensive use of temporary files and directories** for all intermediate steps. This ensures that your working directory remains clean, as all temporary data is automatically removed once the processing is complete.
 
