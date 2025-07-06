@@ -11,3 +11,4 @@ GEMINI.MD
 /_processing_intermediates/
 *.exe
 *.mp4
+/.git/
