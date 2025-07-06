@@ -68,7 +68,7 @@ This script takes an MP4 video file (e.g., `patrol.mp4` as defined in `separate.
     ```bash
     .venv\scripts\Activate\
     ```
-3.  **Download file yith integrated YT-DLP**
+3.  **Download file with integrated YT-DLP**
     ```bash
     python main.py download URL FILENAME
     ```
