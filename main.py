@@ -3,26 +3,22 @@ import subprocess
 import tempfile
 import shutil
 import argparse
+import sys
 from colorama import Fore, Back, Style, init, deinit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Add the 'modules' directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
+
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration
+from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_file import download_file_concurrent
 from module_audio import align_audio_tracks
 from module_ytdlp import download_video
 
-def _check_program_installed(program_name):
-    """Provjera dodatnih alata """
-    if shutil.which(program_name):
-        print(f"{Fore.GREEN}'{program_name}' instaliran.{Style.RESET_ALL}")
-        return True
-    else:
-        print(f"{Fore.RED}Error: '{program_name}' not found in system PATH.{Style.RESET_ALL}")
-        print(f"{Fore.RED}Please ensure '{program_name}' is installed and its executable directory is added to your system's PATH environment variable.{Style.RESET_ALL}")
-        return False
+
 
 def process_video(input_file):
     if not os.path.exists(input_file):
@@ -34,14 +30,6 @@ def process_video(input_file):
         print(f"{Fore.YELLOW}Warning: Could not determine audio duration for the original video.{Style.RESET_ALL}")
 
     print(f"\n{Back.MAGENTA}{Fore.WHITE}# SISTEMSKA PROVJERA {Style.RESET_ALL}")
-
-    print(f"\n{Fore.CYAN}1. Provjera dodatnih alata da li su instalirani{Style.RESET_ALL}")
-    if not _check_program_installed("ffmpeg"):
-        return False
-    if not _check_program_installed("spleeter"):
-        return False
-    if not _check_program_installed("demucs"):
-        return False
 
     cuda_is_available = check_gpu_cuda_support()
 
@@ -75,10 +63,10 @@ def process_video(input_file):
     spleeter_vocal_wav_path = None
 
     try:
-        print(f"\n{Back.YELLOW}{Fore.BLACK}# UKLANJANJE MUZIKE ZAPOČETO ZA FAJL: {input_file} ---{Style.RESET_ALL}\n")
+        print(f"\n{Back.YELLOW}{Fore.BLACK}# MUSIC REMOVAL STARTED FOR {input_file} ---{Style.RESET_ALL}\n")
 
         print(f"{Fore.CYAN}1. Extracting audio to temporary WAV: {temp_audio_wav_path}...{Style.RESET_ALL}")
-        ffmpeg_cmd = ["ffmpeg", "-y","-loglevel","error", "-i", input_file, temp_audio_wav_path]
+        ffmpeg_cmd = [FFMPEG_EXE, "-y","-loglevel","error", "-i", input_file, temp_audio_wav_path]
         print(f"{Fore.MAGENTA}Executing: {' '.join(ffmpeg_cmd)}\n")
         try:
             subprocess.run(ffmpeg_cmd, check=True)
@@ -101,7 +89,7 @@ def process_video(input_file):
         elif not spleeter_input_exists:
             print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly for the combined track.{Style.RESET_ALL}")
             try:
-                combine_cmd = ["ffmpeg", "-y", "-i", demucs_vocal_wav_path, "-c:a", "libfdk_aac", "-b:a", "192k", combined_vocals_aac_path]
+                combine_cmd = [FFMPEG_EXE, "-y", "-i", demucs_vocal_wav_path, "-c:a", "libfdk_aac", "-b:a", "192k", combined_vocals_aac_path]
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(combine_cmd)}")
                 subprocess.run(combine_cmd, check=True)
                 print(f"{Fore.GREEN}Demucs vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
@@ -111,7 +99,7 @@ def process_video(input_file):
         elif not demucs_input_exists:
             print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly for the combined track.{Style.RESET_ALL}")
             try:
-                combine_cmd = ["ffmpeg", "-y", "-i", spleeter_vocal_wav_path, "-c:a", "libfdk_aac", "-b:a", "192k", combined_vocals_aac_path]
+                combine_cmd = [FFMPEG_EXE, "-y", "-i", spleeter_vocal_wav_path, "-c:a", "libfdk_aac", "-b:a", "192k", combined_vocals_aac_path]
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(combine_cmd)}")
                 subprocess.run(combine_cmd, check=True)
                 print(f"{Fore.GREEN}\N{check mark} Spleeter vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
@@ -124,7 +112,7 @@ def process_video(input_file):
             if aligned_spleeter and aligned_demucs:
                 try:
                     combine_cmd = [
-                        "ffmpeg",
+                        FFMPEG_EXE,
                         "-loglevel", "error",
                         "-y",
                         "-i", aligned_spleeter,
@@ -145,12 +133,14 @@ def process_video(input_file):
                 print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
                 return False
 
-        output_video = f"nomusic-{os.path.basename(input_file)}"
+        output_folder = "nomusic"
+        os.makedirs(output_folder, exist_ok=True)
+        output_video = os.path.join(output_folder, f"{os.path.basename(input_file)}")
         
         print(f"\n{Fore.CYAN}5. Creating final video: {output_video}...{Style.RESET_ALL}")
         try:
             final_ffmpeg_cmd = [
-                "ffmpeg",
+                FFMPEG_EXE,
                 "-loglevel", "error",
                 "-y",
                 "-i", input_file,
@@ -216,7 +206,7 @@ def process_video(input_file):
         print(f"{Fore.CYAN}--- Processing complete ---{Style.RESET_ALL}")
 
 
-if __name__ == "__main__":
+def main():
     init()
 
     parser = argparse.ArgumentParser(description="Process a video file to separate audio stems or download a video.")
@@ -243,37 +233,11 @@ if __name__ == "__main__":
                 print(f"\n{Fore.RED}Script failed. Check logs above.{Style.RESET_ALL}")
         finally:
             deinit()
-    elif args.command == "process":
-        files_config = [
-            {"url": "https://oblak.pronameserver.xyz/public.php/dav/files/8mW9BJCqLXX5ecp/?accept=zip", "filename": "ffmpeg.exe"},
-            {"url": "https://oblak.pronameserver.xyz/public.php/dav/files/mGjWEPpJgC7xfiz/?accept=zip", "filename": "ffprobe.exe"}
-        ]
-
-        print(f"\n{Back.RED}{Fore.WHITE}# FFMPEG Download {Style.RESET_ALL}\n")
-        files_to_actually_download = []
-        for file_info in files_config:
-            filename = file_info["filename"]
-            if os.path.exists(filename):
-                print(f"- Skipping '{filename}': File already exists locally.")
-            else:
-                files_to_actually_download.append(file_info)
-                print(f"- '{filename}' does not exist locally, will attempt to download.")
-
-        if not files_to_actually_download:
-            print("\nNo new files to download. All specified files already exist locally.")
-        else:
-            print("\n--- Starting Concurrent Downloads ---")
-            with ThreadPoolExecutor(max_workers=len(files_to_actually_download)) as executor:
-                future_to_file = {executor.submit(download_file_concurrent, f["url"], f["filename"]): f for f in files_to_actually_download}
-
-                for future in as_completed(future_to_file):
-                    original_file_info = future_to_file[future]
-                    success, filename = future.result()
-
-                    if success:
-                        print(f"[{filename}] Download finished.")
-                    else:
-                        print(f"[{filename}] Download failed.")
+    elif args.command == "separate":
+        if not download_ffmpeg():
+            print(f"\n{Fore.RED}FFmpeg download failed. Cannot proceed with video processing.{Style.RESET_ALL}")
+            deinit()
+            return
 
         try:
             success = process_video(args.input_file)
@@ -286,3 +250,5 @@ if __name__ == "__main__":
     else:
         parser.print_help()
 
+if __name__ == "__main__":
+    main()

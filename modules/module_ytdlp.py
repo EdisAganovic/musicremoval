@@ -10,8 +10,8 @@ def check_and_update_ytdlp():
     """
     print(f"{Fore.CYAN}Checking for yt-dlp updates...{Style.RESET_ALL}")
     try:
-        # Use pip to upgrade yt-dlp. This will install it if it's not present.
-        update_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
+        # Use UV to upgrade yt-dlp.
+        update_cmd = ["uv", "pip", "install", "--upgrade", "yt-dlp"]
         print(f"{Fore.MAGENTA}Executing: {' '.join(update_cmd)}{Style.RESET_ALL}")
         result = subprocess.run(update_cmd, check=True, capture_output=True, text=True)
         if "Requirement already satisfied" in result.stdout:
@@ -33,8 +33,6 @@ def download_video(url, filename=None):
 
     download_folder = "download"
     os.makedirs(download_folder, exist_ok=True)
-
-    print(f"\n{Fore.CYAN}Starting video download from URL: {url}{Style.RESET_ALL}")
 
     try:
         # 1. Get the final filename from yt-dlp before downloading
@@ -66,23 +64,18 @@ def download_video(url, filename=None):
             url
         ]
         
-        # Using run instead of Popen for simpler blocking execution
         process = subprocess.run(download_cmd, check=True, capture_output=True, text=True, encoding='utf-8')
-        
-        # Output stdout/stderr for debugging if needed
-        # print(process.stdout)
-        # if process.stderr:
-        #     print(process.stderr)
 
         # 4. Verify download and print stats
         if os.path.exists(final_filepath):
             file_size = os.path.getsize(final_filepath) / (1024 * 1024)  # in MB
             resolution = get_video_resolution(final_filepath)
-            print(f"\n{Fore.GREEN}Download complete.{Style.RESET_ALL}")
+            print(f"\n{Fore.GREEN}Download complete.{Style.RESET_ALL}\n")
+            print(f"  - URL: {url}")
             print(f"  - File: {final_filepath}")
             print(f"  - Size: {file_size:.2f} MB")
             if resolution:
-                print(f"  - Resolution: {resolution}")
+                print(f"  - Resolution: {resolution}px")
             return final_filepath
         else:
             print(f"\n{Fore.RED}Download failed. File '{final_filepath}' not found after download process.{Style.RESET_ALL}")

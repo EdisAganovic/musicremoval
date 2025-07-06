@@ -7,8 +7,10 @@ uv.lock
 GEMINI.MD
 .venv
 /src/
+/modules/__pycache__/
 /__pycache__/
 /_processing_intermediates/
 *.exe
 *.mp4
 /.git/
+/nomusic/
