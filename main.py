@@ -223,7 +223,7 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(dest="command")
 
     # Subparser for the 'process' command
-    process_parser = subparsers.add_parser("process", help="Process a video file to separate audio stems.")
+    process_parser = subparsers.add_parser("separate", help="Process a video file to separate audio stems.")
     process_parser.add_argument("input_file", help="Path to the input video file.")
 
     # Subparser for the 'download' command
