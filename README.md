@@ -63,11 +63,20 @@ This script takes an MP4 video file (e.g., `patrol.mp4` as defined in `separate.
 
 ### Usage
 
-1.  **Place your video file** in the same directory as `separate.py`.
-2.  **Edit the `input_video_file` variable** in `separate.py` (near the `if __name__ == "__main__":` block) to the name of your video file (e.g., `patrol.mp4`).
-3.  **Run the script from your activated virtual environment:**
+1.  **Place your video file** in the same directory as `main.py`.
+2.  **Activate virtual enviroment** in terminal
     ```bash
-    python separate.py
+    .venv\scripts\Activate\
+    ```
+3.  **Download file yith integrated YT-DLP**
+    ```bash
+    python main.py download URL FILENAME
+    ```
+    URL = https://youtu.be/example
+    FILENAME = Cartoon.mp4
+2.  **Run the script**
+    ```bash
+    python main.py separate video.mp4
     ```
 
-The script will provide detailed, colored output showing each step of the process. Upon completion, a new video file named `nomusic-<original_filename>` (e.g., `nomusic-patrol.mp4`) will be created in the same directory, containing only the isolated vocal track.
+The script will provide detailed, colored output showing each step of the process. Upon completion, a new video file named `nomusic-<original_filename>` (e.g., `nomusic-patrol.mp4`) will be created in the same directory, containing only the isolated vocal tracks.
