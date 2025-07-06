@@ -1,0 +1,13 @@
+/download/
+/pretrained_models/
+/spleeter_out/
+/demucs_out/
+.ENV
+uv.lock
+GEMINI.MD
+.venv
+/src/
+/__pycache__/
+/_processing_intermediates/
+*.exe
+*.mp4
