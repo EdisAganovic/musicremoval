@@ -61,6 +61,7 @@ def process_video(input_file):
 
     temp_spleeter_segments_dir = None
     spleeter_vocal_wav_path = None
+    temp_demucs_segments_dir = None
 
     try:
         print(f"\n{Back.YELLOW}{Fore.BLACK}# MUSIC REMOVAL STARTED FOR {input_file} ---{Style.RESET_ALL}\n")

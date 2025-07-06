@@ -43,8 +43,15 @@ def download_video(url, filename=None):
             "-o", output_template,
             url
         ]
+        simple_filename_cmd = [
+           "yt_dlp",
+            "--get-filename",
+            "-o", output_template,
+            url
+        ]       
         
         print(f"{Fore.MAGENTA}Determining filename...{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}Executing: {' '.join(simple_filename_cmd)}{Style.RESET_ALL}")
         result = subprocess.run(get_filename_cmd, check=True, capture_output=True, text=True, encoding='utf-8')
         final_filepath = result.stdout.strip().splitlines()[-1]
 
@@ -57,13 +64,12 @@ def download_video(url, filename=None):
         print(f"{Fore.CYAN}Downloading to '{final_filepath}'...{Style.RESET_ALL}")
         download_cmd = [
             sys.executable, "-m", "yt_dlp",
-            "--extractor-args", "youtube:player_client=default,ios",
+            "--extractor-args", "youtube:player_client=default,ios", # Special fix 2025.6
             "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
             "-o", output_template,
-            "--no-progress", # Quieter output
+            "--progress", # Quieter output
             url
         ]
-        
         process = subprocess.run(download_cmd, check=True, capture_output=True, text=True, encoding='utf-8')
 
         # 4. Verify download and print stats

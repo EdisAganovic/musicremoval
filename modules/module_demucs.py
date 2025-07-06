@@ -93,6 +93,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
         else:
             demucs_cmd = [
                 "demucs",
+                "--no-progress",
                 "-n", "htdemucs",
                 "-o", demucs_base_out_path,
                 temp_audio_wav_path
@@ -111,4 +112,3 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
         return None, temp_demucs_segments_dir
     
     return demucs_vocal_wav_path, temp_demucs_segments_dir
-
