@@ -133,6 +133,7 @@ def convert_audio_with_ffmpeg(input_path, output_path, codec=None):
         cmd = [
             FFMPEG_EXE,
             "-i", input_path,
+            "-log","error"
             "-y",
             "-c:a", audio_codec,
             "-b:a", "192k", # Example bitrate, adjust as needed
