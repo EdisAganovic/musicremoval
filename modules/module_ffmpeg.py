@@ -95,3 +95,56 @@ def get_video_resolution(file_path):
     except Exception as e:
         print(f"{Fore.RED}An unexpected error occurred while getting video resolution for {file_path}: {e}{Style.RESET_ALL}")
         return None
+
+def check_fdk_aac_codec():
+    """
+    Checks if libfdk_aac codec is available in FFmpeg.
+    """
+    try:
+        cmd = [FFMPEG_EXE, "-encoders"]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        if "libfdk_aac" in result.stdout:
+            return True
+        else:
+            return False
+    except subprocess.CalledProcessError as e:
+        print(f"{Fore.RED}Error: FFmpeg failed to list encoders. Is FFmpeg installed and in PATH? Error: {e}{Style.RESET_ALL}")
+        return False
+    except Exception as e:
+        print(f"{Fore.RED}An unexpected error occurred while checking for libfdk_aac: {e}{Style.RESET_ALL}")
+        return False
+
+def convert_audio_with_ffmpeg(input_path, output_path, codec=None):
+    """
+    Converts audio using FFmpeg, preferring libfdk_aac if available.
+    """
+    if codec is None:
+        if check_fdk_aac_codec():
+            audio_codec = "libfdk_aac"
+            print(f"{Fore.GREEN}Using libfdk_aac for audio encoding.{Style.RESET_ALL}")
+        else:
+            audio_codec = "aac"
+            print(f"{Fore.YELLOW}libfdk_aac not found. Falling back to aac for audio encoding.{Style.RESET_ALL}")
+    else:
+        audio_codec = codec
+        print(f"{Fore.CYAN}Using specified codec: {audio_codec} for audio encoding.{Style.RESET_ALL}")
+
+    try:
+        cmd = [
+            FFMPEG_EXE,
+            "-i", input_path,
+            "-y",
+            "-c:a", audio_codec,
+            "-b:a", "192k", # Example bitrate, adjust as needed
+            output_path
+        ]
+        print(f"Executing FFmpeg command: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+        print(f"{Fore.GREEN}Successfully converted {input_path} to {output_path} using {audio_codec}.{Style.RESET_ALL}")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"{Fore.RED}Error: FFmpeg failed to convert audio. Command: {' '.join(e.cmd)}. Error: {e.stderr}{Style.RESET_ALL}")
+        return False
+    except Exception as e:
+        print(f"{Fore.RED}An unexpected error occurred during audio conversion: {e}{Style.RESET_ALL}")
+        return False

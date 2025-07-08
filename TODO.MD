@@ -1,5 +1,5 @@
 - Demucs provjera da li je instaliran i da li je nije enviroment aktivan
 - Demucs sakriti viška output
 - Separacija svih fajlova u jednom folderu (main.py folder download ili main.py folder d:\crtani)
-- Failback za libfdk_aac za ffmpeg
++ Failback za libfdk_aac za ffmpeg
 - Debugging (sakrivanje executing funkcija) i da ih snimi u log.

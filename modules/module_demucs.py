@@ -37,7 +37,8 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 segment_output_path = os.path.join(temp_demucs_segments_dir, segment_filename)
 
                 ffmpeg_split_cmd = [
-                    "ffmpeg", "-y", "-loglevel", "error",
+                    "ffmpeg", "-y", 
+                    "-loglevel", "error",
                     "-i", temp_audio_wav_path,
                     "-ss", str(current_start_time),
                     "-t", str(segment_duration),

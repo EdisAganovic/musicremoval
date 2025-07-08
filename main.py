@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE
+from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE, convert_audio_with_ffmpeg, check_fdk_aac_codec
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_file import download_file_concurrent
@@ -90,9 +90,10 @@ def process_video(input_file):
         elif not spleeter_input_exists:
             print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly for the combined track.{Style.RESET_ALL}")
             try:
-                combine_cmd = [FFMPEG_EXE, "-y", "-i", demucs_vocal_wav_path, "-c:a", "libfdk_aac", "-b:a", "192k", combined_vocals_aac_path]
-                print(f"\n{Fore.MAGENTA}Executing: {' '.join(combine_cmd)}")
-                subprocess.run(combine_cmd, check=True)
+                success = convert_audio_with_ffmpeg(demucs_vocal_wav_path, combined_vocals_aac_path)
+                if not success:
+                    print(f"{Fore.RED}Error re-encoding Demucs vocals.{Style.RESET_ALL}")
+                    return False
                 print(f"{Fore.GREEN}Demucs vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
             except subprocess.CalledProcessError as e:
                 print(f"{Fore.RED}Error re-encoding Demucs vocals: {e}{Style.RESET_ALL}")
@@ -100,9 +101,10 @@ def process_video(input_file):
         elif not demucs_input_exists:
             print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly for the combined track.{Style.RESET_ALL}")
             try:
-                combine_cmd = [FFMPEG_EXE, "-y", "-i", spleeter_vocal_wav_path, "-c:a", "libfdk_aac", "-b:a", "192k", combined_vocals_aac_path]
-                print(f"\n{Fore.MAGENTA}Executing: {' '.join(combine_cmd)}")
-                subprocess.run(combine_cmd, check=True)
+                success = convert_audio_with_ffmpeg(spleeter_vocal_wav_path, combined_vocals_aac_path)
+                if not success:
+                    print(f"{Fore.RED}Error re-encoding Spleeter vocals.{Style.RESET_ALL}")
+                    return False
                 print(f"{Fore.GREEN}\N{check mark} Spleeter vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
             except subprocess.CalledProcessError as e:
                 print(f"{Fore.RED}\N{CROSS MARK}' Error re-encoding Spleeter vocals: {e}{Style.RESET_ALL}")
@@ -112,20 +114,10 @@ def process_video(input_file):
 
             if aligned_spleeter and aligned_demucs:
                 try:
-                    combine_cmd = [
-                        FFMPEG_EXE,
-                        "-loglevel", "error",
-                        "-y",
-                        "-i", aligned_spleeter,
-                        "-i", aligned_demucs,
-                        "-filter_complex", "[0:a][1:a]amix=inputs=2:duration=longest[a]",
-                        "-map", "[a]",
-                        "-c:a", "libfdk_aac",
-                        "-b:a", "192k",
-                        combined_vocals_aac_path
-                    ]
-                    print(f"\n{Fore.MAGENTA}Executing: {' '.join(combine_cmd)}")
-                    subprocess.run(combine_cmd, check=True)
+                    success = convert_audio_with_ffmpeg(aligned_spleeter, combined_vocals_aac_path)
+                    if not success:
+                        print(f"{Fore.RED}Error combining AAC files.{Style.RESET_ALL}")
+                        return False
                     print(f"\n{Fore.GREEN}\N{check mark} Vocals combined successfully.{Style.RESET_ALL}")
                 except subprocess.CalledProcessError as e:
                     print(f"{Fore.RED}\N{CROSS MARK}' Error combining AAC files: {e}{Style.RESET_ALL}")
@@ -140,6 +132,7 @@ def process_video(input_file):
         
         print(f"\n{Fore.CYAN}5. Creating final video: {output_video}...{Style.RESET_ALL}")
         try:
+            audio_codec = "libfdk_aac" if check_fdk_aac_codec() else "aac"
             final_ffmpeg_cmd = [
                 FFMPEG_EXE,
                 "-loglevel", "error",
@@ -147,7 +140,7 @@ def process_video(input_file):
                 "-i", input_file,
                 "-i", combined_vocals_aac_path,
                 "-c:v", "copy",
-                "-c:a", "libfdk_aac",
+                "-c:a", audio_codec,
                 "-map", "0:v:0",
                 "-map", "1:a:0",
                 "-shortest",
