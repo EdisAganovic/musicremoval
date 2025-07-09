@@ -100,7 +100,19 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 temp_audio_wav_path
             ]
             print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
-            subprocess.run(demucs_cmd, check=True)
+            try: 
+                subprocess.run(
+                    demucs_cmd, 
+                    check=True,
+                    stdout=subprocess.PIPE, # Capture standard output
+                    stderr=subprocess.PIPE 
+                    )
+            except subprocess.CalledProcessError as e:
+                print(f"Demucs command failed with error code {e.returncode}.")
+                print(f"Demucs stdout:\n{e.stdout.decode()}") # Access captured stdout on error
+                print(f"Demucs stderr:\n{e.stderr.decode()}") # Access captured stderr on error
+            except FileNotFoundError:
+                print("Error: 'demucs' command not found. Make sure Demucs is installed via UV.")
             demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
             print(f"\n{Fore.GREEN}\N{check mark} Demucs separation complete. Output in: {demucs_base_out_path}\n{Style.RESET_ALL}")
 
