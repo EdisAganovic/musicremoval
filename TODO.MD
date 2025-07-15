@@ -18,9 +18,9 @@ mdx_q, mdx_extra_q: quantized version of the previous models. Smaller download a
 - Detekcija ko ima 64 GB RAM-a
 The -j flag allow to specify a number of parallel jobs (e.g. demucs -j 2 myfile.mp3). This will multiply by the same amount the RAM used so be careful!
 
-direktno pozivanje iz programa
-# Assume that your command is `demucs --mp3 --two-stems vocals -n mdx_extra "track with space.mp3"`
-# The following codes are same as the command above:
+- Direktno pozivanje iz programa
+Assume that your command is `demucs --mp3 --two-stems vocals -n mdx_extra "track with space.mp3"`
+The following codes are same as the command above:
 import demucs.separate
 demucs.separate.main(["--mp3", "--two-stems", "vocals", "-n", "mdx_extra", "track with space.mp3"])
 
