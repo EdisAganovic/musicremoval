@@ -10,6 +10,14 @@ def check_and_update_ytdlp():
     """
     print(f"{Fore.CYAN}Checking for yt-dlp updates...{Style.RESET_ALL}")
     try:
+        # Get current yt-dlp version
+        version_cmd = ["yt-dlp", "--version"]
+        try:
+            version_result = subprocess.run(version_cmd, check=True, capture_output=True, text=True)
+            print(f"{Fore.CYAN}Current yt-dlp version: {version_result.stdout.strip()}{Style.RESET_ALL}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print(f"{Fore.YELLOW}yt-dlp not found or no version information available.{Style.RESET_ALL}")
+
         # Use UV to upgrade yt-dlp.
         update_cmd = ["uv", "pip", "install", "--upgrade", "yt-dlp"]
         print(f"{Fore.MAGENTA}Executing: {' '.join(update_cmd)}{Style.RESET_ALL}")
@@ -36,7 +44,11 @@ def download_video(url, filename=None, cookies_file=None):
 
     try:
         # 1. Get the final filename from yt-dlp before downloading
-        output_template = os.path.join(download_folder, filename if filename else "%(title)s.%(ext)s")
+        if filename:
+            output_template = os.path.join(download_folder, filename)
+        else:
+            output_template = os.path.join(download_folder, "%(title)s.%(ext)s")
+
         get_filename_cmd = [
             sys.executable, "-m", "yt_dlp",
             "--get-filename",
@@ -51,16 +63,9 @@ def download_video(url, filename=None, cookies_file=None):
             get_filename_cmd.extend(["--cookies", cookies_file])
         get_filename_cmd.append(url)
 
-        simple_filename_cmd = [
-           "yt_dlp",
-            "--get-filename",
-            "-o", output_template,
-            url
-        ]
-
         print(f"{Fore.MAGENTA}Determining filename...{Style.RESET_ALL}")
         # Remove check=True to handle yt-dlp errors manually
-        result = subprocess.run(get_filename_cmd, capture_output=True, text=True, encoding='utf-8')
+        result = subprocess.run(get_filename_cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
             print(f"\n{Fore.RED}An error occurred while trying to get video metadata (Exit Code: {result.returncode}).{Style.RESET_ALL}")
@@ -75,7 +80,7 @@ def download_video(url, filename=None, cookies_file=None):
             if cookies_file and os.path.exists(cookies_file):
                 list_formats_cmd.extend(["--cookies", cookies_file])
             
-            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8')
+            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True)
             if list_result.stdout:
                 print(list_result.stdout)
             if list_result.stderr:
@@ -92,47 +97,66 @@ def download_video(url, filename=None, cookies_file=None):
 
         # 3. If it doesn't exist, download it
         print(f"{Fore.CYAN}Downloading to '{final_filepath}'...{Style.RESET_ALL}")
-        
-        # --- First Attempt: High-quality format ---
-        print(f"{Fore.CYAN}Attempt 1: Trying high-quality format...{Style.RESET_ALL}")
-        download_cmd_hq = [
-            sys.executable, "-m", "yt_dlp",
-            "--ignore-errors",
-            "--fragment-retries", "infinite",
-            "--retry-sleep", "fragment:exp=1:300",
-            #"--extractor-args", "youtube:player_client=default,ios",
-            "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
-            "-o", output_template,
-            "--progress",
+
+        download_attempts = [
+            {
+                "name": "High-quality",
+                "cmd": [
+                    sys.executable, "-m", "yt_dlp",
+                    "--ignore-errors",
+                    "--fragment-retries", "infinite",
+                    "--retry-sleep", "fragment:exp=1:300",
+                    "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
+                    "-o", output_template,
+                    "--progress",
+                ]
+            },
+            {
+                "name": "User requested",
+                "cmd": [
+                    sys.executable, "-m", "yt_dlp",
+                    "--ignore-errors",
+                    "--fragment-retries", "infinite",
+                    "--retry-sleep", "fragment:exp=1:300",
+                    "--extractor-args", "youtube:player_client=default,ios",
+                    "-f", "bv[ext=mp4]+ba[ext=m4a]",
+                    "-o", output_template,
+                    "--progress",
+                ]
+            },
+            {
+                "name": "Fallback",
+                "cmd": [
+                    sys.executable, "-m", "yt_dlp",
+                    "--ignore-errors",
+                    "--fragment-retries", "infinite",
+                    "--retry-sleep", "fragment:exp=1:300",
+                    "--extractor-args", "youtube:player_client=default,ios",
+                    "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                    "-o", output_template,
+                    "--progress",
+                ]
+            }
         ]
-        if cookies_file and os.path.exists(cookies_file):
-            download_cmd_hq.extend(["--cookies", cookies_file])
-        download_cmd_hq.append(url)
-        
-        process = subprocess.run(download_cmd_hq, capture_output=True, text=True, encoding='utf-8')
 
-        # --- Check for success, if not, try fallback ---
-        if not (os.path.exists(final_filepath) and os.path.getsize(final_filepath) > 0):
-            print(f"\n{Fore.YELLOW}High-quality format failed. Trying fallback format...{Style.RESET_ALL}")
-            if process.stderr:
-                 print(f"{Fore.YELLOW}Details from previous attempt: {process.stderr.strip()}{Style.RESET_ALL}")
-
-            # --- Second Attempt: Fallback format ---
-            download_cmd_fallback = [
-                sys.executable, "-m", "yt_dlp",
-                "--ignore-errors",
-                "--fragment-retries", "infinite",
-                "--retry-sleep", "fragment:exp=1:300",
-                "--extractor-args", "youtube:player_client=default,ios",
-                "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                "-o", output_template,
-                "--progress",
-            ]
+        process = None
+        for i, attempt in enumerate(download_attempts):
+            print(f"{Fore.CYAN}Attempt {i+1}: Trying {attempt['name']} format...{Style.RESET_ALL}")
+            
+            download_cmd = attempt["cmd"]
             if cookies_file and os.path.exists(cookies_file):
-                download_cmd_fallback.extend(["--cookies", cookies_file])
-            download_cmd_fallback.append(url)
+                download_cmd.extend(["--cookies", cookies_file])
+            download_cmd.append(url)
+            
+            process = subprocess.run(download_cmd, capture_output=True, text=True)
 
-            process = subprocess.run(download_cmd_fallback, capture_output=True, text=True, encoding='utf-8')
+            if os.path.exists(final_filepath) and os.path.getsize(final_filepath) > 0:
+                break  # Download successful, exit loop
+
+            if i < len(download_attempts) - 1:
+                print(f"\n{Fore.YELLOW}Attempt {i+1} failed. Trying next format...{Style.RESET_ALL}")
+                if process and process.stderr:
+                    print(f"{Fore.YELLOW}Details from previous attempt: {process.stderr.strip()}{Style.RESET_ALL}")
 
         # 4. Verify final download and print stats
         if os.path.exists(final_filepath) and os.path.getsize(final_filepath) > 0:
@@ -162,7 +186,7 @@ def download_video(url, filename=None, cookies_file=None):
             if cookies_file and os.path.exists(cookies_file):
                 list_formats_cmd.extend(["--cookies", cookies_file])
             
-            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8')
+            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True)
             if list_result.stdout:
                 print(list_result.stdout)
             if list_result.stderr:
