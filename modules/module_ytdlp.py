@@ -140,6 +140,7 @@ def download_video(url, filename=None, cookies_file=None):
         ]
 
         process = None
+        download_successful = False
         for i, attempt in enumerate(download_attempts):
             print(f"{Fore.CYAN}Attempt {i+1}: Trying {attempt['name']} format...{Style.RESET_ALL}")
             
@@ -148,10 +149,27 @@ def download_video(url, filename=None, cookies_file=None):
                 download_cmd.extend(["--cookies", cookies_file])
             download_cmd.append(url)
             
+            files_before_attempt = set(os.listdir(download_folder))
             process = subprocess.run(download_cmd, capture_output=True, text=True)
 
+            # Check for the pre-determined file first (common case)
             if os.path.exists(final_filepath) and os.path.getsize(final_filepath) > 0:
-                break  # Download successful, exit loop
+                download_successful = True
+                break
+
+            # If that failed, check for any new file in the download folder
+            files_after_attempt = set(os.listdir(download_folder))
+            new_files = files_after_attempt - files_before_attempt
+            for f in new_files:
+                if not f.endswith('.part'):
+                    path = os.path.join(download_folder, f)
+                    if os.path.isfile(path) and os.path.getsize(path) > 0:
+                        final_filepath = path  # Update to the correct path
+                        download_successful = True
+                        break  # Exit the inner 'for f in new_files' loop
+            
+            if download_successful:
+                break  # Exit the outer 'for i, attempt' loop
 
             if i < len(download_attempts) - 1:
                 print(f"\n{Fore.YELLOW}Attempt {i+1} failed. Trying next format...{Style.RESET_ALL}")
@@ -159,7 +177,7 @@ def download_video(url, filename=None, cookies_file=None):
                     print(f"{Fore.YELLOW}Details from previous attempt: {process.stderr.strip()}{Style.RESET_ALL}")
 
         # 4. Verify final download and print stats
-        if os.path.exists(final_filepath) and os.path.getsize(final_filepath) > 0:
+        if download_successful:
             if process.returncode != 0:
                 print(f"\n{Fore.YELLOW}Warning: yt-dlp finished with exit code {process.returncode}, but the file was downloaded. Proceeding...{Style.RESET_ALL}")
 
