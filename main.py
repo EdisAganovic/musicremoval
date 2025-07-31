@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import tempfile
@@ -11,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE, convert_audio_with_ffmpeg, check_fdk_aac_codec
+from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE, convert_audio_with_ffmpeg, check_fdk_aac_codec, get_video_codec
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_file import download_file_concurrent
@@ -128,24 +129,59 @@ def process_video(input_file):
 
         output_folder = "nomusic"
         os.makedirs(output_folder, exist_ok=True)
-        output_video = os.path.join(output_folder, f"{os.path.basename(input_file)}")
-        
-        print(f"\n{Fore.CYAN}5. Creating final video: {output_video}...{Style.RESET_ALL}")
+        print(f"\n{Fore.CYAN}5. Creating final video: ...{Style.RESET_ALL}")
         try:
-            audio_codec = "libfdk_aac" if check_fdk_aac_codec() else "aac"
+            with open('video.json', 'r') as f:
+                settings = json.load(f)
+            
+            video_settings = settings.get('video', {})
+            audio_settings = settings.get('audio', {})
+            output_settings = settings.get('output', {})
+
+            video_codec_setting = video_settings.get('codec', 'copy')
+            video_bitrate = video_settings.get('bitrate')
+            audio_codec = audio_settings.get('codec', 'aac')
+            audio_bitrate = audio_settings.get('bitrate')
+            output_format = output_settings.get('format', 'mp4')
+
+            base_filename = os.path.splitext(os.path.basename(input_file))[0]
+            output_video = os.path.join(output_folder, f"{base_filename}.{output_format}")
+            print(f"\n{Fore.CYAN}Re-evaluating final video name to: {output_video}...{Style.RESET_ALL}")
+
+            # Get original video codec
+            original_video_codec = get_video_codec(input_file)
+
+            if original_video_codec and "h264" in original_video_codec.lower() and "h264" in video_codec_setting.lower():
+                video_codec = "copy"
+                print(f"{Fore.GREEN}Original video codec '{original_video_codec}' matches h264 setting. Using 'copy'.{Style.RESET_ALL}")
+            else:
+                video_codec = video_codec_setting
+                print(f"{Fore.YELLOW}Original video codec is '{original_video_codec}', setting is '{video_codec_setting}'. Re-encoding.{Style.RESET_ALL}")
+
             final_ffmpeg_cmd = [
                 FFMPEG_EXE,
                 "-loglevel", "error",
                 "-y",
                 "-i", input_file,
                 "-i", combined_vocals_aac_path,
-                "-c:v", "copy",
+                "-c:v", video_codec,
+            ]
+            if video_bitrate:
+                final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
+            
+            final_ffmpeg_cmd.extend([
                 "-c:a", audio_codec,
+            ])
+            if audio_bitrate:
+                final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+
+            final_ffmpeg_cmd.extend([
                 "-map", "0:v:0",
                 "-map", "1:a:0",
                 "-shortest",
+                "-f", output_format,
                 output_video
-            ]
+            ])
             print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
             subprocess.run(final_ffmpeg_cmd, check=True)
             print(f"\n{Fore.GREEN}\N{check mark} Successfully created {output_video}{Style.RESET_ALL}")

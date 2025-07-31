@@ -1,0 +1,13 @@
+{
+  "video": {
+    "codec": "h264_nvenc",
+    "bitrate": "1800k"
+  },
+  "audio": {
+    "codec": "libfdk_aac",
+    "bitrate": "128k"
+  },
+  "output": {
+    "format": "mp4"
+  }
+}

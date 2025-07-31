@@ -96,6 +96,22 @@ def get_video_resolution(file_path):
         print(f"{Fore.RED}An unexpected error occurred while getting video resolution for {file_path}: {e}{Style.RESET_ALL}")
         return None
 
+def get_video_codec(file_path):
+    """
+    Gets the video codec of a video file using ffprobe.
+    Returns codec name as a string (e.g., "h264"), or None if an error occurs.
+    """
+    try:
+        cmd = [FFPROBE_EXE, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"{Fore.RED}Error: ffprobe failed to get video codec for {file_path}. Error: {e}{Style.RESET_ALL}")
+        return None
+    except Exception as e:
+        print(f"{Fore.RED}An unexpected error occurred while getting video codec for {file_path}: {e}{Style.RESET_ALL}")
+        return None
+
 def check_fdk_aac_codec():
     """
     Checks if libfdk_aac codec is available in FFmpeg.
