@@ -208,7 +208,9 @@ def main():
 
     # Subparser for the 'process' command
     process_parser = subparsers.add_parser("separate", help="Process a video file to separate audio stems.")
-    process_parser.add_argument("input_file", help="Path to the input video file.")
+    group = process_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--file", help="Path to the input video file.")
+    group.add_argument("--folder", help="Path to the folder containing video files.")
 
     # Subparser for the 'download' command
     download_parser = subparsers.add_parser("download", help="Download a video from a URL.")
@@ -234,15 +236,32 @@ def main():
             return
 
         try:
-            success = process_video(args.input_file)
-            if success:
-                print(f"\n{Fore.GREEN}Script finished successfully for {args.input_file}.{Style.RESET_ALL}")
-            else:
-                print(f"\n{Fore.RED}Script failed for {args.input_file}. Check logs above.{Style.RESET_ALL}")
+            if args.file:
+                success = process_video(args.file)
+                if success:
+                    print(f"\n{Fore.GREEN}Script finished successfully for {args.file}.{Style.RESET_ALL}")
+                else:
+                    print(f"\n{Fore.RED}Script failed for {args.file}. Check logs above.{Style.RESET_ALL}")
+            elif args.folder:
+                video_files = [f for f in os.listdir(args.folder) if f.lower().endswith(('.mp4', '.mkv', '.mov', '.avi', '.flv'))]
+                if not video_files:
+                    print(f"{Fore.YELLOW}No video files found in the specified folder: {args.folder}{Style.RESET_ALL}")
+                    return
+
+                for video_file in video_files:
+                    file_path = os.path.join(args.folder, video_file)
+                    print(f"\n{Back.BLUE}{Fore.WHITE}--- Starting processing for: {file_path} ---{Style.RESET_ALL}")
+                    success = process_video(file_path)
+                    if success:
+                        print(f"\n{Fore.GREEN}--- Finished processing successfully for: {file_path} ---{Style.RESET_ALL}")
+                    else:
+                        print(f"\n{Fore.RED}--- Finished processing with errors for: {file_path} ---{Style.RESET_ALL}")
+
         finally:
             deinit()
     else:
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()
