@@ -109,12 +109,12 @@ You can control the output video and audio quality by creating a `video.json` fi
 ```json
 {
   "video": {
-    "codec": "copy",
-    "bitrate": null
+    "codec": "h264_nvenc", # GPU accelerated encoding
+    "bitrate": 1800k  # perfect balance for FullHD res
   },
   "audio": {
-    "codec": "aac",
-    "bitrate": "192k"
+    "codec": "lifdk_aac", # 4x speed improvement with this codec
+    "bitrate": 128k
   },
   "output": {
     "format": "mp4"
