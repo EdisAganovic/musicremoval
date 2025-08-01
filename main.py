@@ -148,15 +148,7 @@ def process_video(input_file):
             output_video = os.path.join(output_folder, f"{base_filename}.{output_format}")
             print(f"\n{Fore.CYAN}Re-evaluating final video name to: {output_video}...{Style.RESET_ALL}")
 
-            # Get original video codec
-            original_video_codec = get_video_codec(input_file)
-
-            if original_video_codec and "h264" in original_video_codec.lower() and "h264" in video_codec_setting.lower():
-                video_codec = "copy"
-                print(f"{Fore.GREEN}Original video codec '{original_video_codec}' matches h264 setting. Using 'copy'.{Style.RESET_ALL}")
-            else:
-                video_codec = video_codec_setting
-                print(f"{Fore.YELLOW}Original video codec is '{original_video_codec}', setting is '{video_codec_setting}'. Re-encoding.{Style.RESET_ALL}")
+            video_codec = video_codec_setting
 
             final_ffmpeg_cmd = [
                 FFMPEG_EXE,
