@@ -1,82 +1,125 @@
+# Demucs & Spleeter Vocal Extractor
 
-This Python script automates the process of isolating vocals from a video's audio track and then creating a new video with only those vocals, effectively removing background music. It achieves this by leveraging two powerful audio source separation tools, Spleeter and Demucs, and uses FFmpeg for all audio/video manipulation.
+This Python script provides a command-line interface to automate the process of isolating vocals from video or audio files. It uses **Demucs** and **Spleeter**, two powerful audio source separation tools, to get the best possible result. The script can process local files or download videos from the web, then creates a new video with only the isolated vocals, effectively removing background music and other noise.
 
-A key design choice in this specific version of the script is the **extensive use of temporary files and directories** (managed via Python's `tempfile` module) for all intermediate steps. This ensures that your working directory remains clean, as all temporary data is automatically removed once the processing is complete, regardless of success or failure.
-
-The script also utilizes `colorama` for enhanced terminal output, providing clearer visual feedback on different stages, warnings, and potential issues.
+A key design choice is the **extensive use of temporary files**, ensuring the working directory remains clean. All intermediate data is automatically removed upon completion. The script also features color-coded terminal output for better readability.
 
 ---
 
-## Python Script for Vocal Extraction and Video Re-Muxing
+## Features
 
-### Overview
+*   **Command-Line Interface:** A clean CLI for downloading videos and separating vocals.
+*   **Dual Source Separation:** Utilizes both Spleeter and Demucs (`htdemucs` model) for vocal separation.
+*   **Intelligent Audio Alignment:** Automatically aligns the Spleeter and Demucs vocal tracks using cross-correlation to compensate for any timing discrepancies before they are combined.
+*   **Automatic Segmentation for Long Audio:** If the audio duration exceeds 10 minutes, the script automatically splits the audio into segments for both Spleeter and Demucs, processes each chunk, and then seamlessly concatenates the results. This bypasses the memory and processing limitations of the tools with very long files.
+*   **Flexible Vocal Track Handling:**
+    *   If both Spleeter and Demucs produce a vocal track, the script uses the aligned track from Spleeter.
+    *   If only one of the tools succeeds, the script uses the single available vocal track.
+*   **Video Downloading:** Includes a `download` command that uses `yt-dlp` to fetch videos from URLs, with fallback logic to find the best available format.
+*   **Batch Processing:** The `separate` command can process a single file or all video files within a specified folder.
+*   **Video Re-Muxing:** Creates a new video file by combining the original video stream with the new vocal-only audio track.
+*   **Configurable Output:** Video and audio settings for the final output (codec, bitrate, format) can be customized via a `video.json` file.
+*   **GPU/CUDA Support Check:** Automatically detects if a CUDA-enabled GPU is available for significantly faster processing and provides feedback.
+*   **Automatic Dependencies:** Downloads FFmpeg/FFprobe automatically if they are not found in the `modules` directory.
+*   **Automatic Cleanup:** All temporary files and directories (`spleeter_out`, `demucs_out`, temp wavs, etc.) are automatically deleted after processing.
+*   **Robust Error Handling:** Provides clear error messages and warnings.
 
-This script takes an MP4 video file (e.g., `patrol.mp4` as defined in `separate.py`) as input, extracts its audio, processes that audio using both Spleeter and Demucs to isolate the vocal track, intelligently combines these two vocal tracks, and then creates a new MP4 video file with the original video stream and the newly combined vocal-only audio.
-
-### Features
-
-*   **Audio Extraction:** Extracts audio from input video using FFmpeg.
-*   **Dual Source Separation:** Utilizes both Spleeter and Demucs (specifically `htdemucs` model) for vocal separation, potentially leading to better results by combining their outputs.
-*   **Intelligent Audio Alignment:** Before mixing, the script automatically aligns the Spleeter and Demucs vocal tracks using cross-correlation (`numpy`, `scipy`, `soundfile`). This compensates for any minor timing discrepancies introduced by the separation processes, ensuring precise synchronization.
-*   **Spleeter Segmentation for Long Videos:** Automatically detects if the audio duration exceeds Spleeter's typical 10-minute (600 seconds) processing limit. If so, it splits the audio into segments, processes each segment with Spleeter, and then concatenates the resulting vocal tracks back together. This bypasses Spleeter's limitations with very long files.
-*   **Audio Mixing:** Combines the aligned vocal tracks from Spleeter and Demucs using FFmpeg's `amix` filter, resulting in a single, high-quality vocal-only audio track.
-    *   If only one vocal track (Spleeter or Demucs) is successfully generated, the script will automatically use that single track.
-*   **Video Re-Muxing:** Creates a new video by combining the original video stream (copied without re-encoding) with the isolated and mixed vocal audio (encoded to AAC).
-*   **GPU/CUDA Support Check:** Automatically detects and reports PyTorch CUDA availability, indicating if Demucs/Spleeter can leverage NVIDIA GPUs for faster processing. Provides helpful warnings and tips if CUDA is not found or configured.
-*   **Automatic Cleanup:** All intermediate audio files (e.g., extracted WAV, split segments, aligned vocals) and separation output directories (`spleeter_out`, `demucs_out`) are created as temporary files/directories and are automatically deleted upon script completion, regardless of success or failure.
-*   **Error Handling:** Includes robust `try-except` blocks and uses `subprocess.run(check=True)` to catch and report errors during subprocess execution (FFmpeg, Spleeter, Demucs commands). Enhanced readability is provided by `colorama` for distinct colored terminal output (e.g., green for success, red for errors, yellow for warnings).
-
-### How to run
+## How to run
 
 1.  **Python Environment with UV:**
-    *   UV is recommended for managing Python environments and dependencies.
+    *   This project uses `uv` for fast Python environment and package management.
     *   **Install UV (if not already installed):**
         ```powershell
-        powershell -c 'irm https://astral.sh/uv/install.ps1 | iex' # On Windows PowerShell
-        # curl -LsSf https://astral.sh/uv/install.sh | sh # On Linux/macOS
+        powershell -c 'irm https://astral.sh/uv/install.ps1 | iex'
         ```
+        *For Linux/macOS, see the [official uv installation guide](https://github.com/astral-sh/uv#installation).*
     *   **Create and Activate Virtual Environment:**
         ```bash
-        uv venv --python 3.10.0 # Creates a virtual environment with Python 3.10
-        .venv\scripts\activate  # On Windows PowerShell/CMD
-        # source .venv/bin/activate # On Linux/macOS or Git Bash
+        uv venv --python 3.10 # Creates a virtual environment
+        .venv\scripts\activate  # On Windows
+        # source .venv/bin/activate # On Linux/macOS
         ```
-    *   **Install Base Python Dependencies:**
+    *   **Install Dependencies:**
         ```bash
         uv pip install -r requirements.txt
         ```
-        *This will install `spleeter`, `demucs`, `colorama`, `pydub`, `numpy`, `scipy`, `soundfile`, and a CPU-only version of `torch` by default.*
+        *This installs all necessary packages, including a CPU-only version of PyTorch.*
 
-2.  **PyTorch with GPU Support (Optional, but Highly Recommended for Performance):**
-    *   If you have an NVIDIA GPU, this step ensures Demucs and Spleeter utilize it.
-    *   Download https://developer.nvidia.com/cuda-12-8-0-download-archive and install it.
-    *   **First, uninstall the CPU version of PyTorch installed by `requirements.txt`:**
-
-        `uv pip uninstall torch torchvision torchaudio`
-
-    *   **Then, install the GPU version (replace `cu128` with your specific CUDA version, e.g., `cu124`, `cu118` based on your CUDA Toolkit installation):**
+2.  **PyTorch with GPU Support (Optional, but HIGHLY Recommended):**
+    *   For a massive performance boost, install PyTorch with CUDA support if you have an NVIDIA GPU.
+    *   Find your CUDA version by running `nvidia-smi`.
+    *   **First, uninstall the CPU-only PyTorch:**
         ```bash
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+        uv pip uninstall torch torchvision torchaudio
         ```
-        *(Ensure the CUDA version in the `--index-url` matches your installed NVIDIA CUDA Toolkit version. Refer to [PyTorch's official installation page](https://pytorch.org/get-started/locally/) for the correct `index-url` based on your CUDA version and OS).*
-    *   If you don't have an NVIDIA GPU or choose not to use GPU support, you can omit this step (the `uv pip install -r requirements.txt` will provide a CPU-only version of PyTorch), but the script will run on CPU, which is significantly slower for separation tasks.
+    *   **Then, install the GPU version.** Replace `cu121` with your specific CUDA version (e.g., `cu118`).
+        ```bash
+        # Example for CUDA 12.1
+        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        ```
+        *Refer to the [PyTorch official website](https://pytorch.org/get-started/locally/) for the correct command for your system.*
 
-### Usage
+## Usage
 
-1.  **Place your video file** in the same directory as `main.py`.
-2.  **Activate virtual enviroment** in terminal
-    ```bash
-    .venv\scripts\Activate\
-    ```
-3.  **Download file with integrated YT-DLP**
-    ```bash
-    python main.py download URL FILENAME
-    ```
-    URL = https://youtu.be/example
-    FILENAME = Cartoon.mp4
-2.  **Run the script**
-    ```bash
-    python main.py separate video.mp4
-    ```
+The script is run from the command line and has two main commands: `download` and `separate`.
 
-The script will provide detailed, colored output showing each step of the process. Upon completion, a new video file named `nomusic-<original_filename>` (e.g., `nomusic-patrol.mp4`) will be created in the same directory, containing only the isolated vocal tracks.
+### 1. Download a Video
+
+This command uses `yt-dlp` to download a video. The downloaded file will be saved in the `download/` folder.
+
+**Syntax:**
+```bash
+python main.py download <URL> [FILENAME]
+```
+
+**Example:**
+```bash
+# Download a video and let yt-dlp decide the filename
+python main.py download "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Download a video and save it as "MyVideo.mp4"
+python main.py download "https://www.youtube.com/watch?v=dQw4w9WgXcQ" "MyVideo.mp4"
+```
+
+### 2. Separate Vocals
+
+This command processes video files to remove music and leave only vocals. The final video is saved in the `nomusic/` directory.
+
+**Process a single video file:**
+```bash
+python main.py separate --file "path/to/your/video.mp4"
+```
+
+**Process all videos in a folder:**
+```bash
+python main.py separate --folder "path/to/your/videos_folder"
+```
+
+---
+
+## Configuration (`video.json`)
+
+You can control the output video and audio quality by creating a `video.json` file in the root directory. If this file doesn't exist, the script will use default settings.
+
+**Example `video.json`:**
+```json
+{
+  "video": {
+    "codec": "copy",
+    "bitrate": null
+  },
+  "audio": {
+    "codec": "aac",
+    "bitrate": "192k"
+  },
+  "output": {
+    "format": "mp4"
+  }
+}
+```
+
+*   **`video.codec`**: The video codec for the output file. Use `"copy"` to stream copy the original video track without re-encoding (fastest and preserves quality). You can also specify a codec like `"libx264"`.
+*   **`video.bitrate`**: Target video bitrate (e.g., `"4000k"`). Only used if `codec` is not `"copy"`.
+*   **`audio.codec`**: The audio codec for the vocal track. Defaults to `"aac"`.
+*   **`audio.bitrate`**: Target audio bitrate (e.g., `"192k"`, `"256k"`).
+*   **`output.format`**: The container format for the final video (e.g., `"mp4"`, `"mkv"`).
