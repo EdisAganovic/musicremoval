@@ -45,7 +45,11 @@ A key design choice is the **extensive use of temporary files**, ensuring the wo
         ```
         *This installs all necessary packages, including a CPU-only version of PyTorch.*
 
-2.  **PyTorch with GPU Support (Optional, but HIGHLY Recommended):**
+2.  **Download and install CUDA toolkit**
+
+    * Download https://developer.nvidia.com/cuda-12-8-0-download-archive
+
+3.  **PyTorch with GPU Support (Optional, but HIGHLY Recommended):**
     *   For a massive performance boost, install PyTorch with CUDA support if you have an NVIDIA GPU.
     *   Find your CUDA version by running `nvidia-smi`.
     *   **First, uninstall the CPU-only PyTorch:**
