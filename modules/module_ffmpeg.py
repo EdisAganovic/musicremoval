@@ -1,9 +1,43 @@
 import subprocess
+import json
 from colorama import Fore, Style, Back
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from module_file import download_file_concurrent
+def get_audio_tracks(input_file):
+    """
+    Retrieves audio tracks from a video file using ffprobe.
+    """
+    if not FFMPEG_EXE:
+        print(f"{Fore.RED}FFmpeg not found. Cannot retrieve audio tracks.{Style.RESET_ALL}")
+        return []
+
+    ffprobe_exe = FFMPEG_EXE.replace('ffmpeg', 'ffprobe')
+    command = [
+        ffprobe_exe,
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams",
+        "-select_streams", "a",
+        input_file
+    ]
+    
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        streams = json.loads(result.stdout).get('streams', [])
+        audio_tracks = []
+        for stream in streams:
+            lang = stream.get('tags', {}).get('language', 'unknown')
+            audio_tracks.append({'index': stream['index'], 'language': lang})
+        return audio_tracks
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"{Fore.RED}Error getting audio tracks: {e}{Style.RESET_ALL}")
+        return []
+    except json.JSONDecodeError:
+        print(f"{Fore.RED}Error parsing ffprobe output.{Style.RESET_ALL}")
+        return []
+
 
 FFMPEG_EXE = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ffmpeg.exe'))
 FFPROBE_EXE = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ffprobe.exe'))
@@ -27,7 +61,7 @@ def download_ffmpeg():
         # Prepend the target directory to the filename
         local_filepath = os.path.join(target_dir, file_info["filename"])
         if os.path.exists(local_filepath):
-            print(f"- Skipping '{file_info['filename']}': File already exists locally.")
+            print(f"- Found '{file_info['filename']}' at: {os.path.abspath(local_filepath)}")
         else:
             # Pass the full path to the download function
             files_to_actually_download.append({

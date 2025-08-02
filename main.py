@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE, convert_audio_with_ffmpeg, check_fdk_aac_codec, get_video_codec
+from module_ffmpeg import get_audio_duration, download_ffmpeg, FFMPEG_EXE, convert_audio_with_ffmpeg, check_fdk_aac_codec, get_video_codec, get_audio_tracks
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_file import download_file_concurrent
@@ -67,8 +67,37 @@ def process_video(input_file):
     try:
         print(f"\n{Back.YELLOW}{Fore.BLACK}# MUSIC REMOVAL STARTED FOR {input_file} ---{Style.RESET_ALL}\n")
 
+        audio_tracks = get_audio_tracks(input_file)
+        selected_track_index = None
+
+        if audio_tracks:
+            priority_languages = ["hr", "hrv", "sr"]
+            selected_track = None
+
+            # Try to find a track with a priority language
+            for lang in priority_languages:
+                for track in audio_tracks:
+                    if track['language'].lower() == lang:
+                        selected_track = track
+                        break
+                if selected_track:
+                    break
+            
+            # If no priority language track is found, take the first one
+            if not selected_track:
+                selected_track = audio_tracks[0]
+            
+            selected_track_index = selected_track['index']
+            print(f"{Fore.GREEN}Selected audio track: Language: {selected_track['language']}, Stream Index: {selected_track['index']}{Style.RESET_ALL}\n")
+        else:
+            print(f"{Fore.YELLOW}No audio tracks found.{Style.RESET_ALL}")
+
         print(f"{Fore.CYAN}1. Extracting audio to temporary WAV: {temp_audio_wav_path}...{Style.RESET_ALL}")
-        ffmpeg_cmd = [FFMPEG_EXE, "-y","-loglevel","error", "-i", input_file, temp_audio_wav_path]
+        ffmpeg_cmd = [FFMPEG_EXE, "-y","-loglevel","error", "-i", input_file]
+        if selected_track_index is not None:
+            ffmpeg_cmd.extend(["-map", f"0:{selected_track_index}"])
+        ffmpeg_cmd.append(temp_audio_wav_path)
+        
         print(f"{Fore.MAGENTA}Executing: {' '.join(ffmpeg_cmd)}\n")
         try:
             subprocess.run(ffmpeg_cmd, check=True)

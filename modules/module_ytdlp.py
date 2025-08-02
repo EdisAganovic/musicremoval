@@ -2,7 +2,6 @@ import subprocess
 import sys
 import os
 from colorama import Fore, Style
-from module_ffmpeg import get_video_resolution
 
 def check_and_update_ytdlp():
     """
