@@ -94,7 +94,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
         else:
             demucs_cmd = [
                 "demucs",
-                "--no-progress",
+                # "--no-progress",
                 "-n", "htdemucs",
                 "-o", demucs_base_out_path,
                 temp_audio_wav_path

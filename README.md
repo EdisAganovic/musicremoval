@@ -57,10 +57,10 @@ A key design choice is the **extensive use of temporary files**, ensuring the wo
         ```bash
         uv pip uninstall torch torchvision torchaudio
         ```
-    *   **Then, install the GPU version.** Replace `cu121` with your specific CUDA version (e.g., `cu118`).
+    *   **Then, install the GPU version.** Replace `cu128` with your specific CUDA version (e.g., `cu118`).
         ```bash
         # Example for CUDA 12.1
-        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
         ```
         *Refer to the [PyTorch official website](https://pytorch.org/get-started/locally/) for the correct command for your system.*
 
