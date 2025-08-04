@@ -56,13 +56,13 @@ def process_video(input_file):
 
     try:
         print(f"\n{Back.YELLOW}{Fore.BLACK}# MUSIC REMOVAL STARTED FOR {input_file} ---")
-        print(f"{Style.RESET_ALL}\n")
+        print(f"{Style.RESET_ALL}")
 
         audio_tracks = get_audio_tracks(input_file)
         selected_track_index = None
 
         if audio_tracks:
-            priority_languages = ["hr", "hrv", "sr"]
+            priority_languages = ["hr", "hrv", "sr","jpn"]
             selected_track = None
 
             # Try to find a track with a priority language
