@@ -15,6 +15,7 @@ def main():
     init()
 
     parser = argparse.ArgumentParser(description="Process a video file to separate audio stems or download a video.")
+    parser.add_argument("--temp", action="store_true", help="If used, We will display paths, but we will not delete temporary files or dirs")
     subparsers = parser.add_subparsers(dest="command")
 
     # Subparser for the 'process' command
@@ -48,7 +49,7 @@ def main():
 
         try:
             if args.file:
-                success = process_video(args.file)
+                success = process_video(args.file, args.temp)
                 if success:
                     print(f"\n{Fore.GREEN}Script finished successfully for {args.file}.{Style.RESET_ALL}")
                 else:
@@ -62,7 +63,7 @@ def main():
                 for video_file in video_files:
                     file_path = os.path.join(args.folder, video_file)
                     print(f"\n{Back.BLUE}{Fore.WHITE}--- Starting processing for: {file_path} ---{Style.RESET_ALL}")
-                    success = process_video(file_path)
+                    success = process_video(file_path, args.temp)
                     if success:
                         print(f"\n{Fore.GREEN}--- Finished processing successfully for: {file_path} ---{Style.RESET_ALL}")
                     else:

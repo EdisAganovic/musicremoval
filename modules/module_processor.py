@@ -11,7 +11,7 @@ from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_audio import align_audio_tracks
 
-def process_video(input_file):
+def process_video(input_file, keep_temp=False):
     if not os.path.exists(input_file):
         print(f"{Fore.RED}Error: Input video file '{input_file}' not found.{Style.RESET_ALL}")
         return False
@@ -214,35 +214,48 @@ def process_video(input_file):
             return False
 
     finally:
-        print(f"\n{Fore.CYAN}--- Cleanup of temporary files ---")
-        for f_path in [temp_audio_wav_path, combined_vocals_aac_path, 
-                       aligned_spleeter_vocals_path, aligned_demucs_vocals_path]:
-            if os.path.exists(f_path):
+        if not keep_temp:
+            print(f"\n{Fore.CYAN}--- Cleanup of temporary files ---")
+            for f_path in [temp_audio_wav_path, combined_vocals_aac_path, 
+                           aligned_spleeter_vocals_path, aligned_demucs_vocals_path]:
+                if os.path.exists(f_path):
+                    try:
+                        os.remove(f_path)
+                        print(f"{Fore.BLUE}Removed temporary file: {f_path}{Style.RESET_ALL}")
+                    except OSError as e:
+                        print(f"{Fore.RED}Error removing temporary file {f_path}: {e}{Style.RESET_ALL}")
+
+            if temp_spleeter_segments_dir and os.path.exists(temp_spleeter_segments_dir):
                 try:
-                    os.remove(f_path)
-                    print(f"{Fore.BLUE}Removed temporary file: {f_path}{Style.RESET_ALL}")
+                    shutil.rmtree(temp_spleeter_segments_dir)
+                    print(f"{Fore.BLUE}Removed temporary directory: {temp_spleeter_segments_dir}{Style.RESET_ALL}")
                 except OSError as e:
-                    print(f"{Fore.RED}Error removing temporary file {f_path}: {e}{Style.RESET_ALL}")
+                    print(f"{Fore.RED}Error removing temporary directory {temp_spleeter_segments_dir}: {e}{Style.RESET_ALL}")
 
-        if temp_spleeter_segments_dir and os.path.exists(temp_spleeter_segments_dir):
-            try:
-                shutil.rmtree(temp_spleeter_segments_dir)
-                print(f"{Fore.BLUE}Removed temporary directory: {temp_spleeter_segments_dir}{Style.RESET_ALL}")
-            except OSError as e:
-                print(f"{Fore.RED}Error removing temporary directory {temp_spleeter_segments_dir}: {e}{Style.RESET_ALL}")
-
-        if temp_demucs_segments_dir and os.path.exists(temp_demucs_segments_dir):
-            try:
-                shutil.rmtree(temp_demucs_segments_dir)
-                print(f"{Fore.BLUE}Removed temporary directory: {temp_demucs_segments_dir}{Style.RESET_ALL}")
-            except OSError as e:
-                print(f"{Fore.RED}Error removing temporary directory {temp_demucs_segments_dir}: {e}{Style.RESET_ALL}")
-
-        for dir_path in [spleeter_out_path, demucs_base_out_path]:
-            if os.path.exists(dir_path):
+            if temp_demucs_segments_dir and os.path.exists(temp_demucs_segments_dir):
                 try:
-                    shutil.rmtree(dir_path)
-                    print(f"{Fore.BLUE}Removed output directory: {dir_path}{Style.RESET_ALL}")
+                    shutil.rmtree(temp_demucs_segments_dir)
+                    print(f"{Fore.BLUE}Removed temporary directory: {temp_demucs_segments_dir}{Style.RESET_ALL}")
                 except OSError as e:
-                    print(f"{Fore.RED}Error removing output directory {dir_path}: {e}{Style.RESET_ALL}")
+                    print(f"{Fore.RED}Error removing temporary directory {temp_demucs_segments_dir}: {e}{Style.RESET_ALL}")
+
+            for dir_path in [spleeter_out_path, demucs_base_out_path]:
+                if os.path.exists(dir_path):
+                    try:
+                        shutil.rmtree(dir_path)
+                        print(f"{Fore.BLUE}Removed output directory: {dir_path}{Style.RESET_ALL}")
+                    except OSError as e:
+                        print(f"{Fore.RED}Error removing output directory {dir_path}: {e}{Style.RESET_ALL}")
+        else:
+            print(f"\n{Fore.YELLOW}--- Skipping cleanup of temporary files ---")
+            print(f"Temporary audio WAV file: {temp_audio_wav_path}")
+            print(f"Combined vocals AAC file: {combined_vocals_aac_path}")
+            print(f"Aligned Spleeter vocals: {aligned_spleeter_vocals_path}")
+            print(f"Aligned Demucs vocals: {aligned_demucs_vocals_path}")
+            if temp_spleeter_segments_dir:
+                print(f"Spleeter segments directory: {temp_spleeter_segments_dir}")
+            if temp_demucs_segments_dir:
+                print(f"Demucs segments directory: {temp_demucs_segments_dir}")
+            print(f"Spleeter output path: {spleeter_out_path}")
+            print(f"Demucs output path: {demucs_base_out_path}")
         print(f"{Fore.CYAN}--- Processing complete ---")
