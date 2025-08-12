@@ -71,48 +71,60 @@ def download_video(url, filename=None, cookies_file=None):
             print(f"\n{Fore.RED}An error occurred while trying to get video metadata (Exit Code: {result.returncode}).{Style.RESET_ALL}")
             if result.stderr:
                 print(f"{Fore.RED}{result.stderr.strip()}{Style.RESET_ALL}")
+
+            # --- List available formats on metadata error ---
+            print(f"\n{Fore.CYAN}--- Listing available formats for {url} ---")
+            list_formats_cmd = [
+                sys.executable, "-m", "yt_dlp", "-F", url
+            ]
+            if cookies_file and os.path.exists(cookies_file):
+                list_formats_cmd.extend(["--cookies", cookies_file])
+            
+            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True)
+            if list_result.stdout:
+                print(list_result.stdout)
+            if list_result.stderr:
+                print(f"{Fore.RED}{list_result.stderr.strip()}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}--- End of available formats ---")
             return None
 
         final_filepath = result.stdout.strip().splitlines()[-1]
+        filename_without_ext, _ = os.path.splitext(os.path.basename(final_filepath))
 
-        if os.path.exists(final_filepath):
-            print(f"{Fore.YELLOW}Video '{final_filepath}' already exists. Skipping download.{Style.RESET_ALL}")
-            return final_filepath
+        for f in os.listdir(download_folder):
+            f_without_ext, _ = os.path.splitext(f)
+            if f_without_ext == filename_without_ext:
+                existing_filepath = os.path.join(download_folder, f)
+                file_size = os.path.getsize(existing_filepath) / (1024 * 1024)
+                resolution = get_video_resolution(existing_filepath)
+                print(f"\n{Fore.YELLOW}Video with the same base name already exists.{Style.RESET_ALL}")
+                print(f"  - File: {existing_filepath}")
+                print(f"  - Size: {file_size:.2f} MB")
+                if resolution:
+                    print(f"  - Resolution: {resolution}px")
+                print("Skipping download.")
+                return existing_filepath
 
         print(f"{Fore.CYAN}Downloading to '{final_filepath}'...{Style.RESET_ALL}")
 
-        download_attempts = [
-            {
-                "name": "High-quality",
-                "cmd": [
-                    sys.executable, "-m", "yt_dlp",
-                    "--ignore-errors",
-                    "--fragment-retries", "infinite",
-                    "--retry-sleep", "fragment:exp=1:300",
-                    "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
-                    "-o", output_template,
-                    "--progress",
-                ]
-            },
-            {
-                "name": "Fallback",
-                "cmd": [
-                    sys.executable, "-m", "yt_dlp",
-                    "--ignore-errors",
-                    "--fragment-retries", "infinite",
-                    "--retry-sleep", "fragment:exp=1:300",
-                    "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                    "-o", output_template,
-                    "--progress",
-                ]
-            }
+        base_cmd = [
+            sys.executable, "-m", "yt_dlp",
+            "--ignore-errors",
+            "--fragment-retries", "infinite",
+            "--retry-sleep", "fragment:exp=1:300",
+            "-o", output_template,
+        ]
+        
+        format_attempts = [
+            "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]",
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
         ]
 
         download_successful = False
-        for i, attempt in enumerate(download_attempts):
-            print(f"{Fore.CYAN}Attempt {i+1}: Trying {attempt['name']} format...{Style.RESET_ALL}")
+        for i, format_str in enumerate(format_attempts):
+            print(f"{Fore.CYAN}Attempt {i+1}: Trying format '{format_str}'...{Style.RESET_ALL}")
             
-            download_cmd = attempt["cmd"]
+            download_cmd = base_cmd + ["-f", format_str]
             if cookies_file and os.path.exists(cookies_file):
                 download_cmd.extend(["--cookies", cookies_file])
             download_cmd.append(url)
@@ -140,7 +152,7 @@ def download_video(url, filename=None, cookies_file=None):
             if download_successful:
                 break
 
-            if i < len(download_attempts) - 1:
+            if i < len(format_attempts) - 1:
                 print(f"\n{Fore.YELLOW}Attempt {i+1} failed. Trying next format...{Style.RESET_ALL}")
 
         if download_successful:
@@ -153,9 +165,10 @@ def download_video(url, filename=None, cookies_file=None):
             if resolution:
                 print(f"  - Resolution: {resolution}px")
             return final_filepath
-        else:
-            print(f"\n{Fore.RED}Download failed after all attempts.{Style.RESET_ALL}")
-            return None
+        
+        # This part will now only be reached if the download fails
+        print(f"\n{Fore.RED}Download failed after all attempts.{Style.RESET_ALL}")
+        return None
 
     except Exception as e:
         print(f"\n{Fore.RED}An unexpected error occurred: {e}{Style.RESET_ALL}")
