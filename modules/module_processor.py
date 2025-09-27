@@ -9,7 +9,7 @@ from module_cuda import check_gpu_cuda_support
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
-from module_audio import align_audio_tracks
+from module_audio import align_audio_tracks, mix_audio_tracks
 
 def process_video(input_file, keep_temp=False):
     if not os.path.exists(input_file):
@@ -100,7 +100,7 @@ def process_video(input_file, keep_temp=False):
         spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext)
         demucs_vocal_wav_path, temp_demucs_segments_dir = separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext)
 
-        print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals into temporary AAC: {combined_vocals_aac_path}...{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals into temporary AAC: {combined_vocals_aac_path}...{Style.RESET_ALL}\n")
 
         spleeter_input_exists = spleeter_vocal_wav_path and os.path.exists(spleeter_vocal_wav_path) and os.path.getsize(spleeter_vocal_wav_path) > 0
         demucs_input_exists = demucs_vocal_wav_path and os.path.exists(demucs_vocal_wav_path) and os.path.getsize(demucs_vocal_wav_path) > 0
@@ -128,21 +128,40 @@ def process_video(input_file, keep_temp=False):
                     return False
                 print(f"{Fore.GREEN}✔ Spleeter vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
             except subprocess.CalledProcessError as e:
-                print(f"{Fore.RED}✖' Error re-encoding Spleeter vocals: {e}{Style.RESET_ALL}")
+                print(f"{Fore.RED}Error re-encoding Spleeter vocals: {e}{Style.RESET_ALL}")
                 return False
         else:
             aligned_spleeter, aligned_demucs = align_audio_tracks(spleeter_vocal_wav_path, demucs_vocal_wav_path, aligned_spleeter_vocals_path, aligned_demucs_vocals_path)
 
             if aligned_spleeter and aligned_demucs:
+                # Mix the aligned tracks together
+                temp_mixed_wav_path = tempfile.NamedTemporaryFile(suffix="_mixed.wav", delete=False)
+                temp_mixed_wav_path.close()
+                
                 try:
-                    success = convert_audio_with_ffmpeg(aligned_spleeter, combined_vocals_aac_path)
-                    if not success:
-                        print(f"{Fore.RED}Error combining AAC files.{Style.RESET_ALL}")
+                    # Mix the aligned tracks together with equal volume
+                    mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, temp_mixed_wav_path.name, volume1=0.5, volume2=0.5)
+                    
+                    if mixed_result:
+                        # Convert the mixed WAV to AAC format
+                        success = convert_audio_with_ffmpeg(temp_mixed_wav_path.name, combined_vocals_aac_path)
+                        if not success:
+                            print(f"{Fore.RED}Error converting mixed audio to AAC format.{Style.RESET_ALL}")
+                            return False
+                        print(f"\n{Fore.GREEN}✔ Vocals combined successfully.{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.RED}Error: Mixing of aligned vocal tracks failed.{Style.RESET_ALL}")
                         return False
-                    print(f"\n{Fore.GREEN}✔ Vocals combined successfully.{Style.RESET_ALL}")
                 except subprocess.CalledProcessError as e:
-                    print(f"{Fore.RED}✖' Error combining AAC files: {e}{Style.RESET_ALL}")
+                    print(f"{Fore.RED}Error with mixed audio conversion: {e}{Style.RESET_ALL}")
                     return False
+                finally:
+                    # Clean up the temporary mixed WAV file
+                    if os.path.exists(temp_mixed_wav_path.name):
+                        try:
+                            os.remove(temp_mixed_wav_path.name)
+                        except OSError:
+                            pass  # Ignore errors when removing temp file
             else:
                 print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
                 return False
