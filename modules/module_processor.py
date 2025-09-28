@@ -111,7 +111,7 @@ def process_video(input_file, keep_temp=False):
         elif not spleeter_input_exists:
             print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly for the combined track.{Style.RESET_ALL}")
             try:
-                success = convert_audio_with_ffmpeg(demucs_vocal_wav_path, combined_vocals_aac_path)
+                success = convert_audio_with_ffmpeg(demucs_vocal_wav_path, combined_vocals_aac_path, normalize_audio=True)
                 if not success:
                     print(f"{Fore.RED}Error re-encoding Demucs vocals.{Style.RESET_ALL}")
                     return False
@@ -122,7 +122,7 @@ def process_video(input_file, keep_temp=False):
         elif not demucs_input_exists:
             print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly for the combined track.{Style.RESET_ALL}")
             try:
-                success = convert_audio_with_ffmpeg(spleeter_vocal_wav_path, combined_vocals_aac_path)
+                success = convert_audio_with_ffmpeg(spleeter_vocal_wav_path, combined_vocals_aac_path, normalize_audio=True)
                 if not success:
                     print(f"{Fore.RED}Error re-encoding Spleeter vocals.{Style.RESET_ALL}")
                     return False
@@ -143,8 +143,8 @@ def process_video(input_file, keep_temp=False):
                     mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, temp_mixed_wav_path.name, volume1=0.5, volume2=0.5)
                     
                     if mixed_result:
-                        # Convert the mixed WAV to AAC format
-                        success = convert_audio_with_ffmpeg(temp_mixed_wav_path.name, combined_vocals_aac_path)
+                        # Convert the mixed WAV to AAC format with loudnorm audio normalization
+                        success = convert_audio_with_ffmpeg(temp_mixed_wav_path.name, combined_vocals_aac_path, normalize_audio=True)
                         if not success:
                             print(f"{Fore.RED}Error converting mixed audio to AAC format.{Style.RESET_ALL}")
                             return False

@@ -15,6 +15,7 @@ A key design choice is the **extensive use of temporary files**, ensuring the wo
 *   **Flexible Vocal Track Handling:**
     *   If both Spleeter and Demucs produce a vocal track, the script uses the aligned track from Spleeter.
     *   If only one of the tools succeeds, the script uses the single available vocal track.
+*   **Advanced Audio Normalization:** Applies professional loudness normalization using the `loudnorm` filter with ITU-R BS.1770-4 algorithm to ensure consistent audio levels. Uses industry-standard parameters: `I=-23` (integrated loudness), `TP=-2` (true-peak), and `LRA=7` (loudness range) for broadcast-quality audio.
 *   **Automatic Audio Track Selection:** When a video contains multiple audio tracks, the script automatically selects the best one based on a predefined language priority (`hr`, `hrv`, `sr`). If none of the priority languages are found, it defaults to the first available audio track, removing the need for manual selection.
 *   **Video Downloading:** Includes a `download` command that uses `yt-dlp` to fetch videos from URLs, with fallback logic to find the best available format.
 *   **Batch Processing:** The `separate` command can process a single file or all video files within a specified folder.

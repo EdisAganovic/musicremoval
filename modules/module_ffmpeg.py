@@ -164,7 +164,7 @@ def check_fdk_aac_codec():
         print(f"{Fore.RED}An unexpected error occurred while checking for libfdk_aac: {e}{Style.RESET_ALL}")
         return False
 
-def convert_audio_with_ffmpeg(input_path, output_path, codec=None):
+def convert_audio_with_ffmpeg(input_path, output_path, codec=None, normalize_audio=False):
     """
     Converts audio using FFmpeg, preferring libfdk_aac if available.
     """
@@ -187,8 +187,15 @@ def convert_audio_with_ffmpeg(input_path, output_path, codec=None):
             "-y",
             "-c:a", audio_codec,
             "-b:a", "192k", # Example bitrate, adjust as needed
-            output_path
         ]
+        
+        if normalize_audio:
+            # Add loudnorm audio normalization filter
+            cmd.extend(["-af", "loudnorm=I=-23:TP=-2:LRA=7"])
+            print(f"{Fore.CYAN}Applying loudnorm audio normalization with I=-23:TP=-2:LRA=7{Style.RESET_ALL}")
+        
+        cmd.append(output_path)
+        
         print(f"Executing FFmpeg command: {' '.join(cmd)}")
         subprocess.run(cmd, check=True)
         print(f"{Fore.GREEN}Successfully converted {input_path} to {output_path} using {audio_codec}.{Style.RESET_ALL}")
