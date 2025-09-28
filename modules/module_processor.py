@@ -87,6 +87,8 @@ def process_video(input_file, keep_temp=False):
         ffmpeg_cmd = [FFMPEG_EXE, "-y","-loglevel","error", "-i", input_file]
         if selected_track_index is not None:
             ffmpeg_cmd.extend(["-map", f"0:{selected_track_index}"])
+        # Downmix to stereo using -ac 2
+        ffmpeg_cmd.extend(["-ac", "2"])
         ffmpeg_cmd.append(temp_audio_wav_path)
         
         print(f"{Fore.MAGENTA}Executing: {' '.join(ffmpeg_cmd)}\n")
