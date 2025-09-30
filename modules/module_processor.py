@@ -168,6 +168,59 @@ def process_video(input_file, keep_temp=False):
                 print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
                 return False
 
+        # Check duration of original audio and final processed audio before combining
+        original_audio_duration = get_audio_duration(temp_audio_wav_path)
+        processed_audio_duration = get_audio_duration(combined_vocals_aac_path)
+        
+        if original_audio_duration and processed_audio_duration:
+            duration_diff = original_audio_duration - processed_audio_duration
+            print(f"{Fore.BLUE}Original audio duration: {original_audio_duration:.2f} seconds{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}Processed audio duration: {processed_audio_duration:.2f} seconds{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}Duration difference: {duration_diff:.2f} seconds (positive = processed audio is shorter){Style.RESET_ALL}")
+            
+            # Always add silence to the beginning of processed audio if there's any difference
+            if abs(duration_diff) > 0.001:  # More precise than exact zero due to floating point
+                print(f"{Fore.YELLOW}Duration difference detected. Adding silence to beginning of processed audio.{Style.RESET_ALL}")
+                
+                # Add silence at the beginning of processed audio using delay filter
+                delayed_temp_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False)
+                delayed_temp_path = delayed_temp_file.name
+                delayed_temp_file.close()
+                
+                # Use the delay filter to add silence at the beginning if processed audio is shorter
+                if duration_diff > 0:  # processed audio is shorter, need to add delay (silence) at the beginning
+                    delay_cmd = [
+                        FFMPEG_EXE, "-y", "-loglevel", "error",
+                        "-i", combined_vocals_aac_path,
+                        "-af", f"adelay={int(abs(duration_diff) * 1000)}|{int(abs(duration_diff) * 1000)}",  # delay in milliseconds
+                        "-c:a", "aac",
+                        delayed_temp_path
+                    ]
+                else:  # processed audio is longer, need to trim
+                    delay_cmd = [
+                        FFMPEG_EXE, "-y", "-loglevel", "error",
+                        "-i", combined_vocals_aac_path,
+                        "-t", str(original_audio_duration),
+                        "-c:a", "aac",
+                        delayed_temp_path
+                    ]
+
+                try:
+                    subprocess.run(delay_cmd, check=True)
+                    # Replace the combined vocals file with the corrected version
+                    os.remove(combined_vocals_aac_path)
+                    os.rename(delayed_temp_path, combined_vocals_aac_path)
+                    print(f"{Fore.GREEN}Processed audio duration adjusted successfully.{Style.RESET_ALL}")
+                except subprocess.CalledProcessError as e:
+                    print(f"{Fore.RED}Error adjusting processed audio duration: {e}{Style.RESET_ALL}")
+                    # Use original file if adjustment fails
+                    if os.path.exists(delayed_temp_path):
+                        os.remove(delayed_temp_path)
+            else:
+                print(f"{Fore.GREEN}Audio durations are identical.{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.YELLOW}Could not verify audio durations.{Style.RESET_ALL}")
+
         output_folder = "nomusic"
         os.makedirs(output_folder, exist_ok=True)
         print(f"\n{Fore.CYAN}5. Creating final video: ...{Style.RESET_ALL}")
