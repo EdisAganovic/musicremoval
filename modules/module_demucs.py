@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import tempfile
 import shutil
 from colorama import Fore, Style
@@ -56,7 +57,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             for i, segment_path in enumerate(split_audio_paths):
                 segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
                 
-                demucs_cmd = ["demucs", "-n", "htdemucs", "-o", demucs_base_out_path, segment_path]
+                demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "-o", demucs_base_out_path, segment_path]
                 print(f"\n{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Demucs: \n{' '.join(demucs_cmd)}{Style.RESET_ALL}")
                 subprocess.run(demucs_cmd, check=True)
 
@@ -93,7 +94,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 print(f"\n{Fore.GREEN}\N{check mark} All Demucs vocal segments joined successfully.{Style.RESET_ALL}")
         else:
             demucs_cmd = [
-                "demucs",
+                sys.executable, "-m", "demucs.separate",
                 # "--no-progress",
                 "-n", "htdemucs",
                 "-o", demucs_base_out_path,

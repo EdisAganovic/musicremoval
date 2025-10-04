@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import tempfile
 from colorama import Fore, Style
 from module_ffmpeg import get_audio_duration
@@ -56,7 +57,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
                 spleeter_segment_out_sub_path = os.path.join(spleeter_out_path, segment_base_name)
                 
-                spleeter_cmd = ["spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
+                spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
                 print(f"\n{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Spleeter: \n{' '.join(spleeter_cmd)}{Style.RESET_ALL}")
                 subprocess.run(spleeter_cmd, check=True)
 
@@ -92,7 +93,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 spleeter_vocal_wav_path = final_spleeter_vocals_temp_path
                 print(f"\n{Fore.GREEN}\N{check mark} All Spleeter vocal segments joined successfully.{Style.RESET_ALL}")
         else:
-            spleeter_cmd = ["spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
+            spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
             print(f"{Fore.MAGENTA}Executing Spleeter directly: {' '.join(spleeter_cmd)}{Style.RESET_ALL}\n")
             subprocess.run(spleeter_cmd, check=True)
             spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
