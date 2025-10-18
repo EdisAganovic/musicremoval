@@ -59,7 +59,14 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 
                 demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "-o", demucs_base_out_path, segment_path]
                 print(f"\n{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Demucs: \n{' '.join(demucs_cmd)}{Style.RESET_ALL}")
-                subprocess.run(demucs_cmd, check=True)
+                
+                try:
+                    result = subprocess.run(demucs_cmd, check=True, capture_output=True, text=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"{Fore.RED}Error with demucs separation for segment {segment_base_name}: {e}{Style.RESET_ALL}")
+                    print(f"{Fore.RED}Demucs may have failed due to silence in the audio segment. Skipping this segment.{Style.RESET_ALL}")
+                    # If there's an error (like the assertion error from silence), continue to next segment
+                    continue
 
                 segment_vocal_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "vocals.wav")
                 if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
@@ -102,18 +109,21 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             ]
             print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
             try: 
-                subprocess.run(
+                result = subprocess.run(
                     demucs_cmd, 
                     check=True,
                     stdout=subprocess.PIPE, # Capture standard output
                     stderr=subprocess.PIPE 
                     )
             except subprocess.CalledProcessError as e:
-                print(f"Demucs command failed with error code {e.returncode}.")
-                print(f"Demucs stdout:\n{e.stdout.decode()}") # Access captured stdout on error
-                print(f"Demucs stderr:\n{e.stderr.decode()}") # Access captured stderr on error
+                print(f"{Fore.RED}Demucs command failed with error code {e.returncode}.{Style.RESET_ALL}")
+                print(f"{Fore.RED}Demucs stdout:\n{e.stdout.decode()}{Style.RESET_ALL}") # Access captured stdout on error
+                print(f"{Fore.RED}Demucs stderr:\n{e.stderr.decode()}{Style.RESET_ALL}") # Access captured stderr on error
+                print(f"{Fore.RED}Demucs may have failed due to silence in the audio. Demucs output will not be used for combination.{Style.RESET_ALL}")
+                return None, temp_demucs_segments_dir
             except FileNotFoundError:
                 print("Error: 'demucs' command not found. Make sure Demucs is installed via UV.")
+                return None, temp_demucs_segments_dir
             demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
             print(f"\n{Fore.GREEN}\N{check mark} Demucs separation complete. Output in: {demucs_base_out_path}\n{Style.RESET_ALL}")
 
@@ -123,6 +133,11 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error with demucs separation: {e}{Style.RESET_ALL}")
+        # If there's a CalledProcessError, return None to indicate failure but allow process to continue
+        return None, temp_demucs_segments_dir
+    except Exception as e:
+        print(f"{Fore.RED}Unexpected error with demucs separation: {e}{Style.RESET_ALL}")
+        # For other exceptions (like AssertionError from silence), return None to allow process to continue
         return None, temp_demucs_segments_dir
     
     return demucs_vocal_wav_path, temp_demucs_segments_dir
