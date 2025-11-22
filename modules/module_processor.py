@@ -250,6 +250,7 @@ def process_video(input_file, keep_temp=False):
                 "-y",
                 "-i", input_file,
                 "-i", combined_vocals_aac_path,
+                "-vf", "scale=1920:1080",
                 "-c:v", video_codec,
             ]
             if video_bitrate:

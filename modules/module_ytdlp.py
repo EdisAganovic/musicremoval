@@ -1,8 +1,37 @@
 import subprocess
 import sys
 import os
+import re
 from colorama import Fore, Style
 from module_ffmpeg import get_video_resolution
+
+
+def sanitize_filename(filename: str, max_length: int = 200) -> str:
+    """
+    Sanitizes a filename by removing invalid characters and limiting length.
+
+    Args:
+        filename: The original filename to sanitize
+        max_length: Maximum length for the filename (default 200)
+
+    Returns:
+        Sanitized filename that's safe for the filesystem
+    """
+    # Replace invalid characters for Windows filesystem
+    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
+
+    # Remove leading/trailing spaces and dots which are invalid on Windows
+    sanitized = sanitized.strip(' .')
+
+    # Limit the length of the filename, preserving the extension
+    name, ext = os.path.splitext(sanitized)
+    if len(sanitized) > max_length:
+        # Truncate the name part to fit within max_length, keeping extension
+        max_name_length = max_length - len(ext)
+        name = name[:max_name_length]
+        sanitized = name + ext
+
+    return sanitized
 
 def check_and_update_ytdlp():
     """
@@ -46,9 +75,14 @@ def download_video(url, filename=None, cookies_file=None):
     try:
         # 1. Get the final filename from yt-dlp before downloading
         if filename:
-            output_template = os.path.join(download_folder, filename)
+            # Sanitize the provided filename to ensure it's safe for the filesystem
+            safe_filename = sanitize_filename(filename)
+            output_template = os.path.join(download_folder, safe_filename)
         else:
-            output_template = os.path.join(download_folder, "%(title)s.%(ext)s")
+            # Use a custom format that limits title length to prevent filesystem errors
+            # Windows has a 260 character path limit by default, so we limit the title
+            # yt-dlp format: %(title).Ns where N is the max number of characters
+            output_template = os.path.join(download_folder, "%(title).100s.%(ext)s")
 
         get_filename_cmd = [
             sys.executable, "-m", "yt_dlp",
