@@ -1,16 +1,35 @@
+"""
+Module for audio source separation using Demucs.
+Includes segmentation logic for long files to prevent OOM/processing errors.
+"""
 import os
 import subprocess
 import sys
 import tempfile
 import shutil
 from colorama import Fore, Style
-from module_ffmpeg import get_audio_duration
+from tqdm import tqdm
+from module_ffmpeg import get_audio_duration, FFMPEG_EXE
 
-def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext):
+def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=2):
     """
-    Separates audio using Demucs, handling segmentation for long files.
+    Separates vocals using Demucs (htdemucs model).
+    If audio is > 10 min, it splits the file into segments, processes them in parallel, and joins them back.
+    
+    Args:
+        temp_audio_wav_path: Path to the source WAV file.
+        demucs_base_out_path: Directory to store Demucs output.
+        base_audio_name_no_ext: Base name for identifying output segments.
+        max_workers: Number of parallel segments to process.
+        
+    Returns:
+        tuple: (path_to_final_vocal_wav, temp_segments_dir)
     """
     print(f"\n{Fore.CYAN}3. Separating with Demucs (htdemucs model) into: {demucs_base_out_path}...{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}Using up to {max_workers} parallel workers for Demucs segments.{Style.RESET_ALL}")
+    
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    
     demucs_vocal_wav_path = None
     temp_demucs_segments_dir = None
     try:
@@ -21,12 +40,11 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             print(f"{Fore.RED}Failed to get audio duration, cannot proceed with Demucs separation.{Style.RESET_ALL}")
             return None, None
 
-        DEMUCS_SEGMENT_DURATION_SECONDS = 600  # 10 minutes
+        DEMUCS_SEGMENT_DURATION_SECONDS = 600  # 10 minutes per segment for GPU efficiency
 
         if audio_duration > DEMUCS_SEGMENT_DURATION_SECONDS:
-            print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for Demucs...{Style.RESET_ALL}\n")
+            print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for parallel Demucs...{Style.RESET_ALL}\n")
             temp_demucs_segments_dir = tempfile.mkdtemp()
-            demucs_segment_vocal_paths = []
             split_audio_paths = []
 
             current_start_time = 0
@@ -38,7 +56,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 segment_output_path = os.path.join(temp_demucs_segments_dir, segment_filename)
 
                 ffmpeg_split_cmd = [
-                    "ffmpeg", "-y", 
+                    FFMPEG_EXE, "-y", 
                     "-loglevel", "error",
                     "-i", temp_audio_wav_path,
                     "-ss", str(current_start_time),
@@ -54,40 +72,61 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
             print(f"\n{Fore.GREEN}\N{check mark} Audio splitted into {len(split_audio_paths)} segments for Demucs.{Style.RESET_ALL}")
 
-            for i, segment_path in enumerate(split_audio_paths):
+            def process_segment(item):
+                i, segment_path = item
                 segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
+                segment_vocal_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "vocals.wav")
+                
+                # Check if it already exists (maybe from a previous partial run?)
+                if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
+                    return i, segment_vocal_path
                 
                 demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "-o", demucs_base_out_path, segment_path]
-                print(f"\n{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Demucs: \n{' '.join(demucs_cmd)}{Style.RESET_ALL}")
                 
                 try:
-                    result = subprocess.run(demucs_cmd, check=True, capture_output=True, text=True)
+                    subprocess.run(demucs_cmd, check=True, capture_output=True, text=True)
                 except subprocess.CalledProcessError as e:
-                    print(f"{Fore.RED}Error with demucs separation for segment {segment_base_name}: {e}{Style.RESET_ALL}")
-                    print(f"{Fore.RED}Demucs may have failed due to silence in the audio segment. Skipping this segment.{Style.RESET_ALL}")
-                    # If there's an error (like the assertion error from silence), continue to next segment
-                    continue
-
-                segment_vocal_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "vocals.wav")
+                    tqdm.write(f"{Fore.YELLOW}Warning: Demucs failed for segment {segment_base_name}. Creating silence.{Style.RESET_ALL}")
+                    # Create silence fallback
+                    os.makedirs(os.path.dirname(segment_vocal_path), exist_ok=True)
+                    silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", segment_vocal_path]
+                    try:
+                        subprocess.run(silence_cmd, check=True)
+                    except:
+                        return i, None
+                
                 if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
-                    demucs_segment_vocal_paths.append(segment_vocal_path)
-                else:
-                    print(f"{Fore.YELLOW}Warning: Demucs vocals for segment {segment_base_name} not found or empty at {segment_vocal_path}. Skipping this segment.{Style.RESET_ALL}")
+                    return i, segment_vocal_path
+                return i, None
+
+            # Execute in parallel
+            results = [None] * len(split_audio_paths)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Map segments to worker tasks
+                futures = {executor.submit(process_segment, (i, path)): i for i, path in enumerate(split_audio_paths)}
+                
+                with tqdm(total=len(split_audio_paths), desc="Demucs Parallel", unit="seg") as pbar:
+                    for future in as_completed(futures):
+                        idx, vocal_path = future.result()
+                        results[idx] = vocal_path
+                        pbar.update(1)
+
+            demucs_segment_vocal_paths = [r for r in results if r is not None]
 
             if not demucs_segment_vocal_paths:
-                print(f"{Fore.RED}Error: No Demucs vocal segments were successfully generated. Demucs output will not be used for combination.{Style.RESET_ALL}")
+                print(f"{Fore.RED}Error: No Demucs vocal segments were successfully generated.{Style.RESET_ALL}")
                 return None, temp_demucs_segments_dir
             else:
+                # Joining segments...
                 concat_list_path = os.path.join(temp_demucs_segments_dir, "concat_list.txt")
                 with open(concat_list_path, "w") as f:
                     for p in demucs_segment_vocal_paths:
                         f.write(f"file '{os.path.abspath(p)}'\n")
 
-                final_demucs_vocals_filename = "concatenated_demucs_vocals.wav"
-                final_demucs_vocals_temp_path = os.path.join(temp_demucs_segments_dir, final_demucs_vocals_filename)
+                final_demucs_vocals_temp_path = os.path.join(temp_demucs_segments_dir, "concatenated_demucs_vocals.wav")
                 
                 ffmpeg_concat_cmd = [
-                    "ffmpeg", "-y", 
+                    FFMPEG_EXE, "-y", 
                     "-loglevel", "error",
                     "-f", "concat",
                     "-safe", "0",
@@ -100,32 +139,25 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 demucs_vocal_wav_path = final_demucs_vocals_temp_path
                 print(f"\n{Fore.GREEN}\N{check mark} All Demucs vocal segments joined successfully.{Style.RESET_ALL}")
         else:
+            # Short file, just run directly
             demucs_cmd = [
                 sys.executable, "-m", "demucs.separate",
-                # "--no-progress",
                 "-n", "htdemucs",
                 "-o", demucs_base_out_path,
                 temp_audio_wav_path
             ]
             print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
             try: 
-                result = subprocess.run(
-                    demucs_cmd, 
-                    check=True,
-                    stdout=subprocess.PIPE, # Capture standard output
-                    stderr=subprocess.PIPE 
-                    )
+                subprocess.run(demucs_cmd, check=True, capture_output=True, text=True)
+                demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
             except subprocess.CalledProcessError as e:
-                print(f"{Fore.RED}Demucs command failed with error code {e.returncode}.{Style.RESET_ALL}")
-                print(f"{Fore.RED}Demucs stdout:\n{e.stdout.decode()}{Style.RESET_ALL}") # Access captured stdout on error
-                print(f"{Fore.RED}Demucs stderr:\n{e.stderr.decode()}{Style.RESET_ALL}") # Access captured stderr on error
-                print(f"{Fore.RED}Demucs may have failed due to silence in the audio. Demucs output will not be used for combination.{Style.RESET_ALL}")
-                return None, temp_demucs_segments_dir
-            except FileNotFoundError:
-                print("Error: 'demucs' command not found. Make sure Demucs is installed via UV.")
-                return None, temp_demucs_segments_dir
-            demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
-            print(f"\n{Fore.GREEN}\N{check mark} Demucs separation complete. Output in: {demucs_base_out_path}\n{Style.RESET_ALL}")
+                print(f"{Fore.RED}Demucs failed for short audio. Creating silence fallback.{Style.RESET_ALL}")
+                demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
+                os.makedirs(os.path.dirname(demucs_vocal_wav_path), exist_ok=True)
+                silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", temp_audio_wav_path, "-af", "volume=0", demucs_vocal_wav_path]
+                subprocess.run(silence_cmd, check=True)
+
+            print(f"\n{Fore.GREEN}\N{check mark} Demucs separation complete.\n{Style.RESET_ALL}")
 
         if not os.path.exists(demucs_vocal_wav_path) or os.path.getsize(demucs_vocal_wav_path) == 0:
             print(f"{Fore.YELLOW}Warning: Demucs vocals not found or empty at {demucs_vocal_wav_path}.{Style.RESET_ALL}")

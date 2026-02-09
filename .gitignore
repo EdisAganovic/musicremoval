@@ -1,5 +1,7 @@
 /download/
+/nomusic/
 /pretrained_models/
+/patrolne/
 /spleeter_out/
 /demucs_out/
 .ENV
@@ -12,6 +14,9 @@ GEMINI.MD
 /_processing_intermediates/
 *.exe
 *.mp4
+*.mp3
+*.mkv
+*.aac
 /.git/
 /nomusic/
 /patrolne/

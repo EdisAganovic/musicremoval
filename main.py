@@ -1,28 +1,37 @@
+"""
+Main entry point for the Demucs & Spleeter Vocal Extractor.
+This script provides a CLI for downloading videos and separating vocals from video/audio files.
+"""
 import os
 import argparse
 import sys
 from colorama import Fore, Back, Style, init, deinit
 
-# Add the 'modules' directory to the Python path
+# Add the 'modules' directory to the Python path to allow direct imports of module_* files
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
 
 from module_ffmpeg import download_ffmpeg
 from module_ytdlp import download_video
-from module_processor import process_video
+from module_processor import process_file, VIDEO_EXTENSIONS, AUDIO_EXTENSIONS
 
 
 def main():
+    """
+    Parses command line arguments and dispatches to the appropriate module (download or separate).
+    Handles colorama initialization and cleanup.
+    """
     init()
 
-    parser = argparse.ArgumentParser(description="Process a video file to separate audio stems or download a video.")
+    parser = argparse.ArgumentParser(description="Process a video or audio file to separate vocals using Demucs and Spleeter.")
     parser.add_argument("--temp", action="store_true", help="If used, We will display paths, but we will not delete temporary files or dirs")
     subparsers = parser.add_subparsers(dest="command")
 
     # Subparser for the 'process' command
-    process_parser = subparsers.add_parser("separate", help="Process a video file to separate audio stems.")
+    process_parser = subparsers.add_parser("separate", help="Process a video or audio file to separate vocals.")
     group = process_parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--file", help="Path to the input video file.")
-    group.add_argument("--folder", help="Path to the folder containing video files.")
+    group.add_argument("--file", help="Path to the input video or audio file.")
+    group.add_argument("--folder", help="Path to the folder containing video/audio files.")
+    process_parser.add_argument("--duration", type=int, help="Limit processing to the first N seconds (e.g., 120 for 2 minutes).")
 
     # Subparser for the 'download' command
     download_parser = subparsers.add_parser("download", help="Download a video from a URL.")
@@ -49,21 +58,27 @@ def main():
 
         try:
             if args.file:
-                success = process_video(args.file, args.temp)
+                success = process_file(args.file, args.temp, args.duration)
                 if success:
                     print(f"\n{Fore.GREEN}Script finished successfully for {args.file}.{Style.RESET_ALL}")
                 else:
                     print(f"\n{Fore.RED}Script failed for {args.file}. Check logs above.{Style.RESET_ALL}")
             elif args.folder:
-                video_files = [f for f in os.listdir(args.folder) if f.lower().endswith(('.mp4', '.mkv', '.mov', '.avi', '.flv'))]
-                if not video_files:
-                    print(f"{Fore.YELLOW}No video files found in the specified folder: {args.folder}{Style.RESET_ALL}")
+                # Combine video and audio extensions for batch processing
+                supported_extensions = VIDEO_EXTENSIONS + AUDIO_EXTENSIONS
+                media_files = [f for f in os.listdir(args.folder) if f.lower().endswith(supported_extensions)]
+                
+                if not media_files:
+                    print(f"{Fore.YELLOW}No video or audio files found in the specified folder: {args.folder}{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}Supported formats: {', '.join(supported_extensions)}{Style.RESET_ALL}")
                     return
 
-                for video_file in video_files:
-                    file_path = os.path.join(args.folder, video_file)
+                print(f"{Fore.CYAN}Found {len(media_files)} files to process.{Style.RESET_ALL}")
+                
+                for media_file in media_files:
+                    file_path = os.path.join(args.folder, media_file)
                     print(f"\n{Back.BLUE}{Fore.WHITE}--- Starting processing for: {file_path} ---{Style.RESET_ALL}")
-                    success = process_video(file_path, args.temp)
+                    success = process_file(file_path, args.temp, args.duration)
                     if success:
                         print(f"\n{Fore.GREEN}--- Finished processing successfully for: {file_path} ---{Style.RESET_ALL}")
                     else:

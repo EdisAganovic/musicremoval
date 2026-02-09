@@ -61,7 +61,7 @@ A key design choice is the **extensive use of temporary files**, ensuring the wo
     *   **Then, install the GPU version.** Replace `cu128` with your specific CUDA version (e.g., `cu118`).
         ```bash
         # Example for CUDA 12.1
-        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+        uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
         ```
         *Refer to the [PyTorch official website](https://pytorch.org/get-started/locally/) for the correct command for your system.*
 
@@ -101,22 +101,33 @@ python main.py separate --file "path/to/your/video.mp4"
 python main.py separate --folder "path/to/your/videos_folder"
 ```
 
+**Process audio files directly (mp3, wav, flac, etc.):**
+```bash
+python main.py separate --file "path/to/your/song.mp3"
+```
+
+When processing audio-only files, the output will be an audio file (not a video) with `_vocals` suffix, preserving the original format when possible.
+
+**Supported file formats:**
+- **Video:** .mp4, .mkv, .mov, .avi, .flv, .webm, .wmv
+- **Audio:** .mp3, .wav, .flac, .aac, .ogg, .m4a, .wma
+
 ---
 
 ## Configuration (`video.json`)
 
-You can control the output video and audio quality by creating a `video.json` file in the root directory. If this file doesn't exist, the script will use default settings.
+You can control the output video and audio quality by creating a `video.json` file in the root directory. If this file doesn't exist or contains invalid JSON, the script will use default settings.
 
 **Example `video.json`:**
 ```json
 {
   "video": {
-    "codec": "h264_nvenc", # GPU accelerated encoding
-    "bitrate": 1800k  # perfect balance for FullHD res
+    "codec": "h264_nvenc",
+    "bitrate": "1800k"
   },
   "audio": {
-    "codec": "lifdk_aac", # 4x speed improvement with this codec
-    "bitrate": 128k
+    "codec": "libfdk_aac",
+    "bitrate": "128k"
   },
   "output": {
     "format": "mp4"
@@ -124,8 +135,12 @@ You can control the output video and audio quality by creating a `video.json` fi
 }
 ```
 
-*   **`video.codec`**: The video codec for the output file. Use `"copy"` to stream copy the original video track without re-encoding (fastest and preserves quality). You can also specify a codec like `"libx264"`.
+> **Note:** JSON does not support comments. All values must be properly quoted strings.
+
+**Available Settings:**
+
+*   **`video.codec`**: The video codec for the output file. Use `"copy"` to stream copy the original video track without re-encoding (fastest and preserves quality). You can also specify a codec like `"libx264"` or `"h264_nvenc"` (GPU accelerated).
 *   **`video.bitrate`**: Target video bitrate (e.g., `"4000k"`). Only used if `codec` is not `"copy"`.
-*   **`audio.codec`**: The audio codec for the vocal track. Defaults to `"aac"`.
+*   **`audio.codec`**: The audio codec for the vocal track. Defaults to `"aac"`. Use `"libfdk_aac"` for better quality (requires FFmpeg compiled with libfdk_aac).
 *   **`audio.bitrate`**: Target audio bitrate (e.g., `"192k"`, `"256k"`).
 *   **`output.format`**: The container format for the final video (e.g., `"mp4"`, `"mkv"`).

@@ -9,5 +9,8 @@
   },
   "output": {
     "format": "mp4"
+  },
+  "processing": {
+    "demucs_workers": 3
   }
 }
