@@ -42,7 +42,7 @@ def check_and_update_ytdlp():
         # Get current yt-dlp version
         version_cmd = ["yt-dlp", "--version"]
         try:
-            version_result = subprocess.run(version_cmd, check=True, capture_output=True, text=True)
+            version_result = subprocess.run(version_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             print(f"{Fore.CYAN}Current yt-dlp version: {version_result.stdout.strip()}{Style.RESET_ALL}")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"{Fore.YELLOW}yt-dlp not found or no version information available.{Style.RESET_ALL}")
@@ -50,7 +50,7 @@ def check_and_update_ytdlp():
         # Use UV to upgrade yt-dlp.
         update_cmd = ["uv", "pip", "install", "--upgrade", "yt-dlp"]
         print(f"{Fore.MAGENTA}Executing: {' '.join(update_cmd)}{Style.RESET_ALL}")
-        result = subprocess.run(update_cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if "Requirement already satisfied" in result.stdout:
             print(f"{Fore.GREEN}yt-dlp is up to date.{Style.RESET_ALL}")
         else:
@@ -69,7 +69,7 @@ def download_video(url, filename=None, cookies_file=None):
     if not check_and_update_ytdlp():
         return None
 
-    download_folder = "download"
+    download_folder = "downloads"
     os.makedirs(download_folder, exist_ok=True)
 
     try:
@@ -91,6 +91,7 @@ def download_video(url, filename=None, cookies_file=None):
             "--fragment-retries", "infinite",
             "--retry-sleep", "fragment:exp=1:300",
             "--extractor-args", "youtube:player_client=default,ios",
+            "--remote-components", "ejs:github",
             "-o", output_template,
         ]
         if cookies_file and os.path.exists(cookies_file):
@@ -99,7 +100,7 @@ def download_video(url, filename=None, cookies_file=None):
         get_filename_cmd.append(url)
 
         print(f"{Fore.MAGENTA}Determining filename...{Style.RESET_ALL}")
-        result = subprocess.run(get_filename_cmd, capture_output=True, text=True)
+        result = subprocess.run(get_filename_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
         if result.returncode != 0:
             print(f"\n{Fore.RED}An error occurred while trying to get video metadata (Exit Code: {result.returncode}).{Style.RESET_ALL}")
@@ -109,12 +110,12 @@ def download_video(url, filename=None, cookies_file=None):
             # --- List available formats on metadata error ---
             print(f"\n{Fore.CYAN}--- Listing available formats for {url} ---")
             list_formats_cmd = [
-                sys.executable, "-m", "yt_dlp", "-F", url
+                sys.executable, "-m", "yt_dlp", "-F", "--remote-components", "ejs:github", url
             ]
             if cookies_file and os.path.exists(cookies_file):
                 list_formats_cmd.extend(["--cookies", cookies_file])
             
-            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True)
+            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
             if list_result.stdout:
                 print(list_result.stdout)
             if list_result.stderr:
@@ -146,6 +147,7 @@ def download_video(url, filename=None, cookies_file=None):
             "--ignore-errors",
             "--fragment-retries", "infinite",
             "--retry-sleep", "fragment:exp=1:300",
+            "--remote-components", "ejs:github",
             "-o", output_template,
         ]
         

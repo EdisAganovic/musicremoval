@@ -24,7 +24,7 @@ def get_audio_tracks(input_file):
     ]
     
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         streams = json.loads(result.stdout).get('streams', [])
         audio_tracks = []
         for stream in streams:
@@ -102,7 +102,7 @@ def get_audio_duration(file_path):
     try:
         # Use ffprobe to get duration
         cmd = [FFPROBE_EXE, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         return float(result.stdout.strip())
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error: ffprobe failed to get duration for {file_path}. Is ffprobe installed and in PATH? Error: {e}{Style.RESET_ALL}")
@@ -121,7 +121,7 @@ def get_video_resolution(file_path):
     """
     try:
         cmd = [FFPROBE_EXE, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error: ffprobe failed to get resolution for {file_path}. Error: {e}{Style.RESET_ALL}")
@@ -130,6 +130,56 @@ def get_video_resolution(file_path):
         print(f"{Fore.RED}An unexpected error occurred while getting video resolution for {file_path}: {e}{Style.RESET_ALL}")
         return None
 
+def get_file_metadata(file_path):
+    """
+    Gets resolution, duration, video codec, and audio codec using ffprobe.
+    """
+    metadata = {
+        "resolution": "N/A",
+        "duration": "N/A",
+        "video_codec": "N/A",
+        "audio_codec": "N/A",
+        "is_video": False
+    }
+    
+    try:
+        cmd = [
+            FFPROBE_EXE, 
+            "-v", "quiet", 
+            "-print_format", "json", 
+            "-show_streams", 
+            "-show_format", 
+            file_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        data = json.loads(result.stdout)
+        
+        # Get duration
+        format_info = data.get('format', {})
+        duration = format_info.get('duration')
+        if duration:
+            try:
+                metadata["duration"] = f"{float(duration):.2f}s"
+            except:
+                pass
+        
+        streams = data.get('streams', [])
+        for stream in streams:
+            if stream.get('codec_type') == 'video':
+                metadata["is_video"] = True
+                metadata["video_codec"] = stream.get('codec_name', 'N/A')
+                width = stream.get('width')
+                height = stream.get('height')
+                if width and height:
+                    metadata["resolution"] = f"{width}x{height}"
+            elif stream.get('codec_type') == 'audio':
+                metadata["audio_codec"] = stream.get('codec_name', 'N/A')
+                
+        return metadata
+    except Exception as e:
+        print(f"Error getting metadata for {file_path}: {e}")
+        return metadata
+
 def get_video_codec(file_path):
     """
     Gets the video codec of a video file using ffprobe.
@@ -137,7 +187,7 @@ def get_video_codec(file_path):
     """
     try:
         cmd = [FFPROBE_EXE, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error: ffprobe failed to get video codec for {file_path}. Error: {e}{Style.RESET_ALL}")
@@ -152,7 +202,7 @@ def check_fdk_aac_codec():
     """
     try:
         cmd = [FFMPEG_EXE, "-encoders"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         if "libfdk_aac" in result.stdout:
             return True
         else:

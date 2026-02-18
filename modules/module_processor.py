@@ -13,11 +13,14 @@ from module_cuda import check_gpu_cuda_support
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
-from module_audio import align_audio_tracks, mix_audio_tracks
+from module_audio import align_audio_tracks, mix_audio_tracks, calculate_audio_lag
 
 # Supported file extensions
 VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.wmv')
 AUDIO_EXTENSIONS = ('.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma')
+
+# Local temp directory
+TEMP_DIR = "_temp"
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -129,15 +132,22 @@ def is_video_file(file_path):
     """Check if the file is a video file."""
     return file_path.lower().endswith(VIDEO_EXTENSIONS)
 
-def process_file(input_file, keep_temp=False, duration=None):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
     """
+    def update_progress(step, progress):
+        if progress_callback:
+            progress_callback(step, progress)
+
     is_audio_only = is_audio_file(input_file)
     if not os.path.exists(input_file):
         print(f"{Fore.RED}Error: Input video file '{input_file}' not found.{Style.RESET_ALL}")
         return False
+    
+    # Ensure local temp directory exists
+    os.makedirs(TEMP_DIR, exist_ok=True)
     
     original_duration = get_audio_duration(input_file)
     if original_duration is None:
@@ -152,7 +162,7 @@ def process_file(input_file, keep_temp=False, duration=None):
     else:
         print(f"{Fore.GREEN}GPU akceleracija podržana.{Style.RESET_ALL}")
 
-    temp_audio_wav_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+    temp_audio_wav_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=TEMP_DIR)
     temp_audio_wav_path = temp_audio_wav_file.name
     temp_audio_wav_file.close()
 
@@ -161,35 +171,39 @@ def process_file(input_file, keep_temp=False, duration=None):
     spleeter_out_path = "spleeter_out"
     demucs_base_out_path = "demucs_out"
 
-    temp_combined_vocals_aac_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False)
-    combined_vocals_aac_path = temp_combined_vocals_aac_file.name
-    temp_combined_vocals_aac_file.close()
+    temp_vocal_mixture_wav_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=TEMP_DIR)
+    vocal_mixture_wav_path = temp_vocal_mixture_wav_file.name
+    temp_vocal_mixture_wav_file.close()
 
-    temp_aligned_spleeter_vocals = tempfile.NamedTemporaryFile(suffix="_aligned_spleeter.wav", delete=False)
+    temp_aligned_spleeter_vocals = tempfile.NamedTemporaryFile(suffix="_aligned_spleeter.wav", delete=False, dir=TEMP_DIR)
     aligned_spleeter_vocals_path = temp_aligned_spleeter_vocals.name
     temp_aligned_spleeter_vocals.close()
 
-    temp_aligned_demucs_vocals = tempfile.NamedTemporaryFile(suffix="_aligned_demucs.wav", delete=False)
+    temp_aligned_demucs_vocals = tempfile.NamedTemporaryFile(suffix="_aligned_demucs.wav", delete=False, dir=TEMP_DIR)
     aligned_demucs_vocals_path = temp_aligned_demucs_vocals.name
     temp_aligned_demucs_vocals.close()
 
     temp_spleeter_segments_dir = None
     spleeter_vocal_wav_path = None
     temp_demucs_segments_dir = None
+    combined_vocals_aac_path = None
 
     try:
         file_type = "audio" if is_audio_only else "video"
         print(f"\n{Back.YELLOW}{Fore.BLACK}# MUSIC REMOVAL STARTED FOR {input_file} ({file_type} file) ---")
         print(f"{Style.RESET_ALL}")
 
-        # Step 0: Audio Track Selection (for video files with multiple streams)
+        # Step 0: Audio Track Selection
         selected_track_index = None
-        if not is_audio_only:
-            audio_tracks = get_audio_tracks(input_file)
-        else:
-            audio_tracks = []
+        update_progress("Scanning audio tracks", 5)
+        audio_tracks = get_audio_tracks(input_file)
 
-        if audio_tracks:
+        if not audio_tracks:
+            update_progress("Error: No audio tracks found", 0)
+            print(f"{Fore.RED}Error: No audio tracks found in '{input_file}'. Aborting.{Style.RESET_ALL}")
+            return False
+
+        if not is_audio_only:
             # Language priorities for automatic selection
             priority_languages = ["hr", "hrv", "sr","jpn"]
             selected_track = None
@@ -210,11 +224,13 @@ def process_file(input_file, keep_temp=False, duration=None):
             selected_track_index = selected_track['index']
             print(f"{Fore.GREEN}Selected audio track: Language: {selected_track['language']}, Stream Index: {selected_track['index']}{Style.RESET_ALL}\n")
         else:
-            if not is_audio_only:
-                print(f"{Fore.YELLOW}No audio tracks found.{Style.RESET_ALL}")
+            # For audio-only files, we use the first available audio track (usually only one)
+            selected_track_index = audio_tracks[0]['index']
+            print(f"{Fore.GREEN}Processing audio file with track index: {selected_track_index}{Style.RESET_ALL}\n")
 
         # Step 1: Export Source to High-Quality WAV for processing
         print(f"{Fore.CYAN}1. Extracting audio to temporary WAV: {temp_audio_wav_path}...{Style.RESET_ALL}")
+        update_progress("Extracting audio", 10)
         ffmpeg_cmd = [FFMPEG_EXE, "-y","-loglevel","error", "-i", input_file]
         if duration:
             ffmpeg_cmd.extend(["-t", str(duration)])
@@ -240,7 +256,9 @@ def process_file(input_file, keep_temp=False, duration=None):
         demucs_workers = settings.get('processing', {}).get('demucs_workers', 2)
 
         # Both models return (path_to_wav, temp_segments_dir)
+        update_progress("Running Spleeter", 20)
         spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext)
+        update_progress("Running Demucs", 50)
         demucs_vocal_wav_path, temp_demucs_segments_dir = separate_with_demucs(
             temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=demucs_workers
         )
@@ -259,28 +277,23 @@ def process_file(input_file, keep_temp=False, duration=None):
         elif not spleeter_input_exists:
             print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly.{Style.RESET_ALL}")
             try:
-                # Re-encode to AAC with normalization directly if only one track available
-                success = convert_audio_with_ffmpeg(demucs_vocal_wav_path, combined_vocals_aac_path, normalize_audio=True)
-                if not success:
-                    print(f"{Fore.RED}Error re-encoding Demucs vocals.{Style.RESET_ALL}")
-                    return False
-                print(f"{Fore.GREEN}Demucs vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
-            except subprocess.CalledProcessError as e:
-                print(f"{Fore.RED}Error re-encoding Demucs vocals: {e}{Style.RESET_ALL}")
+                # Copy Demucs WAV to our vocal mixture path (still WAV)
+                shutil.copy2(demucs_vocal_wav_path, vocal_mixture_wav_path)
+                print(f"{Fore.GREEN}Demucs vocals ready for mixing.{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.RED}Error copying Demucs vocals: {e}{Style.RESET_ALL}")
                 return False
         elif not demucs_input_exists:
             print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
             try:
-                success = convert_audio_with_ffmpeg(spleeter_vocal_wav_path, combined_vocals_aac_path, normalize_audio=True)
-                if not success:
-                    print(f"{Fore.RED}Error re-encoding Spleeter vocals.{Style.RESET_ALL}")
-                    return False
-                print(f"{Fore.GREEN}✔ Spleeter vocals re-encoded to AAC successfully.{Style.RESET_ALL}")
-            except subprocess.CalledProcessError as e:
-                print(f"{Fore.RED}Error re-encoding Spleeter vocals: {e}{Style.RESET_ALL}")
+                shutil.copy2(spleeter_vocal_wav_path, vocal_mixture_wav_path)
+                print(f"{Fore.GREEN}✔ Spleeter vocals ready for mixing.{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
                 return False
         else:
             # When both exist, perform cross-correlation alignment to fix any millisecond offsets
+            update_progress("Aligning audio tracks", 80)
             aligned_spleeter, aligned_demucs = align_audio_tracks(spleeter_vocal_wav_path, demucs_vocal_wav_path, aligned_spleeter_vocals_path, aligned_demucs_vocals_path)
 
             if aligned_spleeter and aligned_demucs:
@@ -290,14 +303,10 @@ def process_file(input_file, keep_temp=False, duration=None):
                 
                 try:
                     # Equal weight mix (0.5 each)
-                    mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, temp_mixed_wav_path.name, volume1=0.5, volume2=0.5)
+                    update_progress("Mixing vocals", 90)
+                    mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, vocal_mixture_wav_path, volume1=0.5, volume2=0.5)
                     
                     if mixed_result:
-                        # Convert final mixed WAV to normalized AAC
-                        success = convert_audio_with_ffmpeg(temp_mixed_wav_path.name, combined_vocals_aac_path, normalize_audio=True)
-                        if not success:
-                            print(f"{Fore.RED}Error converting mixed audio to AAC format.{Style.RESET_ALL}")
-                            return False
                         print(f"\n{Fore.GREEN}✔ Vocals combined successfully.{Style.RESET_ALL}")
                     else:
                         print(f"{Fore.RED}Error: Mixing of aligned vocal tracks failed.{Style.RESET_ALL}")
@@ -315,58 +324,81 @@ def process_file(input_file, keep_temp=False, duration=None):
                 print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
                 return False
 
-        # Check duration of original audio and final processed audio before combining
+        # Smarter synchronization: Only pad the start based on detected lag, then pad the end.
         original_audio_duration = get_audio_duration(temp_audio_wav_path)
-        processed_audio_duration = get_audio_duration(combined_vocals_aac_path)
+        processed_audio_duration = get_audio_duration(vocal_mixture_wav_path)
         
         if original_audio_duration and processed_audio_duration:
-            duration_diff = original_audio_duration - processed_audio_duration
-            print(f"{Fore.BLUE}Original audio duration: {original_audio_duration:.2f} seconds{Style.RESET_ALL}")
-            print(f"{Fore.BLUE}Processed audio duration: {processed_audio_duration:.2f} seconds{Style.RESET_ALL}")
-            print(f"{Fore.BLUE}Duration difference: {duration_diff:.2f} seconds (positive = processed audio is shorter){Style.RESET_ALL}")
+            import soundfile as sf
             
-            # Always add silence to the beginning of processed audio if there's any difference
-            if abs(duration_diff) > 0.001:  # More precise than exact zero due to floating point
-                print(f"{Fore.YELLOW}Duration difference detected. Adding silence to beginning of processed audio.{Style.RESET_ALL}")
+            # Step 4b: Detect REAL lag between original and processed mixture
+            print(f"{Fore.CYAN}4b. Final synchronization check...{Style.RESET_ALL}")
+            try:
+                # Read original (mono subset for check) and processed
+                ref_audio, ref_sr = sf.read(temp_audio_wav_path)
+                proc_audio, proc_sr = sf.read(vocal_mixture_wav_path)
                 
-                # Add silence at the beginning of processed audio using delay filter
-                delayed_temp_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False)
-                delayed_temp_path = delayed_temp_file.name
-                delayed_temp_file.close()
+                # We only need to check the beginning for lag
+                _, lag_ms = calculate_audio_lag(proc_audio, proc_sr, ref_audio, ref_sr)
                 
-                # Use the delay filter to add silence at the beginning if processed audio is shorter
-                if duration_diff > 0:  # processed audio is shorter, need to add delay (silence) at the beginning
-                    delay_cmd = [
-                        FFMPEG_EXE, "-y", "-loglevel", "error",
-                        "-i", combined_vocals_aac_path,
-                        "-af", f"adelay={int(abs(duration_diff) * 1000)}|{int(abs(duration_diff) * 1000)}",  # delay in milliseconds
-                        "-c:a", "aac",
-                        delayed_temp_path
-                    ]
-                else:  # processed audio is longer, need to trim
-                    delay_cmd = [
-                        FFMPEG_EXE, "-y", "-loglevel", "error",
-                        "-i", combined_vocals_aac_path,
-                        "-t", str(original_audio_duration),
-                        "-c:a", "aac",
-                        delayed_temp_path
-                    ]
+                print(f"{Fore.BLUE}Detected start lag: {lag_ms:.2f} ms{Style.RESET_ALL}")
+                
+                # If lag is very large (e.g. > 1s), it's likely a misdetection or a huge error
+                # Usually AI lag is < 50ms.
+                if abs(lag_ms) > 1000:
+                    print(f"{Fore.YELLOW}Warning: Detected lag is suspiciously large. Limiting to 0.{Style.RESET_ALL}")
+                    lag_ms = 0
+                
+                adj_temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=TEMP_DIR)
+                adj_temp_path = adj_temp_file.name
+                adj_temp_file.close()
 
-                try:
-                    subprocess.run(delay_cmd, check=True)
-                    # Replace the combined vocals file with the corrected version
-                    os.remove(combined_vocals_aac_path)
-                    os.rename(delayed_temp_path, combined_vocals_aac_path)
-                    print(f"{Fore.GREEN}Processed audio duration adjusted successfully.{Style.RESET_ALL}")
-                except subprocess.CalledProcessError as e:
-                    print(f"{Fore.RED}Error adjusting processed audio duration: {e}{Style.RESET_ALL}")
-                    # Use original file if adjustment fails
-                    if os.path.exists(delayed_temp_path):
-                        os.remove(delayed_temp_path)
-            else:
-                print(f"{Fore.GREEN}Audio durations are identical.{Style.RESET_ALL}")
+                # Build filter chain: 
+                # 1. adelay for the start lag
+                # 2. apad to fill the remaining duration at the end
+                # 3. atrim to ensure it's not LONGER than original
+                
+                filter_parts = []
+                if lag_ms > 0:
+                    filter_parts.append(f"adelay={int(lag_ms)}|{int(lag_ms)}")
+                
+                # Pad to original duration
+                filter_parts.append(f"apad=whole_dur={original_audio_duration}")
+                
+                # Hard trim at original duration
+                filter_parts.append(f"atrim=0:{original_audio_duration}")
+                
+                adjust_cmd = [
+                    FFMPEG_EXE, "-y", "-loglevel", "error",
+                    "-i", vocal_mixture_wav_path,
+                    "-af", ",".join(filter_parts),
+                    adj_temp_path
+                ]
+                
+                print(f"{Fore.MAGENTA}Applying sync filters: {','.join(filter_parts)}{Style.RESET_ALL}")
+                subprocess.run(adjust_cmd, check=True)
+                
+                os.remove(vocal_mixture_wav_path)
+                os.rename(adj_temp_path, vocal_mixture_wav_path)
+                print(f"{Fore.GREEN}✔ Final synchronization complete.{Style.RESET_ALL}")
+                
+            except Exception as e:
+                print(f"{Fore.RED}Error during final sync: {e}. Keeping original mixture.{Style.RESET_ALL}")
         else:
-            print(f"{Fore.YELLOW}Could not verify audio durations.{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}Could not verify audio durations for final sync.{Style.RESET_ALL}")
+
+        # Step 5: Convert final mixture to ultimate output format
+        temp_combined_vocals_aac_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False, dir=TEMP_DIR)
+        final_mixture_aac_path = temp_combined_vocals_aac_file.name
+        temp_combined_vocals_aac_file.close()
+
+        update_progress("Finalizing audio format", 95)
+        success = convert_audio_with_ffmpeg(vocal_mixture_wav_path, final_mixture_aac_path, normalize_audio=True)
+        if not success:
+            print(f"{Fore.RED}Error finalizing output audio format.{Style.RESET_ALL}")
+            return False
+            
+        combined_vocals_aac_path = final_mixture_aac_path
 
         output_folder = "nomusic"
         os.makedirs(output_folder, exist_ok=True)
@@ -380,7 +412,15 @@ def process_file(input_file, keep_temp=False, duration=None):
 
         audio_codec = audio_settings.get('codec', 'aac')
         audio_bitrate = audio_settings.get('bitrate')
-        base_filename = os.path.splitext(os.path.basename(input_file))[0]
+        
+        # Strip UUID from input filename if present (36 chars uuid + 1 char underscore)
+        raw_name = os.path.basename(input_file)
+        if "_" in raw_name and len(raw_name.split("_")[0]) == 36:
+            clean_name = "_".join(raw_name.split("_")[1:])
+        else:
+            clean_name = raw_name
+            
+        base_filename = f"nomusic_{os.path.splitext(clean_name)[0]}"
         
         try:
             if is_audio_only:
@@ -431,7 +471,7 @@ def process_file(input_file, keep_temp=False, duration=None):
                     else:
                         print(f"{Fore.GREEN}Audio duration is consistent.{Style.RESET_ALL}")
                 
-                return True
+                return output_audio
             else:
                 # For video files, create new video with vocals
                 print(f"\n{Fore.CYAN}5. Creating final video...{Style.RESET_ALL}")
@@ -471,7 +511,9 @@ def process_file(input_file, keep_temp=False, duration=None):
                     output_video
                 ])
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
+                update_progress("Finalizing output", 95)
                 subprocess.run(final_ffmpeg_cmd, check=True)
+                update_progress("Completed", 100)
                 print(f"\n{Fore.GREEN}✔ Successfully created {output_video}{Style.RESET_ALL}")
 
                 # Get final audio duration and compare
@@ -484,7 +526,7 @@ def process_file(input_file, keep_temp=False, duration=None):
                     else:
                         print(f"{Fore.GREEN}Audio duration is consistent.{Style.RESET_ALL}")
 
-                return True
+                return output_video
         except subprocess.CalledProcessError as e:
             print(f"{Fore.RED}✖Error creating final output: {e}{Style.RESET_ALL}")
             return False
@@ -493,7 +535,8 @@ def process_file(input_file, keep_temp=False, duration=None):
         if not keep_temp:
             print(f"\n{Fore.CYAN}--- Cleanup of temporary files ---")
             for f_path in [temp_audio_wav_path, combined_vocals_aac_path, 
-                           aligned_spleeter_vocals_path, aligned_demucs_vocals_path]:
+                           aligned_spleeter_vocals_path, aligned_demucs_vocals_path,
+                           vocal_mixture_wav_path]:
                 if os.path.exists(f_path):
                     try:
                         os.remove(f_path)

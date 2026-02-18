@@ -4,6 +4,62 @@ import soundfile as sf
 from colorama import Fore, Style
 
 
+def calculate_audio_lag(audio1, sr1, audio2, sr2, max_delay_seconds=2.0):
+    """
+    Calculates the lag between two audio signals.
+    Positive result means audio1 is delayed relative to audio2 (audio2 starts earlier).
+    """
+    # Standardize sample rates for correlation
+    if sr1 != sr2:
+        if sr1 < sr2:
+            num = int(audio2.shape[0] * sr1 / sr2)
+            audio2 = signal.resample(audio2, num)
+            sr2 = sr1
+        else:
+            num = int(audio1.shape[0] * sr2 / sr1)
+            audio1 = signal.resample(audio1, num)
+            sr1 = sr2
+            
+    # Prepare envelopes for more robust correlation
+    def get_envelope(audio, sr):
+        if audio.ndim > 1:
+            audio = audio.mean(axis=1)
+        envelope = np.abs(audio)
+        win_size = int(sr * 0.05)
+        if win_size > 1:
+            envelope = np.convolve(envelope, np.ones(win_size)/win_size, mode='same')
+        envelope = envelope - np.mean(envelope)
+        std = np.std(envelope)
+        if std > 0:
+            envelope = envelope / std
+        return envelope
+
+    limit_samples = int(sr1 * 120)
+    env1 = get_envelope(audio1[:limit_samples], sr1)
+    env2 = get_envelope(audio2[:limit_samples], sr1)
+
+    correlation = signal.correlate(env1, env2, mode='full', method='fft')
+    center_idx = len(env2) - 1
+    
+    search_half_width = int(sr1 * max_delay_seconds)
+    search_start = max(0, center_idx - search_half_width)
+    search_end = min(len(correlation), center_idx + search_half_width + 1)
+    
+    windowed_corr = correlation[search_start:search_end]
+    peak_idx_in_window = np.argmax(windowed_corr)
+    peak_idx = search_start + peak_idx_in_window
+    
+    delay_samples = peak_idx - center_idx
+    
+    # Sanity check
+    corr_max = windowed_corr[peak_idx_in_window]
+    corr_mean = np.mean(np.abs(windowed_corr))
+    if corr_max < 2.0 * corr_mean:
+        return 0, 0
+        
+    delay_ms = (delay_samples / sr1) * 1000
+    return delay_samples, delay_ms
+
 def align_audio_tracks(track1_path, track2_path, output_aligned_track1_path, output_aligned_track2_path):
     """
     Aligns two audio tracks using FFT-based cross-correlation.
@@ -12,6 +68,7 @@ def align_audio_tracks(track1_path, track2_path, output_aligned_track1_path, out
 
     Returns the paths to the aligned tracks, or None if alignment fails.
     """
+    # Check for dependencies once at the start of the function
     try:
         import numpy as np
         from scipy import signal
@@ -29,102 +86,59 @@ def align_audio_tracks(track1_path, track2_path, output_aligned_track1_path, out
         audio1, sr1 = sf.read(track1_path)
         audio2, sr2 = sf.read(track2_path)
 
-        # Standardize sample rates
-        if sr1 != sr2:
-            print(f"{Fore.YELLOW}Warning: Sample rates differ ({sr1} vs {sr2}). Resampling for alignment.{Style.RESET_ALL}")
-            if sr1 < sr2:
-                num = int(audio2.shape[0] * sr1 / sr2)
-                audio2 = signal.resample(audio2, num)
-            elif sr2 < sr1:
-                num = int(audio1.shape[0] * sr2 / sr1)
-                audio1 = signal.resample(audio1, num)
-                sr1 = sr2
+        delay_samples, delay_ms = calculate_audio_lag(audio1, sr1, audio2, sr2)
         
-        # Working audio for correlation calculation (normalized mono)
-        def prepare_for_corr(audio):
-            if audio.ndim > 1:
-                audio = audio.mean(axis=1)
-            # Remove DC offset and normalize
-            audio = audio - np.mean(audio)
-            std = np.std(audio)
-            if std > 0:
-                audio = audio / std
-            return audio
-
-        corr_audio1 = prepare_for_corr(audio1)
-        corr_audio2 = prepare_for_corr(audio2)
-
-        # To speed up and improve robustness, we can use a subset of the audio if it's too long
-        # or use the envelope for alignment.
-        # For music alignment, raw waveform is often okay, but envelope is safer for different models.
-        
-        # We'll use the first 120 seconds (2 minutes) for correlation if available
-        limit_samples = int(sr1 * 120)
-        seg1 = corr_audio1[:limit_samples]
-        seg2 = corr_audio2[:limit_samples]
-
-        print(f"{Fore.BLUE}Calculating correlation using FFT method...{Style.RESET_ALL}")
-        # method='fft' is faster for large arrays
-        correlation = signal.correlate(seg1, seg2, mode='full', method='fft')
-        
-        # The peak in the correlation array tells us the shift
-        # delay_samples > 0 means audio1 is delayed relative to audio2 (audio2 starts earlier)
-        # delay_samples < 0 means audio2 is delayed relative to audio1 (audio1 starts earlier)
-        delay_samples = np.argmax(correlation) - (len(seg2) - 1)
-        delay_ms = (delay_samples / sr1) * 1000
-
-        print(f"{Fore.BLUE}Calculated audio delay: {delay_ms:.2f} ms ({delay_samples} samples){Style.RESET_ALL}")
-
-        # Check if delay is plausible (e.g., within 2 seconds)
-        if abs(delay_ms) > 2000:
-            print(f"{Fore.YELLOW}Warning: Large delay detected ({delay_ms:.2f} ms). Peak might be noise.{Style.RESET_ALL}")
+        if delay_ms == 0:
+            print(f"{Fore.YELLOW}Warning: Weak correlation or no delay detected.{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.BLUE}Calculated audio delay: {delay_ms:.2f} ms ({delay_samples} samples){Style.RESET_ALL}")
 
         aligned_audio1 = audio1
         aligned_audio2 = audio2
 
         if delay_samples > 0:
             # audio1 is delayed, so we pad audio2 at the beginning
-            print(f"{Fore.BLUE}Padding Track 2 (Demucs) by {delay_ms:.2f} ms at the beginning.{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}Padding Track 2 by {delay_ms:.2f} ms at the beginning.{Style.RESET_ALL}")
             # Pad beginning of audio2
             if audio2.ndim > 1:
                 aligned_audio2 = np.pad(audio2, ((delay_samples, 0), (0, 0)), 'constant')
             else:
                 aligned_audio2 = np.pad(audio2, (delay_samples, 0), 'constant')
             
-            # Ensure both are same length at the end
-            len_diff = len(aligned_audio2) - len(audio1)
-            if len_diff > 0:
+            # Ensure both are same length at end
+            diff = len(aligned_audio2) - len(audio1)
+            if diff > 0:
                 if audio1.ndim > 1:
-                    aligned_audio1 = np.pad(audio1, ((0, len_diff), (0, 0)), 'constant')
+                    aligned_audio1 = np.pad(audio1, ((0, diff), (0, 0)), 'constant')
                 else:
-                    aligned_audio1 = np.pad(audio1, (0, len_diff), 'constant')
-            elif len_diff < 0:
+                    aligned_audio1 = np.pad(audio1, (0, diff), 'constant')
+            elif diff < 0:
                 if audio2.ndim > 1:
-                    aligned_audio2 = np.pad(aligned_audio2, ((0, -len_diff), (0, 0)), 'constant')
+                    aligned_audio2 = np.pad(aligned_audio2, ((0, -diff), (0, 0)), 'constant')
                 else:
-                    aligned_audio2 = np.pad(aligned_audio2, (0, -len_diff), 'constant')
+                    aligned_audio2 = np.pad(aligned_audio2, (0, -diff), 'constant')
 
         elif delay_samples < 0:
             # audio2 is delayed, so we pad audio1 at the beginning
-            print(f"{Fore.BLUE}Padding Track 1 (Spleeter) by {-delay_ms:.2f} ms at the beginning.{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}Padding Track 1 by {-delay_ms:.2f} ms at the beginning.{Style.RESET_ALL}")
             # Pad beginning of audio1
             if audio1.ndim > 1:
                 aligned_audio1 = np.pad(audio1, ((-delay_samples, 0), (0, 0)), 'constant')
             else:
                 aligned_audio1 = np.pad(audio1, (-delay_samples, 0), 'constant')
             
-            # Ensure both are same length at the end
-            len_diff = len(aligned_audio1) - len(audio2)
-            if len_diff > 0:
+            # Ensure both are same length at end
+            diff = len(aligned_audio1) - len(audio2)
+            if diff > 0:
                 if audio2.ndim > 1:
-                    aligned_audio2 = np.pad(audio2, ((0, len_diff), (0, 0)), 'constant')
+                    aligned_audio2 = np.pad(audio2, ((0, diff), (0, 0)), 'constant')
                 else:
-                    aligned_audio2 = np.pad(audio2, (0, len_diff), 'constant')
-            elif len_diff < 0:
+                    aligned_audio2 = np.pad(audio2, (0, diff), 'constant')
+            elif diff < 0:
                 if audio1.ndim > 1:
-                    aligned_audio1 = np.pad(aligned_audio1, ((0, -len_diff), (0, 0)), 'constant')
+                    aligned_audio1 = np.pad(aligned_audio1, ((0, -diff), (0, 0)), 'constant')
                 else:
-                    aligned_audio1 = np.pad(aligned_audio1, (0, -len_diff), 'constant')
+                    aligned_audio1 = np.pad(aligned_audio1, (0, -diff), 'constant')
         else:
             print(f"{Fore.GREEN}Tracks are already aligned. No padding needed.{Style.RESET_ALL}")
             len1 = len(audio1)

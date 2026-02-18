@@ -44,7 +44,9 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
         if audio_duration > DEMUCS_SEGMENT_DURATION_SECONDS:
             print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for parallel Demucs...{Style.RESET_ALL}\n")
-            temp_demucs_segments_dir = tempfile.mkdtemp()
+            # Ensure _temp exists
+            os.makedirs("_temp", exist_ok=True)
+            temp_demucs_segments_dir = tempfile.mkdtemp(dir="_temp")
             split_audio_paths = []
 
             current_start_time = 0
@@ -84,7 +86,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "-o", demucs_base_out_path, segment_path]
                 
                 try:
-                    subprocess.run(demucs_cmd, check=True, capture_output=True, text=True)
+                    subprocess.run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 except subprocess.CalledProcessError as e:
                     tqdm.write(f"{Fore.YELLOW}Warning: Demucs failed for segment {segment_base_name}. Creating silence.{Style.RESET_ALL}")
                     # Create silence fallback
@@ -148,7 +150,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             ]
             print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
             try: 
-                subprocess.run(demucs_cmd, check=True, capture_output=True, text=True)
+                subprocess.run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
             except subprocess.CalledProcessError as e:
                 print(f"{Fore.RED}Demucs failed for short audio. Creating silence fallback.{Style.RESET_ALL}")

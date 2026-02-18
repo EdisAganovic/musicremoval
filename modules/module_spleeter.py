@@ -39,7 +39,9 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
 
         if audio_duration > SPLEETER_SEGMENT_DURATION_SECONDS:
             print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for Spleeter...{Style.RESET_ALL}\n")
-            temp_spleeter_segments_dir = tempfile.mkdtemp()
+            # Ensure _temp exists
+            os.makedirs("_temp", exist_ok=True)
+            temp_spleeter_segments_dir = tempfile.mkdtemp(dir="_temp")
             spleeter_segment_vocal_paths = []
             split_audio_paths = []
 
@@ -73,7 +75,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 
                 spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
                 tqdm.write(f"{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Spleeter{Style.RESET_ALL}")
-                subprocess.run(spleeter_cmd, check=True, capture_output=True)
+                subprocess.run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
                 segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
                 if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
@@ -98,7 +100,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
         else:
             spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
             print(f"{Fore.MAGENTA}Executing: {' '.join(spleeter_cmd)}{Style.RESET_ALL}\n")
-            subprocess.run(spleeter_cmd, check=True, capture_output=True)
+            subprocess.run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
             print(f"{Fore.GREEN}Spleeter separation complete.{Style.RESET_ALL}")
         
