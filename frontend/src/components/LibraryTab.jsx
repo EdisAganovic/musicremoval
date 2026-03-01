@@ -1,26 +1,75 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { libraryAPI } from '../api/index.js';
-import { Video, Music, FolderOpen, Trash2, Layers, Search, CheckSquare, Square, PlayCircle, Download } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Video, Music, FolderOpen, Trash2, Layers, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw } from 'lucide-react';
+import axios from 'axios';
 
 const LibraryTab = ({ onSeparate }) => {
     const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
     const [sortBy, setSortBy] = useState('date');
     const [folderFilter, setFolderFilter] = useState('all'); // 'all', 'download', 'nomusic'
+    const [folderSizes, setFolderSizes] = useState({ download: '0 MB', nomusic: '0 MB' });
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    
+    // Refs for cleanup
+    const abortControllerRef = useRef(null);
+    const sizeAbortRef = useRef(null);
 
     const fetchLibrary = async () => {
-        setLoading(true);
-        try {
-            const response = await libraryAPI.get();
-            setItems(response.data);
-        } catch (err) {
-            console.error("Failed to fetch library", err);
-        } finally {
-            setLoading(false);
+        setIsRefreshing(true);
+        // Cancel previous request if still pending
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
         }
+        abortControllerRef.current = new AbortController();
+        
+        try {
+            const response = await libraryAPI.get({ signal: abortControllerRef.current.signal });
+            setItems(response.data || []);
+            
+            // Keep spinning for at least 3 seconds for visual feedback
+            setTimeout(() => {
+                setIsRefreshing(false);
+            }, 3000);
+        } catch (err) {
+            // Silently ignore abort errors (expected when switching tabs)
+            if (err.name === 'AbortError' || err.name === 'CanceledError') {
+                return;
+            }
+            console.error("Failed to fetch library", err);
+            setIsRefreshing(false);
+        }
+    };
+
+    const fetchFolderSizes = async () => {
+        // Cancel previous request if still pending
+        if (sizeAbortRef.current) {
+            sizeAbortRef.current.abort();
+        }
+        sizeAbortRef.current = new AbortController();
+        
+        try {
+            const response = await axios.get('http://localhost:5170/api/system-info', {
+                signal: sizeAbortRef.current.signal
+            });
+            setFolderSizes({
+                download: response.data.storage.download_size,
+                nomusic: response.data.storage.output_size
+            });
+        } catch (err) {
+            // Silently ignore abort errors (expected when switching tabs)
+            if (err.name === 'AbortError' || err.name === 'CanceledError') {
+                return;
+            }
+            // Only log actual errors
+            console.error("Failed to fetch folder sizes", err);
+        }
+    };
+
+    const handleRefresh = async () => {
+        await fetchLibrary();
+        await fetchFolderSizes();
     };
 
     const handleDelete = async (taskId) => {
@@ -101,12 +150,20 @@ const LibraryTab = ({ onSeparate }) => {
         return 0;
     });
 
+    // Initial fetch only - manual refresh via button
     useEffect(() => {
         fetchLibrary();
-        const interval = setInterval(() => {
-            fetchLibrary();
-        }, 10000);
-        return () => clearInterval(interval);
+        fetchFolderSizes();
+        
+        return () => {
+            // Cleanup: abort pending requests on unmount
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+            if (sizeAbortRef.current) {
+                sizeAbortRef.current.abort();
+            }
+        };
     }, []);
 
     return (
@@ -135,6 +192,7 @@ const LibraryTab = ({ onSeparate }) => {
                     >
                         <Download className="w-3.5 h-3.5" />
                         Download
+                        <span className="text-xs text-emerald-400">({folderSizes.download})</span>
                     </button>
                     <button
                         onClick={() => setFolderFilter('nomusic')}
@@ -146,11 +204,30 @@ const LibraryTab = ({ onSeparate }) => {
                     >
                         <FolderOpen className="w-3.5 h-3.5" />
                         NoMusic
+                        <span className="text-xs text-emerald-400">({folderSizes.nomusic})</span>
                     </button>
                 </div>
 
-                {/* Open Folder Actions */}
-                <div className="flex gap-2">
+                {/* Actions */}
+                <div className="flex gap-2 items-center">
+                    {/* Refresh Button */}
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className={`p-2 rounded-lg transition-all border ${
+                            isRefreshing
+                                ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 cursor-not-allowed'
+                                : 'bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 border-blue-500/30'
+                        }`}
+                        title="Refresh library"
+                    >
+                        <RefreshCw 
+                            className="w-4 h-4"
+                            style={isRefreshing ? { animation: 'spin 1s linear infinite' } : {}}
+                        />
+                    </button>
+
+                    {/* Open Folder Actions */}
                     <button
                         onClick={() => openFolder('download')}
                         className="px-3 py-2 bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white text-xs font-bold rounded-lg transition-all border border-white/10 flex items-center gap-2"
@@ -216,22 +293,10 @@ const LibraryTab = ({ onSeparate }) => {
                         <span>Delete {selectedItems.length}</span>
                     </button>
                 )}
-
-                {/* Refresh */}
-                <button
-                    onClick={fetchLibrary}
-                    className="p-2 bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white rounded-lg transition-all border border-white/5"
-                >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                </button>
             </div>
 
             {/* Table */}
-            {loading && items.length === 0 ? (
-                <div className="text-center py-10 text-gray-500">Loading...</div>
-            ) : items.length === 0 ? (
+            {items.length === 0 ? (
                 <div className="text-center py-20 bg-dark-900/50 rounded-lg border border-white/5">
                     <p className="text-gray-500 text-sm">No files yet</p>
                 </div>
@@ -256,11 +321,8 @@ const LibraryTab = ({ onSeparate }) => {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {filteredItems.map((item) => (
-                                <motion.tr
+                                <tr
                                     key={item.task_id}
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    exit={{ opacity: 0 }}
                                     className={`transition-all ${
                                         selectedItems.includes(item.task_id)
                                             ? 'bg-primary-500/5'
@@ -338,7 +400,7 @@ const LibraryTab = ({ onSeparate }) => {
                                             </button>
                                         </div>
                                     </td>
-                                </motion.tr>
+                                </tr>
                             ))}
                         </tbody>
                     </table>

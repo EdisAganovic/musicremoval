@@ -52,7 +52,7 @@ import axios from 'axios';
 import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, Subtitles, List, Trash2, Play, Pause, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const DownloaderTab = () => {
+const DownloaderTab = ({ analyzingProgress }) => {
     const [url, setUrl] = useState('');
     const [taskId, setTaskId] = useState(null);
     const [status, setStatus] = useState(null);
@@ -287,6 +287,7 @@ const DownloaderTab = () => {
     const handleAnalyze = async () => {
         if (!url) return;
         setIsAnalyzing(true);
+        setAnalyzingProgress({ current: 0, total: 0 });
         setError(null);
         setVideoInfo(null);
         setAvailableFormats([]);
@@ -301,15 +302,11 @@ const DownloaderTab = () => {
             });
             setVideoInfo(response.data);
 
-            // Extract video ID from URL or response
-            let videoId = null;
-            const urlParams = new URLSearchParams(new URL(url).search);
-            videoId = urlParams.get('v') || response.data.id || null;
-
             // Check if this is a playlist
             if (response.data.is_playlist) {
                 setIsPlaylist(true);
                 setPlaylistVideos(response.data.videos || []);
+                setAnalyzingProgress({ current: response.data.video_count, total: response.data.video_count });
                 // Pre-select all videos
                 setSelectedPlaylistVideos(response.data.videos?.map(v => v.id) || []);
             } else {
@@ -320,21 +317,8 @@ const DownloaderTab = () => {
                 });
 
                 setAvailableFormats(filtered);
-                
-                // Try to restore last selected format for this video ID
-                let formatSelected = false;
-                if (videoId && videoId === lastVideoId && lastSelectedFormat) {
-                    // Check if the saved format still exists in available formats
-                    const savedFormatExists = filtered.some(f => f.format_id === lastSelectedFormat);
-                    if (savedFormatExists) {
-                        setSelectedFormatId(lastSelectedFormat);
-                        formatSelected = true;
-                        console.log(`[Downloader] Restored saved format: ${lastSelectedFormat}`);
-                    }
-                }
-                
-                // If no saved format, select best by default (usually last in list)
-                if (!formatSelected && filtered.length > 0) {
+                if (filtered.length > 0) {
+                    // Select best by default (usually last in list)
                     setSelectedFormatId(filtered[filtered.length - 1].format_id);
                 }
             }
@@ -343,12 +327,13 @@ const DownloaderTab = () => {
             setError('Failed to analyze link. Check if URL is valid.');
         } finally {
             setIsAnalyzing(false);
+            setTimeout(() => setAnalyzingProgress({ current: 0, total: 0 }), 500);
         }
     };
 
     // Update filtered formats when tab changes
     useEffect(() => {
-        if (videoInfo) {
+        if (videoInfo && !videoInfo.is_playlist && videoInfo.formats) {
             const filtered = videoInfo.formats.filter(f => {
                 if (format === 'audio') return f.vcodec === 'none';
                 return f.vcodec !== 'none';
@@ -447,14 +432,28 @@ const DownloaderTab = () => {
                             onClick={handleAnalyze}
                             disabled={!url || isAnalyzing}
                             title={!url ? "Please enter a URL first" : isAnalyzing ? "Analyzing..." : "Analyze video/playlist"}
-                            className={`mr-3 px-6 py-2.5 rounded-lg flex items-center space-x-2 font-bold text-sm transition-all ${
+                            className={`mr-3 px-6 py-2.5 rounded-lg flex items-center space-x-2 font-bold text-sm transition-all min-w-[140px] ${
                                 !url || isAnalyzing
                                 ? 'bg-dark-800 text-gray-600'
                                 : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
                             }`}
                         >
-                            {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                            <span>{isAnalyzing ? 'Analyzing...' : 'Analyze'}</span>
+                            {isAnalyzing ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    <span>
+                                        {analyzingProgress && analyzingProgress.total > 0 
+                                            ? `Analyzing ${analyzingProgress.current}/${analyzingProgress.total}`
+                                            : 'Analyzing...'
+                                        }
+                                    </span>
+                                </>
+                            ) : (
+                                <>
+                                    <Search className="w-4 h-4" />
+                                    <span>Analyze</span>
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -518,7 +517,7 @@ const DownloaderTab = () => {
                                     <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
                                         {playlistVideos.map((video, idx) => (
                                             <div
-                                                key={video.id}
+                                                key={`${video.id}-${idx}`}
                                                 className={`flex items-center space-x-3 p-2 rounded-lg border ${
                                                     selectedPlaylistVideos.includes(video.id)
                                                         ? 'bg-primary-600/10 border-primary-500/30'
@@ -537,11 +536,17 @@ const DownloaderTab = () => {
                                                     }}
                                                     className="rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500"
                                                 />
-                                                <img 
-                                                    src={video.thumbnail} 
-                                                    alt={video.title} 
-                                                    className="w-16 h-12 rounded object-cover flex-shrink-0"
-                                                />
+                                                {video.thumbnail ? (
+                                                    <img
+                                                        src={video.thumbnail}
+                                                        alt={video.title}
+                                                        className="w-16 h-12 rounded object-cover flex-shrink-0"
+                                                    />
+                                                ) : (
+                                                    <div className="w-16 h-12 rounded bg-dark-800 flex items-center justify-center flex-shrink-0">
+                                                        <Video className="w-6 h-6 text-gray-600" />
+                                                    </div>
+                                                )}
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-white text-sm font-medium truncate">{video.title}</p>
                                                     <p className="text-xs text-gray-500">{video.duration || 'N/A'}</p>
@@ -554,7 +559,13 @@ const DownloaderTab = () => {
                                 /* Single Video View */
                                 <div className="flex p-4 space-x-4">
                                     <div className="w-32 h-20 bg-dark-900 rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
-                                        <img src={videoInfo.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                                        {videoInfo.thumbnail ? (
+                                            <img src={videoInfo.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <Video className="w-8 h-8 text-gray-600" />
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center space-x-2 mb-1">

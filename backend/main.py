@@ -2,6 +2,8 @@ import os
 import sys
 import uuid
 import asyncio
+import random
+import io
 from typing import Dict, List
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +16,57 @@ from colorama import Fore, Style, init
 
 # Initialize colorama
 init(autoreset=True)
+
+# Store recent console logs for frontend display
+console_logs = []
+MAX_LOGS = 500  # Keep last 500 log entries
+
+class ConsoleLog:
+    def __init__(self, message: str, level: str = "info"):
+        self.message = message
+        self.level = level  # info, warning, error, success
+        self.timestamp = asyncio.get_event_loop().time()
+    
+    def to_dict(self):
+        return {
+            "message": self.message,
+            "level": self.level,
+            "time": self.timestamp
+        }
+
+def log_console(message: str, level: str = "info"):
+    """Add message to console logs"""
+    console_logs.append(ConsoleLog(message, level))
+    # Trim old logs
+    if len(console_logs) > MAX_LOGS:
+        console_logs.pop(0)
+    # Also print to actual console
+    print(message)
+
+# Custom stdout capture for yt-dlp output
+class LogCapture:
+    def __init__(self, level: str = "info"):
+        self.level = level
+        self.buffer = []
+    
+    def write(self, text):
+        if text.strip():
+            # Parse color codes and determine level
+            if '[0m' in text:
+                text = text.replace('[0m', '')
+            if Fore.RED in text or 'error' in text.lower() or 'failed' in text.lower():
+                level = 'error'
+            elif Fore.YELLOW in text or 'warning' in text.lower():
+                level = 'warning'
+            elif Fore.GREEN in text or '✓' in text or 'success' in text.lower():
+                level = 'success'
+            else:
+                level = self.level
+            
+            log_console(text.strip(), level)
+    
+    def flush(self):
+        pass
 
 # Add parent directory to sys.path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -263,10 +316,12 @@ async def process_queue():
             pending_item["status"] = "failed"
         
         save_queue()
-        
-        # Small delay between downloads
-        await asyncio.sleep(2)
-    
+
+        # Random delay between downloads (29-49 seconds) to avoid rate limiting
+        delay = random.randint(29, 49)
+        print(f"{Fore.YELLOW}Waiting {delay} seconds before next download (rate limiting)...{Style.RESET_ALL}")
+        await asyncio.sleep(delay)
+
     queue_processing = False
 
 class TaskStatus(BaseModel):
@@ -325,15 +380,17 @@ async def run_yt_dlp(task_id: str, url: str, format_type: str = 'audio', format_
         else:
             download_format = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best' if format_type == 'video' else 'bestaudio/best'
 
+        print(f"{Fore.CYAN}Starting yt-dlp download with format: {download_format}{Style.RESET_ALL}")
+        
         ydl_opts = {
             'format': download_format,
             'outtmpl': f'{output_dir}/%(title)s.%(ext)s',
             'progress_hooks': [progress_hook],
             'remote_components': ['ejs:github'],
-            'quiet': True,
+            'quiet': False,  # Show yt-dlp output
             'no_warnings': False,
             'impersonate': ImpersonateTarget(client='chrome'),
-            'no_color': True,  # Disable color codes in output
+            'no_color': False,  # Keep color codes for better visibility
         }
 
         if format_type == 'audio':
@@ -342,6 +399,7 @@ async def run_yt_dlp(task_id: str, url: str, format_type: str = 'audio', format_
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
             }]
+            print(f"{Fore.YELLOW}Audio format selected - will extract to MP3{Style.RESET_ALL}")
 
         if subtitles and subtitles != "none":
             ydl_opts['writesubtitles'] = True
@@ -352,41 +410,50 @@ async def run_yt_dlp(task_id: str, url: str, format_type: str = 'audio', format_
                 ydl_opts['subtitleslangs'] = ['all']
 
             ydl_opts['sleep_subtitles'] = 60
+            print(f"{Fore.YELLOW}Subtitles enabled: {subtitles}{Style.RESET_ALL}")
 
             if format_type == 'video':
                 ydl_opts['postprocessors'] = ydl_opts.get('postprocessors', []) + [{
                     'key': 'FFmpegEmbedSubtitle',
                 }]
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Store ydl instance for potential cancellation
-            active_downloads[task_id]["ydl"] = ydl
-            
-            info = ydl.extract_info(url, download=True)
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # Store ydl instance for potential cancellation
+                active_downloads[task_id]["ydl"] = ydl
 
-            final_filename = info.get('_filename')
+                print(f"{Fore.YELLOW}Downloading: {url}{Style.RESET_ALL}")
+                info = ydl.extract_info(url, download=True)
 
-            if not final_filename:
-                final_filename = ydl.prepare_filename(info)
+                final_filename = info.get('_filename')
 
-            if format_type == 'audio' and final_filename and not final_filename.endswith('.mp3'):
-                final_filename = os.path.splitext(final_filename)[0] + ".mp3"
+                if not final_filename:
+                    final_filename = ydl.prepare_filename(info)
 
-            if final_filename and not os.path.exists(final_filename):
-                possible_name = ydl.prepare_filename(info)
-                if not os.path.exists(possible_name):
-                    title = info.get('title')
-                    for f in os.listdir(output_dir):
-                        if title in f and f.endswith(('.mp4', '.mp3', '.mkv', '.webm')):
-                            final_filename = os.path.join(output_dir, f)
-                            break
-                else:
-                    final_filename = possible_name
+                if format_type == 'audio' and final_filename and not final_filename.endswith('.mp3'):
+                    final_filename = os.path.splitext(final_filename)[0] + ".mp3"
 
-            if not final_filename:
-                raise Exception("Could not determine final download filename.")
+                if final_filename and not os.path.exists(final_filename):
+                    possible_name = ydl.prepare_filename(info)
+                    if not os.path.exists(possible_name):
+                        title = info.get('title')
+                        for f in os.listdir(output_dir):
+                            if title in f and f.endswith(('.mp4', '.mp3', '.mkv', '.webm')):
+                                final_filename = os.path.join(output_dir, f)
+                                break
+                    else:
+                        final_filename = possible_name
 
-            return os.path.abspath(final_filename), info
+                if not final_filename:
+                    raise Exception("Could not determine final download filename.")
+
+                print(f"{Fore.GREEN}✓ Download successful: {final_filename}{Style.RESET_ALL}")
+                return os.path.abspath(final_filename), info
+        except Exception as e:
+            print(f"{Fore.RED}✗ yt-dlp download failed: {e}{Style.RESET_ALL}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     # Retry logic with exponential backoff
     max_retries = 3
@@ -425,49 +492,55 @@ async def run_yt_dlp(task_id: str, url: str, format_type: str = 'audio', format_
 
         # If auto_separate is enabled, queue separation after download
         if auto_separate:
-            print(f"Auto-separation enabled. Starting vocal separation for: {final_filepath}")
+            print(f"{Fore.CYAN}Auto-separation enabled. Starting vocal separation for: {final_filepath}{Style.RESET_ALL}")
             tasks[task_id]["current_step"] = "Starting vocal separation..."
             tasks[task_id]["status"] = "separating"
 
             # Run separation
             try:
+                print(f"{Fore.YELLOW}Calling process_file for separation...{Style.RESET_ALL}")
                 separation_result = await loop.run_in_executor(None, process_file, final_filepath, False, None)
 
                 if separation_result and isinstance(separation_result, str):
                     sep_abs_path = os.path.abspath(separation_result)
+                    print(f"{Fore.GREEN}✓ Separation successful: {sep_abs_path}{Style.RESET_ALL}")
+                    
                     # Extract final metadata
                     try:
                         sep_metadata = get_file_metadata(sep_abs_path)
                         tasks[task_id]["metadata"] = sep_metadata
                     except Exception as meta_err:
-                        print(f"Error extracting separation metadata: {meta_err}")
+                        print(f"{Fore.RED}Error extracting separation metadata: {meta_err}{Style.RESET_ALL}")
 
                     tasks[task_id]["status"] = "completed"
                     tasks[task_id]["progress"] = 100
                     tasks[task_id]["current_step"] = "Download & Separation Finished"
                     tasks[task_id]["result_files"] = [sep_abs_path]
                     save_to_library(tasks[task_id])
-                    
+
                     # Send notification
                     filename = os.path.basename(sep_abs_path)
                     add_notification("success", "Download & Separation Complete", f"'{filename}' is ready in your library", {
                         "file_path": sep_abs_path,
                         "task_id": task_id
                     })
-                    
-                    print(f"Download and separation complete: {sep_abs_path}")
+
+                    print(f"{Fore.GREEN}Download and separation complete: {sep_abs_path}{Style.RESET_ALL}")
                     return
                 else:
-                    raise Exception("Separation failed")
+                    print(f"{Fore.RED}✗ Separation returned no result{Style.RESET_ALL}")
+                    raise Exception("Separation failed - no result returned")
             except Exception as sep_err:
-                print(f"Separation error after download: {sep_err}")
+                print(f"{Fore.RED}✗ Separation error after download: {sep_err}{Style.RESET_ALL}")
+                import traceback
+                traceback.print_exc()
                 tasks[task_id]["current_step"] = f"Download OK, Separation failed: {str(sep_err)}"
                 # Still save the downloaded file to library
                 tasks[task_id]["status"] = "completed"
                 tasks[task_id]["progress"] = 100
                 tasks[task_id]["result_files"] = [final_filepath]
                 save_to_library(tasks[task_id])
-                
+
                 # Send notification for download only
                 filename = os.path.basename(final_filepath)
                 add_notification("warning", "Download Complete (Separation Failed)", f"'{filename}' downloaded but separation failed", {
@@ -527,37 +600,94 @@ async def get_yt_formats(payload: dict):
         ])
         
         if check_playlist and is_playlist_url:
-            # Fetch playlist/channel info
+            # Convert channel URLs to playlist URLs for better extraction
+            # Channel URLs like /@channel or /channel/ID need to be converted
+            if '/@' in url or '/channel/' in url:
+                # Extract channel ID/handle and use uploads playlist
+                if '/@' in url:
+                    channel_handle = url.split('/@')[1].split('?')[0].split('/')[0]
+                    print(f"{Fore.CYAN}Detected channel handle: @{channel_handle}{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}Converting to uploads playlist...{Style.RESET_ALL}")
+                    # Use the uploads playlist URL instead
+                    url = f"https://www.youtube.com/@{channel_handle}/videos"
+                elif '/channel/' in url:
+                    channel_id = url.split('/channel/')[1].split('?')[0].split('/')[0]
+                    print(f"{Fore.CYAN}Detected channel ID: {channel_id}{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}Converting to uploads playlist...{Style.RESET_ALL}")
+                    url = f"https://www.youtube.com/channel/{channel_id}/videos"
+            
+            # Remove /featured, /shorts, /live etc. and use /videos
+            if '/featured' in url:
+                url = url.replace('/featured', '/videos')
+                print(f"{Fore.YELLOW}Removed /featured from URL, using /videos instead{Style.RESET_ALL}")
+            if '/shorts' in url:
+                url = url.replace('/shorts', '/videos')
+                print(f"{Fore.YELLOW}Removed /shorts from URL, using /videos instead{Style.RESET_ALL}")
+            
+            print(f"{Fore.CYAN}Final URL for extraction: {url}{Style.RESET_ALL}")
+            
+            # Fetch playlist/channel info with full extraction
+            log_console(f"Fetching playlist/channel info: {url}", "info")
             ydl_opts = {
-                'quiet': True,
-                'noplaylist': False,  # Allow playlist extraction
-                'extract_flat': True,  # Don't download, just extract info
+                'quiet': False,  # Show output for debugging
+                'noplaylist': False,
+                'extract_flat': False,  # Full extraction for accurate count
+                'playlistend': 100,  # Limit to first 100 videos for performance
                 'remote_components': ['ejs:github'],
             }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
+            try:
+                # Custom logger for yt-dlp
+                class YtDlpLogger:
+                    def debug(self, msg):
+                        log_console(f"[yt-dlp] {msg}", "info")
+                    def warning(self, msg):
+                        log_console(f"[yt-dlp] {msg}", "warning")
+                    def error(self, msg):
+                        log_console(f"[yt-dlp] ERROR: {msg}", "error")
                 
-                # Extract playlist videos
-                videos = []
-                entries = info.get('entries', []) if info.get('_type') == 'playlist' else [info]
+                ydl_opts['logger'] = YtDlpLogger()
                 
-                for entry in entries:
-                    if entry:  # Skip None entries (deleted/private videos)
-                        videos.append({
-                            "id": entry.get('id', ''),
-                            "title": entry.get('title', 'Unknown'),
-                            "thumbnail": entry.get('thumbnail', ''),
-                            "duration": format_duration(entry.get('duration', 0)),
-                            "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
-                        })
-                
-                return {
-                    "is_playlist": True,
-                    "title": info.get("title", "Playlist"),
-                    "thumbnail": info.get("thumbnail", ""),
-                    "video_count": len(videos),
-                    "videos": videos
-                }
+                # Capture both stdout and stderr for yt-dlp output
+                old_stdout = sys.stdout
+                old_stderr = sys.stderr
+                sys.stdout = LogCapture("info")
+                sys.stderr = LogCapture("warning")
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        log_console("Extracting playlist info... (this may take a moment)", "warning")
+                        info = ydl.extract_info(url, download=False)
+                finally:
+                    sys.stdout = old_stdout
+                    sys.stderr = old_stderr
+                    
+                    # Extract playlist videos
+                    videos = []
+                    entries = info.get('entries', []) if info.get('_type') == 'playlist' else [info]
+                    
+                    log_console(f"Found {len(entries)} entries in playlist", "success")
+                    
+                    for entry in entries:
+                        if entry:  # Skip None entries (deleted/private videos)
+                            videos.append({
+                                "id": entry.get('id', ''),
+                                "title": entry.get('title', 'Unknown'),
+                                "thumbnail": entry.get('thumbnail', ''),
+                                "duration": format_duration(entry.get('duration', 0)),
+                                "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
+                            })
+                    
+                    return {
+                        "is_playlist": True,
+                        "title": info.get("title", "Playlist"),
+                        "thumbnail": info.get("thumbnail", ""),
+                        "video_count": len(videos),
+                        "videos": videos
+                    }
+            except Exception as playlist_err:
+                log_console(f"Playlist extraction error: {playlist_err}", "error")
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"Playlist extraction failed: {str(playlist_err)}")
         
         # Single video - get formats
         ydl_opts = {
@@ -714,6 +844,8 @@ async def add_to_queue_batch(payload: dict):
             added_count += 1
     
     save_queue()
+    print(f"{Fore.GREEN}✓ Added {added_count} videos to queue{Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}Note: Downloads will have 29-49 second random delays between them to avoid rate limiting{Style.RESET_ALL}")
     asyncio.create_task(process_queue())
 
     return {"added": added_count, "status": "queued"}
@@ -769,6 +901,218 @@ async def get_notifications():
     """Get all notifications."""
     unread_count = sum(1 for n in notifications if not n.get("read", False))
     return {"notifications": notifications, "unread_count": unread_count}
+
+@app.get("/api/console-logs")
+async def get_console_logs():
+    """Get recent console logs for frontend display."""
+    # Return last 100 logs, newest first
+    recent_logs = console_logs[-100:] if len(console_logs) > 100 else console_logs
+    return {
+        "logs": [log.to_dict() for log in reversed(recent_logs)],
+        "count": len(recent_logs)
+    }
+
+@app.post("/api/console-logs/clear")
+async def clear_console_logs():
+    """Clear all console logs."""
+    global console_logs
+    console_logs = []
+    return {"status": "cleared"}
+
+@app.get("/api/system-info")
+async def get_system_info():
+    """Get system information including GPU, CUDA, and package versions."""
+    import torch
+    import subprocess
+    import shutil
+    import json
+    
+    info = {
+        "gpu": {
+            "available": False,
+            "name": "N/A",
+            "vram_total": "N/A",
+            "vram_free": "N/A",
+            "cuda_version": "N/A"
+        },
+        "packages": {
+            "python": sys.version.split()[0],
+            "yt-dlp": "N/A",
+            "demucs": "N/A",
+            "spleeter": "N/A",
+            "pytorch": torch.__version__,
+            "torchaudio": "N/A",
+            "ffmpeg": "N/A"
+        },
+        "processing": {
+            "demucs_workers": 2,
+            "segment_duration": "600s"
+        },
+        "memory": {
+            "total": "N/A",
+            "available": "N/A",
+            "demucs_usage": "~8GB per job"
+        },
+        "storage": {
+            "total": "N/A",
+            "free": "N/A",
+            "output_folder": os.path.abspath("nomusic"),
+            "download_folder": os.path.abspath("download"),  # Using "download" not "downloads"
+            "output_size": "0 MB",
+            "download_size": "0 MB"
+        },
+        "library": {
+            "total_files": 0,
+            "total_size": "0 MB"
+        }
+    }
+    
+    # Check GPU
+    if torch.cuda.is_available():
+        info["gpu"]["available"] = True
+        info["gpu"]["name"] = torch.cuda.get_device_name(0)
+        info["gpu"]["cuda_version"] = torch.version.cuda
+        
+        # Get VRAM info
+        try:
+            total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            info["gpu"]["vram_total"] = f"{total_vram:.1f} GB"
+        except:
+            pass
+    
+    # Get package versions
+    try:
+        result = subprocess.run([sys.executable, "-m", "pip", "show", "yt-dlp"], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if line.startswith('Version:'):
+                    info["packages"]["yt-dlp"] = line.split(':')[1].strip()
+    except:
+        pass
+    
+    try:
+        result = subprocess.run([sys.executable, "-m", "pip", "show", "demucs"], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if line.startswith('Version:'):
+                    info["packages"]["demucs"] = line.split(':')[1].strip()
+    except:
+        pass
+    
+    try:
+        result = subprocess.run([sys.executable, "-m", "pip", "show", "spleeter"], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            for line in result.stdout.split('\n'):
+                if line.startswith('Version:'):
+                    info["packages"]["spleeter"] = line.split(':')[1].strip()
+    except:
+        pass
+    
+    try:
+        import torchaudio
+        info["packages"]["torchaudio"] = torchaudio.__version__
+    except:
+        pass
+    
+    # Get FFmpeg version
+    try:
+        result = subprocess.run([FFMPEG_EXE, "-version"], capture_output=True, text=True)
+        if result.returncode == 0:
+            first_line = result.stdout.split('\n')[0]
+            info["packages"]["ffmpeg"] = first_line.replace('ffmpeg version', '').strip()
+    except:
+        pass
+    
+    # Get RAM info (cross-platform)
+    try:
+        import psutil
+        mem = psutil.virtual_memory()
+        info["memory"]["total"] = f"{mem.total / (1024**3):.1f} GB"
+        info["memory"]["available"] = f"{mem.available / (1024**3):.1f} GB"
+    except:
+        # Fallback without psutil
+        try:
+            if os.name == 'nt':  # Windows
+                result = subprocess.run(['wmic', 'OS', 'get', 'FreePhysicalMemory,TotalVisibleMemorySize', '/Value'], 
+                                      capture_output=True, text=True)
+                for line in result.stdout.split('\n'):
+                    if 'TotalVisibleMemorySize' in line:
+                        total_kb = int(line.split('=')[1])
+                        info["memory"]["total"] = f"{total_kb / (1024**2):.1f} GB"
+                    elif 'FreePhysicalMemory' in line:
+                        free_kb = int(line.split('=')[1])
+                        info["memory"]["available"] = f"{free_kb / (1024**2):.1f} GB"
+        except:
+            pass
+    
+    # Get storage info
+    try:
+        total, used, free = shutil.disk_usage(os.path.abspath("."))
+        info["storage"]["total"] = f"{total / (1024**3):.1f} GB"
+        info["storage"]["free"] = f"{free / (1024**3):.1f} GB"
+    except:
+        pass
+    
+    # Calculate folder sizes
+    def get_folder_size(path):
+        total_size = 0
+        if os.path.exists(path):
+            for dirpath, dirnames, filenames in os.walk(path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    if os.path.exists(fp):
+                        total_size += os.path.getsize(fp)
+        return total_size
+    
+    try:
+        download_size = get_folder_size("download")  # Using "download" folder, not "downloads"
+        if download_size > 1024**3:
+            info["storage"]["download_size"] = f"{download_size / (1024**3):.2f} GB"
+        elif download_size > 1024**2:
+            info["storage"]["download_size"] = f"{download_size / (1024**2):.1f} MB"
+        elif download_size > 1024:
+            info["storage"]["download_size"] = f"{download_size / 1024:.1f} KB"
+    except:
+        pass
+    
+    try:
+        output_size = get_folder_size("nomusic")
+        if output_size > 1024**3:
+            info["storage"]["output_size"] = f"{output_size / (1024**3):.2f} GB"
+        elif output_size > 1024**2:
+            info["storage"]["output_size"] = f"{output_size / (1024**2):.1f} MB"
+        elif output_size > 1024:
+            info["storage"]["output_size"] = f"{output_size / 1024:.1f} KB"
+    except:
+        pass
+    
+    # Get library stats
+    try:
+        if os.path.exists(LIBRARY_FILE):
+            with open(LIBRARY_FILE, 'r') as f:
+                library = json.load(f)
+                if isinstance(library, list):
+                    info["library"]["total_files"] = len(library)
+                    # Calculate total size
+                    total_size = 0
+                    for item in library:
+                        result_files = item.get("result_files", [])
+                        for rf in result_files:
+                            if os.path.exists(rf):
+                                total_size += os.path.getsize(rf)
+                    if total_size > 1024**3:
+                        info["library"]["total_size"] = f"{total_size / (1024**3):.1f} GB"
+                    elif total_size > 1024**2:
+                        info["library"]["total_size"] = f"{total_size / (1024**2):.1f} MB"
+                    elif total_size > 1024:
+                        info["library"]["total_size"] = f"{total_size / 1024:.1f} KB"
+    except:
+        pass
+    
+    return info
 
 @app.post("/api/notifications/test")
 async def test_notification():

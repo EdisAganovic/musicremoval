@@ -34,6 +34,7 @@ export default {
       animation: {
         'gradient-x': 'gradient-x 15s ease infinite',
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'spin': 'spin 1s linear infinite',
       },
       keyframes: {
         'gradient-x': {
@@ -45,6 +46,10 @@ export default {
             'background-size': '200% 200%',
             'background-position': 'right center',
           },
+        },
+        spin: {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
         },
       },
     },
