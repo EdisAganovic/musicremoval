@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { LayoutGrid, Music, Video, FolderOpen, RefreshCw, Clock, HardDrive, FileAudio, Copy, PlayCircle, Trash2 } from 'lucide-react';
+import { LayoutGrid, Music, Video, FolderOpen, RefreshCw, Clock, HardDrive, FileAudio, Copy, PlayCircle, Trash2, Layers, Search, CheckSquare, Square } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const LibraryTab = () => {
+const LibraryTab = ({ onSeparate }) => {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [sortBy, setSortBy] = useState('date'); // date, size, duration
 
     const fetchLibrary = async () => {
         setLoading(true);
@@ -34,30 +37,142 @@ const LibraryTab = () => {
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (selectedItems.length === 0) return;
+        
+        if (!window.confirm(`Jeste li sigurni da želite obrisati ${selectedItems.length} fajl(ova)?`)) {
+            return;
+        }
+
+        try {
+            for (const taskId of selectedItems) {
+                await axios.post('http://localhost:8000/api/delete-file', { task_id: taskId });
+            }
+            setSelectedItems([]);
+            fetchLibrary();
+        } catch (err) {
+            console.error("Failed to bulk delete", err);
+            alert("Greška pri brisanju fajlova.");
+        }
+    };
+
+    const toggleSelect = (taskId) => {
+        setSelectedItems(prev => 
+            prev.includes(taskId) 
+                ? prev.filter(id => id !== taskId)
+                : [...prev, taskId]
+        );
+    };
+
+    const selectAll = () => {
+        if (selectedItems.length === filteredItems.length) {
+            setSelectedItems([]);
+        } else {
+            setSelectedItems(filteredItems.map(item => item.task_id));
+        }
+    };
+
+    // Filter and sort items
+    const filteredItems = items.filter(item => {
+        const filename = (item.result_files?.[0] || '').toLowerCase();
+        const query = searchQuery.toLowerCase();
+        return filename.includes(query) || 
+               (item.metadata?.duration || '').toLowerCase().includes(query);
+    }).sort((a, b) => {
+        if (sortBy === 'date') {
+            // Sort by task_id (contains timestamp)
+            return b.task_id.localeCompare(a.task_id);
+        } else if (sortBy === 'duration') {
+            const durA = parseFloat(a.metadata?.duration) || 0;
+            const durB = parseFloat(b.metadata?.duration) || 0;
+            return durB - durA;
+        }
+        return 0;
+    });
+
     useEffect(() => {
         fetchLibrary();
-        
+
         // Auto-refresh every 10 seconds to catch new completions
         const interval = setInterval(() => {
             fetchLibrary();
         }, 10000);
-        
+
         return () => clearInterval(interval);
     }, []);
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto pb-10">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-black text-white tracking-tight">Your Library</h2>
-                    <p className="text-gray-500 text-sm font-medium">History of processed files</p>
+            {/* Header with Search */}
+            <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-black text-white tracking-tight">Your Library</h2>
+                        <p className="text-gray-500 text-sm font-medium">
+                            {filteredItems.length} files {selectedItems.length > 0 && `• ${selectedItems.length} selected`}
+                        </p>
+                    </div>
+                    <button
+                        onClick={fetchLibrary}
+                        className="p-2 bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white rounded-xl transition-all border border-white/5 active:scale-95"
+                    >
+                        <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
                 </div>
-                <button 
-                    onClick={fetchLibrary}
-                    className="p-2 bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white rounded-xl transition-all border border-white/5 active:scale-95"
-                >
-                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                </button>
+
+                {/* Search and Controls */}
+                <div className="flex gap-3 flex-wrap">
+                    {/* Search Input */}
+                    <div className="flex-1 min-w-64 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search files..."
+                            className="w-full bg-dark-800 text-white text-sm border border-white/10 rounded-xl pl-10 pr-4 py-2.5 outline-none focus:border-primary-500/50 transition-colors"
+                        />
+                    </div>
+
+                    {/* Sort Dropdown */}
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="bg-dark-800 text-white text-sm border border-white/10 rounded-xl px-4 py-2.5 outline-none focus:border-primary-500/50 transition-colors cursor-pointer"
+                    >
+                        <option value="date">Sort by Date</option>
+                        <option value="duration">Sort by Duration</option>
+                    </select>
+
+                    {/* Select All */}
+                    <button
+                        onClick={selectAll}
+                        className="px-4 py-2.5 bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white text-sm font-bold rounded-xl transition-all border border-white/10 flex items-center gap-2"
+                    >
+                        {selectedItems.length === filteredItems.length && filteredItems.length > 0 ? (
+                            <>
+                                <CheckSquare className="w-4 h-4" />
+                                <span>Deselect All</span>
+                            </>
+                        ) : (
+                            <>
+                                <Square className="w-4 h-4" />
+                                <span>Select All</span>
+                            </>
+                        )}
+                    </button>
+
+                    {/* Bulk Delete */}
+                    {selectedItems.length > 0 && (
+                        <button
+                            onClick={handleBulkDelete}
+                            className="px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 text-sm font-bold rounded-xl transition-all border border-red-500/20 flex items-center gap-2"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete {selectedItems.length}</span>
+                        </button>
+                    )}
+                </div>
             </div>
 
             {loading && items.length === 0 ? (
@@ -80,39 +195,45 @@ const LibraryTab = () => {
             ) : (
                 <div className="grid grid-cols-1 gap-4">
                     <AnimatePresence>
-                        {items.map((item, idx) => (
+                        {filteredItems.map((item, idx) => (
                             <motion.div
                                 key={item.task_id}
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
                                 transition={{ delay: idx * 0.05 }}
-                                className="group relative bg-dark-800/80 backdrop-blur-xl border border-white/5 p-5 rounded-2xl flex items-center justify-between hover:border-primary-500/30 transition-all hover:shadow-2xl hover:shadow-primary-600/10"
+                                className={`group relative bg-dark-800/80 backdrop-blur-xl border p-5 rounded-2xl flex items-center justify-between transition-all hover:shadow-2xl ${
+                                    selectedItems.includes(item.task_id)
+                                        ? 'border-primary-500/50 bg-primary-500/5 shadow-primary-600/10'
+                                        : 'border-white/5 hover:border-primary-500/30'
+                                }`}
                             >
-                                <div className="flex items-center space-x-5">
-                                    <div 
-                                        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 duration-300 cursor-pointer overflow-hidden relative"
+                                {/* Checkbox */}
+                                <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedItems.includes(item.task_id)}
+                                        onChange={() => toggleSelect(item.task_id)}
+                                        className="w-5 h-5 rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500 focus:ring-2 cursor-pointer"
+                                    />
+                                </div>
+                                
+                                <div className="flex items-center space-x-5 pl-10">
+                                    <div
+                                        className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 duration-300 cursor-pointer overflow-hidden relative bg-gradient-to-tr from-indigo-600 to-primary-500"
                                         onClick={async () => {
                                             try { await axios.post('http://localhost:8000/api/open-file', { path: item.result_files?.[0] }); }
                                             catch (err) { alert("Ne mogu otvoriti fajl."); }
                                         }}
                                     >
-                                        <div className={`absolute inset-0 ${
-                                            item.metadata?.is_video 
-                                            ? 'bg-gradient-to-tr from-indigo-600 to-primary-500' 
-                                            : 'bg-gradient-to-tr from-emerald-600 to-teal-500'
-                                        }`} />
-                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">
-                                            <PlayCircle className="w-8 h-8 text-white fill-white/20" />
-                                        </div>
                                         {item.metadata?.is_video ? (
-                                            <Video className="w-7 h-7 text-white relative z-10" />
+                                            <Video className="w-7 h-7 text-white" />
                                         ) : (
-                                            <Music className="w-7 h-7 text-white relative z-10" />
+                                            <Music className="w-7 h-7 text-white" />
                                         )}
                                     </div>
                                     <div className="space-y-1 group/text">
-                                        <h3 
+                                        <h3
                                             className="text-white font-bold text-lg hover:text-primary-400 transition-colors truncate max-w-sm cursor-pointer"
                                             onClick={async () => {
                                                 try { await axios.post('http://localhost:8000/api/open-file', { path: item.result_files?.[0] }); }
@@ -144,7 +265,7 @@ const LibraryTab = () => {
                                 </div>
 
                                 <div className="flex items-center space-x-3">
-                                    <button 
+                                    <button
                                         className="p-3 bg-primary-600/10 hover:bg-primary-600 text-primary-400 hover:text-white rounded-xl transition-all border border-primary-500/20 shadow-lg shadow-primary-500/5 group/play active:scale-95"
                                         onClick={async () => {
                                             try { await axios.post('http://localhost:8000/api/open-file', { path: item.result_files?.[0] }); }
@@ -154,7 +275,18 @@ const LibraryTab = () => {
                                     >
                                         <PlayCircle className="w-5 h-5 transition-transform group-hover/play:scale-125" />
                                     </button>
-                                    <button 
+                                    <button
+                                        className="p-3 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-xl transition-all border border-emerald-500/20 shadow-lg shadow-emerald-500/5 group/separate active:scale-95"
+                                        onClick={() => {
+                                            if (onSeparate) {
+                                                onSeparate(item.result_files?.[0]);
+                                            }
+                                        }}
+                                        title="Separiraj vokale"
+                                    >
+                                        <Layers className="w-5 h-5 transition-transform group-hover/separate:scale-110" />
+                                    </button>
+                                    <button
                                         className="p-3 bg-dark-900/80 hover:bg-dark-700 text-gray-400 hover:text-white rounded-xl transition-all border border-white/5 shadow-inner flex items-center space-x-2 font-bold text-sm group/folder active:scale-95"
                                         onClick={async () => {
                                             try {
@@ -168,7 +300,7 @@ const LibraryTab = () => {
                                         <FolderOpen className="w-4 h-4 transition-transform group-hover/folder:scale-110" />
                                         <span className="hidden md:inline">Folder</span>
                                     </button>
-                                    <button 
+                                    <button
                                         className="p-3 bg-red-500/10 hover:bg-red-500 text-red-500/70 hover:text-white rounded-xl transition-all border border-red-500/20 active:scale-90 group/delete"
                                         onClick={() => handleDelete(item.task_id)}
                                         title="Obriši fajl"

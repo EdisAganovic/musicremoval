@@ -37,6 +37,7 @@ def main():
     download_parser = subparsers.add_parser("download", help="Download a video from a URL.")
     download_parser.add_argument("url", help="URL of the video to download.")
     download_parser.add_argument("filename", nargs='?', default=None, help="Optional: Filename for the downloaded video.")
+    download_parser.add_argument("--separate", action="store_true", help="If used, automatically separate vocals after downloading.")
 
     args = parser.parse_args()
 
@@ -46,6 +47,18 @@ def main():
             if downloaded_file_path:
                 print(f"\n{Fore.GREEN}Script finished successfully.{Style.RESET_ALL}")
                 print(f"Video downloaded to: {downloaded_file_path}")
+                
+                # Auto-separate if flag is set
+                if args.separate:
+                    print(f"\n{Fore.CYAN}Starting vocal separation...{Style.RESET_ALL}")
+                    if not download_ffmpeg():
+                        print(f"\n{Fore.RED}FFmpeg download failed. Cannot proceed with separation.{Style.RESET_ALL}")
+                    else:
+                        success = process_file(downloaded_file_path, args.temp)
+                        if success:
+                            print(f"\n{Fore.GREEN}Vocal separation completed successfully.{Style.RESET_ALL}")
+                        else:
+                            print(f"\n{Fore.RED}Vocal separation failed. Check logs above.{Style.RESET_ALL}")
             else:
                 print(f"\n{Fore.RED}Script failed. Check logs above.{Style.RESET_ALL}")
         finally:

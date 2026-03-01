@@ -1,16 +1,58 @@
 {
+  "presets": {
+    "fast": {
+      "label": "Fast (Small Size)",
+      "video": {
+        "codec": "copy",
+        "bitrate": null
+      },
+      "audio": {
+        "codec": "aac",
+        "bitrate": "128k"
+      },
+      "output": {
+        "format": "mp4"
+      }
+    },
+    "balanced": {
+      "label": "Balanced (Recommended)",
+      "video": {
+        "codec": "h264_nvenc",
+        "bitrate": "2500k"
+      },
+      "audio": {
+        "codec": "aac",
+        "bitrate": "192k"
+      },
+      "output": {
+        "format": "mp4"
+      }
+    },
+    "quality": {
+      "label": "High Quality (Large Size)",
+      "video": {
+        "codec": "hevc_nvenc",
+        "bitrate": "8000k"
+      },
+      "audio": {
+        "codec": "aac",
+        "bitrate": "256k"
+      },
+      "output": {
+        "format": "mp4"
+      }
+    }
+  },
+  "current_preset": "balanced",
   "video": {
     "codec": "h264_nvenc",
-    "bitrate": "1800k"
+    "bitrate": "2500k"
   },
   "audio": {
-    "codec": "libfdk_aac",
-    "bitrate": "128k"
+    "codec": "aac",
+    "bitrate": "192k"
   },
   "output": {
     "format": "mp4"
-  },
-  "processing": {
-    "demucs_workers": 3
   }
 }

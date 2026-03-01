@@ -2,11 +2,14 @@ import { useState } from 'react';
 import SeparationTab from './components/SeparationTab';
 import DownloaderTab from './components/DownloaderTab';
 import LibraryTab from './components/LibraryTab';
+import NotificationBell from './components/NotificationBell';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Download, Music, Library } from 'lucide-react';
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState('separation');
+  const [libraryFileToSeparate, setLibraryFileToSeparate] = useState(null);
 
   const tabVariants = {
     hidden: { opacity: 0, y: 10 },
@@ -19,26 +22,31 @@ function App() {
       <div className="max-w-5xl mx-auto space-y-8">
         
         {/* Header - Glassmorphism */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center space-x-6 mb-10"
+          className="flex items-center justify-between mb-10"
         >
-          <div className="relative group">
-            <div className="absolute -inset-1 bg-gradient-to-r from-primary-600 to-accent-500 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
-            <div className="relative p-4 bg-dark-800 rounded-full ring-1 ring-white/10 shadow-2xl">
-              <Music className="w-8 h-8 text-primary-400 group-hover:text-white transition-colors" />
+          <div className="flex items-center space-x-6">
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-primary-600 to-accent-500 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
+              <div className="relative p-4 bg-dark-800 rounded-full ring-1 ring-white/10 shadow-2xl">
+                <Music className="w-8 h-8 text-primary-400 group-hover:text-white transition-colors" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow-lg">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+                  Audio Splitter
+                </span>{' '}
+                <span className="text-gray-500 font-light">Pro</span>
+              </h1>
+              <p className="text-gray-400 mt-1 font-medium tracking-wide">Next-Gen AI Separation & Downloader</p>
             </div>
           </div>
-          <div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-white drop-shadow-lg">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
-                Audio Splitter
-              </span>{' '}
-              <span className="text-gray-500 font-light">Pro</span>
-            </h1>
-            <p className="text-gray-400 mt-1 font-medium tracking-wide">Next-Gen AI Separation & Downloader</p>
-          </div>
+          
+          {/* Notification Bell */}
+          <NotificationBell />
         </motion.div>
 
         {/* Tab Navigation - Pill Style */}
@@ -73,7 +81,7 @@ function App() {
           {/* Separation Tab Wrapper */}
           <motion.div
             initial={false}
-            animate={{ 
+            animate={{
               opacity: activeTab === 'separation' ? 1 : 0,
               scale: activeTab === 'separation' ? 1 : 0.98,
               y: activeTab === 'separation' ? 0 : 10,
@@ -82,7 +90,7 @@ function App() {
             transition={{ duration: 0.3 }}
             className="glass-card p-8 md:p-10 min-h-[500px] border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)]"
           >
-            <SeparationTab />
+            <SeparationTab libraryFile={libraryFileToSeparate} onFileCleared={() => setLibraryFileToSeparate(null)} />
           </motion.div>
 
           {/* Downloader Tab Wrapper */}
@@ -103,7 +111,7 @@ function App() {
           {/* Library Tab Wrapper */}
           <motion.div
             initial={false}
-            animate={{ 
+            animate={{
               opacity: activeTab === 'library' ? 1 : 0,
               scale: activeTab === 'library' ? 1 : 0.98,
               y: activeTab === 'library' ? 0 : 10,
@@ -112,7 +120,10 @@ function App() {
             transition={{ duration: 0.3 }}
             className="glass-card p-8 md:p-10 min-h-[500px] border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)]"
           >
-            <LibraryTab />
+            <LibraryTab onSeparate={(filePath) => {
+              setLibraryFileToSeparate(filePath);
+              setActiveTab('separation');
+            }} />
           </motion.div>
         </div>
 
@@ -146,15 +157,23 @@ function App() {
                     <span className="text-primary-400 group-hover:text-primary-300 transition-colors">🦖</span>
                     <span className="font-mono tracking-widest uppercase group-hover:text-gray-300">DENO ACTIVE</span>
                 </div>
-                
+
                 <div className="w-px h-3 bg-white/10"></div>
-                
+
                 <span className="font-mono tracking-widest opacity-60">v1.2.0-BETA</span>
             </div>
             <p className="text-[9px] text-gray-600 uppercase tracking-[0.2em] font-bold">2025 DeepMind Advanced Audio Ecosystem</p>
         </motion.div>
       </div>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <NotificationProvider>
+      <AppContent />
+    </NotificationProvider>
   );
 }
 
