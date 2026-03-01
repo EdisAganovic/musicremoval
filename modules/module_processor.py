@@ -1,6 +1,40 @@
 """
-Core processing module that orchestrates the vocal extraction pipeline.
-It handles video/audio input, track selection, model execution, alignment, and final output creation.
+MODULE: module_processor.py - MAIN ORCHESTRATOR for vocal separation
+
+ROLE: Central coordinator that manages the entire vocal extraction pipeline
+
+RESPONSIBILITIES:
+  - Validates input file (video/audio) and selects audio track
+  - Downloads FFmpeg if not present
+  - Extracts source audio to high-quality WAV
+  - Routes to Demucs and/or Spleeter for AI separation
+  - Handles segmentation for files >10min (splits into 600s chunks)
+  - Calls module_audio for alignment and mixing
+  - Applies final normalization (loudnorm) and encoding
+
+KEY FUNCTIONS:
+  process_file(input_path, keep_temp, duration, progress_callback) → bool
+    - Main entry point, returns True on success
+  load_config(config_path) → dict
+    - Loads video.json settings, falls back to defaults
+  is_audio_file() / is_video_file() → bool
+    - Extension-based file type detection
+
+RETURNS:
+  True if successful, False on error
+
+SIDE EFFECTS:
+  - Writes output to ./nomusic/ folder
+  - Updates video.json library database
+  - Creates temp files in _temp/ (cleaned unless keep_temp=True)
+  - Creates spleeter_out/ and demucs_out/ directories
+
+DEPENDENCIES:
+  - module_cuda: GPU detection
+  - module_ffmpeg: Audio extraction, duration, conversion
+  - module_spleeter: AI separation (2stems model)
+  - module_demucs: AI separation (htdemucs model)
+  - module_audio: Alignment via cross-correlation, mixing
 """
 import json
 import os
@@ -145,10 +179,10 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
     if not os.path.exists(input_file):
         print(f"{Fore.RED}Error: Input video file '{input_file}' not found.{Style.RESET_ALL}")
         return False
-    
+
     # Ensure local temp directory exists
     os.makedirs(TEMP_DIR, exist_ok=True)
-    
+
     original_duration = get_audio_duration(input_file)
     if original_duration is None:
         print(f"{Fore.YELLOW}Warning: Could not determine audio duration for the original video.{Style.RESET_ALL}")
@@ -162,9 +196,13 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
     else:
         print(f"{Fore.GREEN}GPU akceleracija podržana.{Style.RESET_ALL}")
 
+    # FIX: Create ALL temp file paths upfront and track them for guaranteed cleanup
+    temp_files_to_cleanup = []
+    
     temp_audio_wav_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=TEMP_DIR)
     temp_audio_wav_path = temp_audio_wav_file.name
     temp_audio_wav_file.close()
+    temp_files_to_cleanup.append(temp_audio_wav_path)
 
     base_audio_name_no_ext = os.path.splitext(os.path.basename(temp_audio_wav_path))[0]
 
@@ -174,14 +212,17 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
     temp_vocal_mixture_wav_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=TEMP_DIR)
     vocal_mixture_wav_path = temp_vocal_mixture_wav_file.name
     temp_vocal_mixture_wav_file.close()
+    temp_files_to_cleanup.append(vocal_mixture_wav_path)
 
     temp_aligned_spleeter_vocals = tempfile.NamedTemporaryFile(suffix="_aligned_spleeter.wav", delete=False, dir=TEMP_DIR)
     aligned_spleeter_vocals_path = temp_aligned_spleeter_vocals.name
     temp_aligned_spleeter_vocals.close()
+    temp_files_to_cleanup.append(aligned_spleeter_vocals_path)
 
     temp_aligned_demucs_vocals = tempfile.NamedTemporaryFile(suffix="_aligned_demucs.wav", delete=False, dir=TEMP_DIR)
     aligned_demucs_vocals_path = temp_aligned_demucs_vocals.name
     temp_aligned_demucs_vocals.close()
+    temp_files_to_cleanup.append(aligned_demucs_vocals_path)
 
     temp_spleeter_segments_dir = None
     spleeter_vocal_wav_path = None
@@ -231,24 +272,28 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         # Step 1: Export Source to High-Quality WAV for processing
         print(f"{Fore.CYAN}1. Extracting audio to temporary WAV: {temp_audio_wav_path}...{Style.RESET_ALL}")
         update_progress("Extracting audio", 10)
-        ffmpeg_cmd = [FFMPEG_EXE, "-y","-loglevel","error", "-i", input_file]
+        ffmpeg_cmd = [FFMPEG_EXE, "-y", "-i", input_file]
         if duration:
             ffmpeg_cmd.extend(["-t", str(duration)])
             print(f"{Fore.YELLOW}Limiting processing to first {duration} seconds.{Style.RESET_ALL}")
-            
+
         if selected_track_index is not None:
             ffmpeg_cmd.extend(["-map", f"0:{selected_track_index}"])
-        
+
         # Downmix to stereo (Demucs/Spleeter prefer 2 channels)
         ffmpeg_cmd.extend(["-ac", "2"])
         ffmpeg_cmd.append(temp_audio_wav_path)
-        
+
         print(f"{Fore.MAGENTA}Executing: {' '.join(ffmpeg_cmd)}\n")
         try:
-            subprocess.run(ffmpeg_cmd, check=True)
+            # FIX: Capture stderr to show meaningful error messages
+            result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
             print(f"{Fore.GREEN}Audio extraction complete.\n{Style.RESET_ALL}")
         except subprocess.CalledProcessError as e:
+            # FIX: Display FFmpeg error output for debugging
             print(f"{Fore.RED}Error extracting audio: {e}{Style.RESET_ALL}")
+            if e.stderr:
+                print(f"{Fore.RED}FFmpeg error output: {e.stderr[:500]}{Style.RESET_ALL}")
             return False
 
         # Step 2 & 3: Run AI Source Separation Models
@@ -532,12 +577,11 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             return False
 
     finally:
+        # FIX: Use tracked list for guaranteed cleanup of all temp files
         if not keep_temp:
             print(f"\n{Fore.CYAN}--- Cleanup of temporary files ---")
-            for f_path in [temp_audio_wav_path, combined_vocals_aac_path, 
-                           aligned_spleeter_vocals_path, aligned_demucs_vocals_path,
-                           vocal_mixture_wav_path]:
-                if os.path.exists(f_path):
+            for f_path in temp_files_to_cleanup:
+                if f_path and os.path.exists(f_path):
                     try:
                         os.remove(f_path)
                         print(f"{Fore.BLUE}Removed temporary file: {f_path}{Style.RESET_ALL}")
@@ -568,7 +612,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         else:
             print(f"\n{Fore.YELLOW}--- Skipping cleanup of temporary files ---")
             print(f"Temporary audio WAV file: {temp_audio_wav_path}")
-            print(f"Combined vocals AAC file: {combined_vocals_aac_path}")
+            if combined_vocals_aac_path:
+                print(f"Combined vocals AAC file: {combined_vocals_aac_path}")
             print(f"Aligned Spleeter vocals: {aligned_spleeter_vocals_path}")
             print(f"Aligned Demucs vocals: {aligned_demucs_vocals_path}")
             if temp_spleeter_segments_dir:

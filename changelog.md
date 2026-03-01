@@ -1,5 +1,125 @@
 # Changelog
 
+## [0.0.3] - 2026-03-01 ⚡
+
+Major UX improvements, playlist support, and configuration centralization.
+
+### [Added]
+
+#### YouTube Downloader
+
+- **Playlist/Channel Download Support**: Full playlist and channel download capability
+  - Auto-detects playlist/channel URLs (`/playlist?list=`, `/@channel`, `/channel/`)
+  - Displays all videos with thumbnails, titles, and duration
+  - Select/deselect individual videos
+  - Select All / None buttons for quick selection
+  - Confirmation modal before adding to queue ("Are you sure you want to download X videos?")
+  - Batch queue addition via `/api/queue/add-batch` endpoint
+  - Supports: Playlists, Channels, Mixes, Single videos
+
+- **Video ID Display**: Shows YouTube video ID in brackets for easy identification
+  - Format: `[dQw4w9WgXcQ] Video Title`
+  - Helps users verify correct video before download
+
+- **Remember Format Preference**: Checkbox to save selected format per video
+  - Stores in localStorage: `lastVideoId` and `lastSelectedFormat`
+  - Auto-restores saved format when re-analyzing same video
+  - Shows "✓ Saved format restored" indicator
+  - Toggle on/off with checkbox
+
+- **Format File Size Preview**: Shows estimated file size in format dropdown
+  - Format: `1080p (245.3 MB)`
+  - Helps users make informed quality/size decisions
+
+#### Library
+
+- **Folder Filter System**: Filter library by source folder
+  - "All Files" - Shows everything
+  - "Download" - Shows only downloaded files (red highlight)
+  - "NoMusic" - Shows only separated files (emerald highlight)
+  - Quick filter buttons always visible
+
+- **Open Folder Quick Actions**: One-click folder access
+  - "Open Download" button - Opens download folder
+  - "Open NoMusic" button - Opens separated files folder
+  - Always visible in library header
+
+- **Smart Separate Button**: Hides for already-separated files
+  - Shows separate button only for download folder files
+  - Hides for nomusic files (already processed)
+
+#### Configuration
+
+- **Centralized Port Configuration**: Single source of truth for backend port
+  - `.env` file: `VITE_API_BASE_URL=http://localhost:5170/api`
+  - API client layer reads from environment
+  - No more hardcoded URLs in components
+  - Easy port changes: edit `.env` and restart
+
+- **API Client Layer**: Centralized API communication
+  - `frontend/src/api/index.js` with organized endpoints
+  - Axios instance with 30s timeout
+  - Request/response interceptors for logging
+  - Organized by feature: `libraryAPI`, `separationAPI`, `downloadAPI`, `queueAPI`, `notificationsAPI`
+
+### [Changed]
+
+#### UI/UX
+
+- **Compact Header**: Reduced header size by ~50%
+  - Logo: 64px → 20px
+  - Title: 36px → 24px
+  - Subtitle removed for cleaner look
+  - Tighter spacing throughout
+
+- **Smoother Tab Transitions**: Faster, cleaner animations
+  - Duration: 0.3s → 0.15s (2x faster)
+  - Removed flying animation (y-axis movement)
+  - Simple opacity fade only
+  - No scale effect
+
+- **Removed Redundant Header**: YT Downloader tab header removed
+  - Removed large YouTube icon
+  - Removed "YouTube Downloader" title
+  - Removed "Advanced Format Selection Control" subtitle
+  - More space for actual content
+
+- **Library Table Layout**: Replaced card layout with compact table
+  - 2-3x more files visible
+  - Organized columns: File, Duration, Quality, Actions
+  - Smaller icons and fonts
+  - Cleaner visual hierarchy
+
+### [Fixed]
+
+- **Port Configuration**: All hardcoded `localhost:8000` URLs replaced
+  - Changed 25+ instances to use API client layer
+  - All components now use centralized configuration
+  - No more CORS errors from port mismatch
+
+- **Folder Name Mismatch**: Corrected "downloads" → "download"
+  - Filter logic updated
+  - Button labels updated
+  - Open folder actions updated
+
+### [Technical]
+
+- **Backend Playlist API**: New `/api/yt-formats` logic
+  - Detects playlist/channel URLs automatically
+  - Returns `{is_playlist: true, videos: [...], video_count: X}`
+  - `format_duration()` helper for readable timestamps
+
+- **Backend Batch Queue API**: New `/api/queue/add-batch` endpoint
+  - Adds multiple videos in single request
+  - Returns `{added: X, status: "queued"}`
+  - Efficient for large playlists
+
+- **Documentation**: Created `PORT_CONFIG.md`
+  - Explains how to change backend port
+  - Single source of truth for configuration
+
+---
+
 ## [0.0.2] - 2026-03-01 ⚡
 
 Major feature expansion with queue management, batch processing, notifications, and production-ready reliability improvements.

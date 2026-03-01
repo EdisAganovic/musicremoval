@@ -1,6 +1,30 @@
-import subprocess
-import os
-import json
+"""
+MODULE: module_deno.py - DENO RUNTIME HELPER
+
+ROLE: Executes Deno JavaScript/TypeScript scripts from Python
+
+KEY FUNCTIONS:
+  run_deno_script(script_path, args) → dict
+    - Returns: {"status": "success"|"error"|"exception", "output"|"error": str}
+    - Runs: deno run -A <script_path> [args...]
+    - Requires Deno installed on system
+  
+  deno_eval(code) → str
+    - Returns: JavaScript evaluation result or error message
+    - Runs: deno eval "<code>"
+
+USE CASES:
+  - Running frontend build scripts
+  - Executing TypeScript utilities
+  - JS/TS code evaluation from Python
+
+DEPENDENCIES:
+  - Deno runtime must be installed and in PATH
+  - subprocess module for process execution
+
+FLAGS:
+  -A: Allow all permissions (network, read, write, etc.)
+"""
 
 def run_deno_script(script_path: str, args: list = None):
     """Executes a Deno script and returns the output ✨."""

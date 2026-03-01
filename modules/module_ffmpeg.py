@@ -1,3 +1,34 @@
+"""
+MODULE: module_ffmpeg.py - FFmpeg/FFprobe WRAPPER
+
+ROLE: Manages FFmpeg binary and provides audio/video inspection utilities
+
+RESPONSIBILITIES:
+  - Auto-downloads ffmpeg.exe and ffprobe.exe to modules/ folder
+  - Extracts audio tracks with language metadata
+  - Gets audio duration and video resolution
+  - Converts audio formats with optional normalization (loudnorm)
+
+KEY FUNCTIONS:
+  download_ffmpeg() → bool
+    - Downloads FFmpeg if missing, returns True on success
+  get_audio_tracks(input_file) → list[dict]
+    - Returns [{index, language}, ...] for each audio stream
+  get_audio_duration(file_path) → float | None
+    - Returns duration in seconds
+  get_video_resolution(file_path) → str | None
+    - Returns "1920x1080" format
+  convert_audio_with_ffmpeg(input, output, codec, normalize_audio) → bool
+    - Converts audio, applies loudnorm if requested
+
+CONSTANTS:
+  FFMPEG_EXE: Absolute path to ffmpeg.exe in modules/
+  FFPROBE_EXE: Absolute path to ffprobe.exe in modules/
+
+DOWNLOAD SOURCE:
+  - ffmpeg.exe: https://oblak.pronameserver.xyz/public.php/dav/files/8mW9BJCqLXX5ecp/?accept=zip
+  - ffprobe.exe: https://oblak.pronameserver.xyz/public.php/dav/files/mGjWEPpJgC7xfiz/?accept=zip
+"""
 import subprocess
 import json
 from colorama import Fore, Style, Back
@@ -5,6 +36,7 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from module_file import download_file_concurrent
+
 def get_audio_tracks(input_file):
     """
     Retrieves audio tracks from a video file using ffprobe.

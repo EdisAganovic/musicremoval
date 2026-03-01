@@ -1,3 +1,43 @@
+"""
+MODULE: module_audio.py - AUDIO ALIGNMENT AND MIXING
+
+ROLE: Aligns and combines vocal tracks from multiple AI models
+
+RESPONSIBILITIES:
+  - Detects millisecond-level offsets via cross-correlation
+  - Pads earlier track to synchronize both outputs
+  - Mixes aligned tracks with configurable volume weights
+  - Handles sample rate conversion and mono/stereo normalization
+
+KEY FUNCTIONS:
+  calculate_audio_lag(audio1, sr1, audio2, sr2, max_delay_seconds) → tuple
+    - Returns: (delay_samples, delay_ms)
+    - Uses FFT-based cross-correlation on audio envelopes
+    - Positive lag means audio1 is delayed (audio2 starts earlier)
+  
+  align_audio_tracks(track1_path, track2_path, output1_path, output2_path) → tuple
+    - Returns: (aligned_track1_path, aligned_track2_path)
+    - Pads beginning of earlier track, ensures equal length
+    - Falls back gracefully if numpy/scipy unavailable
+  
+  mix_audio_tracks(track1_path, track2_path, output_path, volume1, volume2) → str | None
+    - Returns: path to mixed output file
+    - Applies volume scaling, adds signals, normalizes if clipping
+
+ALGORITHM:
+  1. Convert to mono envelopes (50ms window average)
+  2. FFT-based cross-correlation
+  3. Find peak in correlation window (±2 seconds)
+  4. Validate peak strength (>2x mean correlation)
+  5. Pad earlier track with zeros at beginning
+  6. Ensure both tracks have equal length
+
+DEPENDENCIES:
+  - numpy: Array operations, correlation
+  - scipy.signal: Resampling, correlation
+  - soundfile: Audio read/write
+  - module_ffmpeg: FFMPEG_EXE for fallback operations
+"""
 import numpy as np
 from scipy import signal
 import soundfile as sf

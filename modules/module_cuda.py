@@ -1,3 +1,25 @@
+"""
+MODULE: module_cuda.py - GPU/CUDA DETECTION
+
+ROLE: Checks for PyTorch CUDA availability and prints GPU information
+
+KEY FUNCTIONS:
+  check_gpu_cuda_support() → bool
+    - Returns True if torch.cuda.is_available()
+    - Prints CUDA version, GPU name, and device count
+    - Provides troubleshooting hints if CUDA not found
+
+OUTPUT:
+  - Prints colored status messages (cyan/green/red/yellow)
+  - GPU info: CUDA version, device name, count
+  - Troubleshooting: Driver check, CUDA toolkit, PyTorch reinstall
+
+DEPENDENCIES:
+  - torch: PyTorch library for CUDA detection
+
+NOTE:
+  - Demucs and Spleeter run on CPU if CUDA unavailable (slower)
+"""
 import torch
 from colorama import Fore, Style
 

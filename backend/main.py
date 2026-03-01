@@ -512,14 +512,56 @@ async def run_yt_dlp(task_id: str, url: str, format_type: str = 'audio', format_
 
 @app.post("/api/yt-formats")
 async def get_yt_formats(payload: dict):
-    """Fetches available formats for a YouTube URL using yt-dlp -F logic ✨."""
+    """Fetches available formats for a YouTube URL using yt-dlp -F logic ✨.
+    Supports single videos, playlists, and channels."""
     url = payload.get("url")
+    check_playlist = payload.get("check_playlist", False)
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
-    
+
     try:
+        # First, check if it's a playlist/channel URL
+        is_playlist_url = any(indicator in url for indicator in [
+            '/playlist?', 'list=PL', 'list=UU', 'list=RD', 'list=LL',
+            '/channel/', '/@', '/c/'
+        ])
+        
+        if check_playlist and is_playlist_url:
+            # Fetch playlist/channel info
+            ydl_opts = {
+                'quiet': True,
+                'noplaylist': False,  # Allow playlist extraction
+                'extract_flat': True,  # Don't download, just extract info
+                'remote_components': ['ejs:github'],
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+                # Extract playlist videos
+                videos = []
+                entries = info.get('entries', []) if info.get('_type') == 'playlist' else [info]
+                
+                for entry in entries:
+                    if entry:  # Skip None entries (deleted/private videos)
+                        videos.append({
+                            "id": entry.get('id', ''),
+                            "title": entry.get('title', 'Unknown'),
+                            "thumbnail": entry.get('thumbnail', ''),
+                            "duration": format_duration(entry.get('duration', 0)),
+                            "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
+                        })
+                
+                return {
+                    "is_playlist": True,
+                    "title": info.get("title", "Playlist"),
+                    "thumbnail": info.get("thumbnail", ""),
+                    "video_count": len(videos),
+                    "videos": videos
+                }
+        
+        # Single video - get formats
         ydl_opts = {
-            'quiet': True, 
+            'quiet': True,
             'noplaylist': True,
             'remote_components': ['ejs:github'],
             'impersonate': ImpersonateTarget(client='chrome'),
@@ -545,7 +587,7 @@ async def get_yt_formats(payload: dict):
                     label = f"Audio: {f.get('ext')} ({f.get('format_note') or ''})"
                 format_info["label"] = label
                 formats.append(format_info)
-            
+
             # Extract available subtitles
             available_subs = []
             if 'subtitles' in info:
@@ -558,13 +600,26 @@ async def get_yt_formats(payload: dict):
                         available_subs.append({"code": lang, "label": f"{lang} (Auto-generated)"})
 
             return {
+                "is_playlist": False,
                 "title": info.get("title"),
                 "thumbnail": info.get("thumbnail"),
+                "id": info.get("id"),
                 "formats": formats,
                 "subtitles": available_subs
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+def format_duration(seconds):
+    """Format duration in seconds to human readable string."""
+    if not seconds:
+        return "N/A"
+    minutes = int(seconds // 60)
+    secs = int(seconds % 60)
+    hours = minutes // 60
+    if hours > 0:
+        return f"{hours}:{minutes % 60:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
 
 @app.post("/api/download")
 async def download_video(background_tasks: BackgroundTasks, payload: dict):
@@ -621,11 +676,47 @@ async def add_to_queue(payload: dict):
     
     download_queue.append(queue_item)
     save_queue()
-    
+
     # Start queue processing if not already running
     asyncio.create_task(process_queue())
-    
+
     return {"queue_id": queue_item["queue_id"], "status": "queued"}
+
+@app.post("/api/queue/add-batch")
+async def add_to_queue_batch(payload: dict):
+    """Add multiple videos to the download queue (for playlists)."""
+    videos = payload.get("videos", [])
+    format_type = payload.get("format", "audio")
+    format_id = payload.get("format_id")
+    subtitles = payload.get("subtitles", "none")
+    auto_separate = payload.get("auto_separate", False)
+
+    if not videos:
+        raise HTTPException(status_code=400, detail="No videos provided")
+
+    added_count = 0
+    for video in videos:
+        url = video.get("url")
+        if url:
+            queue_item = {
+                "queue_id": str(uuid.uuid4()),
+                "url": url,
+                "format_type": format_type,
+                "format_id": format_id,
+                "subtitles": subtitles,
+                "auto_separate": auto_separate,
+                "status": "pending",
+                "task_id": None,
+                "added_at": asyncio.get_event_loop().time(),
+                "playlist_title": video.get("title", "")
+            }
+            download_queue.append(queue_item)
+            added_count += 1
+    
+    save_queue()
+    asyncio.create_task(process_queue())
+
+    return {"added": added_count, "status": "queued"}
 
 @app.get("/api/queue")
 async def get_queue():

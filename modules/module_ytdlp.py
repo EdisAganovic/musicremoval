@@ -1,14 +1,83 @@
+"""
+MODULE: module_ytdlp.py - YouTube DOWNLOADER
+
+ROLE: Downloads videos from YouTube using yt-dlp
+
+RESPONSIBILITIES:
+  - Auto-updates yt-dlp before each download
+  - Sanitizes filenames for Windows compatibility
+  - Handles format selection with fallback logic
+  - Detects existing downloads to avoid duplicates
+  - Supports cookies for age-restricted content
+  - Handles playlist detection and processing
+
+KEY FUNCTIONS:
+  download_video(url, filename, cookies_file, is_playlist) → str | None
+    - Returns path to downloaded file, None on failure
+  check_and_update_ytdlp() → bool
+    - Updates yt-dlp via uv pip
+  sanitize_filename(filename, max_length) → str
+    - Removes invalid chars, limits length to 200
+  is_playlist_url(url) → bool
+    - Detects if URL is a playlist
+
+DOWNLOAD FLOW:
+  1. Check/update yt-dlp
+  2. Detect if playlist URL
+  3. Get final filename via --get-filename
+  4. Check for existing download (skip if found)
+  5. Attempt best format (mp4+m4a)
+  6. Fallback to alternative format if needed
+  7. Return final file path
+
+OUTPUT:
+  - Saves to ./downloads/ folder
+  - Auto-generates filename if not provided (limits title to 100 chars)
+
+DEPENDENCIES:
+  - module_ffmpeg.get_video_resolution(): For displaying video info
+"""
 import subprocess
 import sys
 import os
 import re
+import time
 from colorama import Fore, Style
 from module_ffmpeg import get_video_resolution
+
+
+def is_playlist_url(url):
+    """
+    Detects if a URL is a YouTube playlist.
+    
+    Returns:
+        bool: True if URL contains playlist indicators
+    """
+    playlist_indicators = [
+        '/playlist?',
+        'list=PL',
+        'list=UU',
+        'list=RD',
+        'list=LL',
+        '/watch?v=', # Single video (not playlist)
+    ]
+    
+    # Check if it's a playlist URL
+    if '/playlist?' in url or ('list=' in url and 'list=PL' in url or 'list=UU' in url or 'list=RD' in url or 'list=LL' in url):
+        return True
+    
+    # Check for channel uploads/mixes
+    if any(indicator in url for indicator in ['/channel/', '/@', '/c/']):
+        # Could be a channel URL - treat as potential playlist
+        return False
+    
+    return False
 
 
 def sanitize_filename(filename: str, max_length: int = 200) -> str:
     """
     Sanitizes a filename by removing invalid characters and limiting length.
+    Also prevents path traversal attacks.
 
     Args:
         filename: The original filename to sanitize
@@ -17,6 +86,12 @@ def sanitize_filename(filename: str, max_length: int = 200) -> str:
     Returns:
         Sanitized filename that's safe for the filesystem
     """
+    # SECURITY: Remove path traversal attempts
+    filename = filename.replace('..', '_')
+    
+    # SECURITY: Only keep the basename (prevent directory traversal)
+    filename = os.path.basename(filename)
+    
     # Replace invalid characters for Windows filesystem
     sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
 
@@ -159,14 +234,23 @@ def download_video(url, filename=None, cookies_file=None):
         download_successful = False
         for i, format_str in enumerate(format_attempts):
             print(f"{Fore.CYAN}Attempt {i+1}: Trying format '{format_str}'...{Style.RESET_ALL}")
-            
+
             download_cmd = base_cmd + ["-f", format_str]
             if cookies_file and os.path.exists(cookies_file):
                 download_cmd.extend(["--cookies", cookies_file])
             download_cmd.append(url)
 
             files_before_attempt = set(os.listdir(download_folder))
-            subprocess.run(download_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # FIX: Capture output for debugging instead of swallowing errors
+            result = subprocess.run(download_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            
+            if result.returncode != 0:
+                print(f"{Fore.RED}Download attempt failed: {result.stderr[:500]}{Style.RESET_ALL}")
+                # Add backoff delay before next attempt
+                if i < len(format_attempts) - 1:
+                    print(f"{Fore.YELLOW}Waiting 2 seconds before retry...{Style.RESET_ALL}")
+                    time.sleep(2)
 
             # First, check for the exact filename we expected
             if os.path.exists(final_filepath) and os.path.getsize(final_filepath) > 0:
@@ -176,15 +260,15 @@ def download_video(url, filename=None, cookies_file=None):
             # If that failed, check for any new, non-temporary file in the download folder
             files_after_attempt = set(os.listdir(download_folder))
             new_files = files_after_attempt - files_before_attempt
-            
+
             for f in new_files:
                 if not f.endswith('.part'):
                     path = os.path.join(download_folder, f)
                     if os.path.isfile(path) and os.path.getsize(path) > 0:
                         final_filepath = path  # Update to the actual downloaded file path
                         download_successful = True
-                        break 
-            
+                        break
+
             if download_successful:
                 break
 

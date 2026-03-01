@@ -1,6 +1,24 @@
 """
-Main entry point for the Demucs & Spleeter Vocal Extractor.
-This script provides a CLI for downloading videos and separating vocals from video/audio files.
+MAIN ENTRY POINT - CLI for vocal separation workflow.
+
+WORKFLOW:
+  1. download → module_ytdlp.download_video() → saves to ./downloads/
+  2. separate → module_processor.process_file() → orchestrates Demucs/Spleeter
+  3. output → saved to ./nomusic/ with metadata in video.json
+
+COMMANDS:
+  - download <url> [filename] [--separate]  → Download from YouTube
+  - separate --file|--folder [--duration]   → Separate vocals from file/folder
+
+KEY FILES:
+  - video.json: Library database + quality presets
+  - download_queue.json: Queue state
+  - notifications.json: Alert history
+
+MODULES USED:
+  - module_ffmpeg: FFmpeg management (auto-downloads if missing)
+  - module_ytdlp: YouTube downloading via yt-dlp
+  - module_processor: Main separation orchestrator (Demucs + Spleeter)
 """
 import os
 import argparse

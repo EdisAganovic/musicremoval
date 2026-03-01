@@ -1,3 +1,18 @@
+"""
+UTILITY CLI - Inspect audio tracks in video files.
+
+STANDALONE: Can run independently via `python tools.py list_tracks <file>`
+
+USAGE:
+  python tools.py list_tracks <video_file>  → List all audio tracks with language
+
+DEPENDENCIES:
+  - module_ffmpeg.get_audio_tracks(): Uses FFprobe to extract track info
+  - module_ffmpeg.download_ffmpeg(): Auto-downloads FFmpeg if missing
+
+OUTPUT:
+  Prints track index and language for each audio stream
+"""
 import argparse
 import sys
 import os

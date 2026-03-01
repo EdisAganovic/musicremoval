@@ -1,3 +1,52 @@
+/**
+ * DOWNLOADER.JSX - YouTube Downloader Interface
+ * 
+ * ROLE: Download videos/audio from YouTube with format selection
+ * 
+ * FEATURES:
+ *   - URL input with analyze button
+ *   - Video info preview (thumbnail, title, duration)
+ *   - Format selection dropdown (filtered by audio/video)
+ *   - Subtitle/caption selection
+ *   - Audio/Video toggle switch
+ *   - Download queue system
+ *   - Queue management (add, remove, start, stop, clear)
+ *   - Real-time download progress polling
+ *   - Cancel active download
+ *   - Auto-separate option for queue items
+ * 
+ * STATE:
+ *   - url: YouTube URL input
+ *   - taskId: Current download task ID
+ *   - status: 'idle' | 'processing' | 'completed' | 'error'
+ *   - progress: 0-100 progress percentage
+ *   - format: 'audio' | 'video'
+ *   - videoInfo: Analyzed video metadata
+ *   - availableFormats: Filtered format list
+ *   - selectedFormatId: Selected format ID
+ *   - subtitles: Selected subtitle language
+ *   - queue: Download queue array
+ *   - queueProcessing: Queue processing flag
+ *   - autoSeparate: Auto-separate after download
+ *   - currentTaskId: Currently active download task
+ * 
+ * API ENDPOINTS:
+ *   - POST /api/yt-formats - Analyze URL and get formats
+ *   - POST /api/download - Start download
+ *   - POST /api/download/cancel - Cancel active download
+ *   - POST /api/queue/add - Add to queue
+ *   - POST /api/queue/remove - Remove from queue
+ *   - POST /api/queue/clear - Clear entire queue
+ *   - POST /api/queue/start - Start queue processing
+ *   - POST /api/queue/stop - Stop queue processing
+ *   - GET /api/queue - Fetch queue status
+ *   - GET /api/status/:taskId - Poll download progress
+ * 
+ * DEPENDENCIES:
+ *   - axios: HTTP client
+ *   - framer-motion: Animations
+ *   - lucide-react: Icons
+ */
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, Subtitles, List, Trash2, Play, Pause, X } from 'lucide-react';
@@ -18,6 +67,20 @@ const DownloaderTab = () => {
     const [availableFormats, setAvailableFormats] = useState([]);
     const [selectedFormatId, setSelectedFormatId] = useState('');
     const [subtitles, setSubtitles] = useState('none');
+    
+    // Playlist support
+    const [isPlaylist, setIsPlaylist] = useState(false);
+    const [playlistVideos, setPlaylistVideos] = useState([]);
+    const [selectedPlaylistVideos, setSelectedPlaylistVideos] = useState([]);
+    
+    // Remember last selected format per video ID
+    const [lastVideoId, setLastVideoId] = useState(() => {
+        return localStorage.getItem('lastVideoId') || null;
+    });
+    const [lastSelectedFormat, setLastSelectedFormat] = useState(() => {
+        return localStorage.getItem('lastSelectedFormat') || null;
+    });
+    const [rememberFormat, setRememberFormat] = useState(true);
 
     // Queue states
     const [queue, setQueue] = useState([]);
@@ -25,6 +88,10 @@ const DownloaderTab = () => {
     const [autoSeparate, setAutoSeparate] = useState(false);
     const [showQueue, setShowQueue] = useState(true);
     const [currentTaskId, setCurrentTaskId] = useState(null);
+    
+    // Playlist confirmation modal
+    const [showPlaylistConfirm, setShowPlaylistConfirm] = useState(false);
+    const [playlistConfirmData, setPlaylistConfirmData] = useState(null);
 
     // Dynamic languages based on video info
     const availableSubtitleOptions = [
@@ -36,7 +103,7 @@ const DownloaderTab = () => {
     // Fetch queue
     const fetchQueue = async () => {
         try {
-            const response = await axios.get('http://localhost:8000/api/queue');
+            const response = await axios.get('http://localhost:5170/api/queue');
             setQueue(response.data.queue || []);
             setQueueProcessing(response.data.processing || false);
         } catch (err) {
@@ -47,11 +114,20 @@ const DownloaderTab = () => {
     // Polling effect
     useEffect(() => {
         let interval;
+        let consecutiveErrors = 0;
+        const MAX_CONSECUTIVE_ERRORS = 3;
+        
         if (taskId && (status === 'processing')) {
             interval = setInterval(async () => {
                 try {
-                    const response = await axios.get(`http://localhost:8000/api/status/${taskId}`);
+                    const response = await axios.get(
+                        `http://localhost:5170/api/status/${taskId}`,
+                        { timeout: 10000 } // 10 second timeout
+                    );
                     const data = response.data;
+
+                    // Reset error counter on successful response
+                    consecutiveErrors = 0;
 
                     setProgress(data.progress || 0);
                     setCurrentStep(data.currentStep || data.current_step);
@@ -65,6 +141,14 @@ const DownloaderTab = () => {
                     }
                 } catch (err) {
                     console.error("Polling error", err);
+                    consecutiveErrors++;
+                    
+                    // Show error after 3 consecutive failures
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                        setError("Connection lost to backend. Refresh page to reconnect.");
+                        setStatus("error");
+                        clearInterval(interval);
+                    }
                 }
             }, 1000);
         }
@@ -73,23 +157,57 @@ const DownloaderTab = () => {
 
     // Queue polling effect
     useEffect(() => {
-        const queueInterval = setInterval(fetchQueue, 2000);
+        let consecutiveErrors = 0;
+        const MAX_CONSECUTIVE_ERRORS = 3;
+        
+        const queueInterval = setInterval(async () => {
+            try {
+                await fetchQueue();
+                consecutiveErrors = 0; // Reset on success
+            } catch (err) {
+                console.error("Queue polling error", err);
+                consecutiveErrors++;
+                
+                // Show error after 3 consecutive failures
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    setError("Connection lost to backend. Refresh page to reconnect.");
+                    clearInterval(queueInterval);
+                }
+            }
+        }, 2000);
         return () => clearInterval(queueInterval);
     }, []);
 
     const handleAddToQueue = async () => {
-        if (!url) return;
+        if (!url && !isPlaylist) return;
 
+        // For playlists, show confirmation first
+        if (isPlaylist && playlistVideos.length > 0) {
+            const selectedCount = selectedPlaylistVideos.length;
+            if (selectedCount === 0) {
+                setError('Please select at least one video.');
+                return;
+            }
+            
+            // Show confirmation modal
+            setPlaylistConfirmData({
+                videoCount: selectedCount,
+                totalCount: playlistVideos.length
+            });
+            setShowPlaylistConfirm(true);
+            return;
+        }
+
+        // Single video - add directly
         try {
-            const response = await axios.post('http://localhost:8000/api/queue/add', {
+            await axios.post('http://localhost:5170/api/queue/add', {
                 url,
                 format,
                 format_id: selectedFormatId,
                 subtitles,
                 auto_separate: autoSeparate
             });
-            
-            // Clear URL and refresh queue
+
             setUrl('');
             fetchQueue();
         } catch (err) {
@@ -98,9 +216,41 @@ const DownloaderTab = () => {
         }
     };
 
+    const handleConfirmPlaylistDownload = async () => {
+        // User confirmed - add selected videos to queue
+        try {
+            const videosToAdd = playlistVideos.filter(v =>
+                selectedPlaylistVideos.includes(v.id)
+            );
+
+            await axios.post('http://localhost:5170/api/queue/add-batch', {
+                videos: videosToAdd.map(v => ({
+                    url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
+                    title: v.title
+                })),
+                format,
+                format_id: selectedFormatId,
+                subtitles,
+                auto_separate: autoSeparate
+            });
+
+            setShowPlaylistConfirm(false);
+            setPlaylistConfirmData(null);
+            setUrl('');
+            setPlaylistVideos([]);
+            setSelectedPlaylistVideos([]);
+            setIsPlaylist(false);
+            fetchQueue();
+        } catch (err) {
+            console.error(err);
+            setError('Failed to add playlist to queue.');
+            setShowPlaylistConfirm(false);
+        }
+    };
+
     const handleRemoveFromQueue = async (queueId) => {
         try {
-            await axios.post('http://localhost:8000/api/queue/remove', { queue_id: queueId });
+            await axios.post('http://localhost:5170/api/queue/remove', { queue_id: queueId });
             fetchQueue();
         } catch (err) {
             console.error("Failed to remove from queue", err);
@@ -109,7 +259,7 @@ const DownloaderTab = () => {
 
     const handleClearQueue = async () => {
         try {
-            await axios.post('http://localhost:8000/api/queue/clear');
+            await axios.post('http://localhost:5170/api/queue/clear');
             fetchQueue();
         } catch (err) {
             console.error("Failed to clear queue", err);
@@ -118,7 +268,7 @@ const DownloaderTab = () => {
 
     const handleStartQueue = async () => {
         try {
-            await axios.post('http://localhost:8000/api/queue/start');
+            await axios.post('http://localhost:5170/api/queue/start');
             fetchQueue();
         } catch (err) {
             console.error("Failed to start queue", err);
@@ -127,7 +277,7 @@ const DownloaderTab = () => {
 
     const handleStopQueue = async () => {
         try {
-            await axios.post('http://localhost:8000/api/queue/stop');
+            await axios.post('http://localhost:5170/api/queue/stop');
             fetchQueue();
         } catch (err) {
             console.error("Failed to stop queue", err);
@@ -140,21 +290,53 @@ const DownloaderTab = () => {
         setError(null);
         setVideoInfo(null);
         setAvailableFormats([]);
-        
+        setPlaylistVideos([]);
+        setSelectedPlaylistVideos([]);
+        setIsPlaylist(false);
+
         try {
-            const response = await axios.post('http://localhost:8000/api/yt-formats', { url });
-            setVideoInfo(response.data);
-            
-            // Filter formats based on current 'format' selection (audio or video)
-            const filtered = response.data.formats.filter(f => {
-                if (format === 'audio') return f.vcodec === 'none';
-                return f.vcodec !== 'none';
+            const response = await axios.post('http://localhost:5170/api/yt-formats', {
+                url,
+                check_playlist: true
             });
-            
-            setAvailableFormats(filtered);
-            if (filtered.length > 0) {
-                // Select best by default (usually last in list)
-                setSelectedFormatId(filtered[filtered.length - 1].format_id);
+            setVideoInfo(response.data);
+
+            // Extract video ID from URL or response
+            let videoId = null;
+            const urlParams = new URLSearchParams(new URL(url).search);
+            videoId = urlParams.get('v') || response.data.id || null;
+
+            // Check if this is a playlist
+            if (response.data.is_playlist) {
+                setIsPlaylist(true);
+                setPlaylistVideos(response.data.videos || []);
+                // Pre-select all videos
+                setSelectedPlaylistVideos(response.data.videos?.map(v => v.id) || []);
+            } else {
+                // Single video - filter formats
+                const filtered = response.data.formats.filter(f => {
+                    if (format === 'audio') return f.vcodec === 'none';
+                    return f.vcodec !== 'none';
+                });
+
+                setAvailableFormats(filtered);
+                
+                // Try to restore last selected format for this video ID
+                let formatSelected = false;
+                if (videoId && videoId === lastVideoId && lastSelectedFormat) {
+                    // Check if the saved format still exists in available formats
+                    const savedFormatExists = filtered.some(f => f.format_id === lastSelectedFormat);
+                    if (savedFormatExists) {
+                        setSelectedFormatId(lastSelectedFormat);
+                        formatSelected = true;
+                        console.log(`[Downloader] Restored saved format: ${lastSelectedFormat}`);
+                    }
+                }
+                
+                // If no saved format, select best by default (usually last in list)
+                if (!formatSelected && filtered.length > 0) {
+                    setSelectedFormatId(filtered[filtered.length - 1].format_id);
+                }
             }
         } catch (err) {
             console.error(err);
@@ -172,11 +354,26 @@ const DownloaderTab = () => {
                 return f.vcodec !== 'none';
             });
             setAvailableFormats(filtered);
-            if (filtered.length > 0) {
+            if (filtered.length > 0 && !lastVideoId) {
                 setSelectedFormatId(filtered[filtered.length - 1].format_id);
             }
         }
     }, [format, videoInfo]);
+
+    // Save selected format to localStorage when it changes (only if checkbox is checked)
+    useEffect(() => {
+        if (selectedFormatId && videoInfo && !videoInfo.is_playlist && rememberFormat) {
+            const urlParams = new URLSearchParams(new URL(url).search);
+            const videoId = urlParams.get('v') || videoInfo.id;
+            if (videoId) {
+                setLastVideoId(videoId);
+                setLastSelectedFormat(selectedFormatId);
+                localStorage.setItem('lastVideoId', videoId);
+                localStorage.setItem('lastSelectedFormat', selectedFormatId);
+                console.log(`[Downloader] Saved format: ${selectedFormatId} for video: ${videoId}`);
+            }
+        }
+    }, [selectedFormatId, videoInfo, url, rememberFormat]);
 
     const handleDownload = async () => {
         if (!url) return;
@@ -187,7 +384,7 @@ const DownloaderTab = () => {
         setError(null);
 
         try {
-            const response = await axios.post('http://localhost:8000/api/download', {
+            const response = await axios.post('http://localhost:5170/api/download', {
                 url,
                 format,
                 format_id: selectedFormatId,
@@ -206,7 +403,7 @@ const DownloaderTab = () => {
         if (!currentTaskId) return;
         
         try {
-            const response = await axios.post('http://localhost:8000/api/download/cancel', {
+            const response = await axios.post('http://localhost:5170/api/download/cancel', {
                 task_id: currentTaskId
             });
             
@@ -226,26 +423,11 @@ const DownloaderTab = () => {
     };
 
     return (
-        <div className="space-y-8 max-w-3xl mx-auto pb-10">
-            {/* Header */}
-            <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center relative py-4"
-            >
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-24 bg-red-600/20 blur-3xl rounded-full"></div>
-                <div className="relative inline-block mb-4 p-4 rounded-3xl bg-dark-800/80 border border-white/5 shadow-2xl backdrop-blur-sm">
-                    <Youtube className="w-10 h-10 text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.5)]" />
-                </div>
-                <h2 className="text-3xl font-black text-white tracking-tight">YouTube Downloader</h2>
-                <p className="text-gray-400 mt-1 font-medium italic">Advanced Format Selection Control</p>
-            </motion.div>
-
+        <div className="space-y-6 max-w-3xl mx-auto">
             {/* Input & Form */}
-            <motion.div 
-                initial={{ opacity: 0, y: 20 }}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
                 className="space-y-6"
             >
                 <div className="relative group">
@@ -264,9 +446,10 @@ const DownloaderTab = () => {
                         <button
                             onClick={handleAnalyze}
                             disabled={!url || isAnalyzing}
+                            title={!url ? "Please enter a URL first" : isAnalyzing ? "Analyzing..." : "Analyze video/playlist"}
                             className={`mr-3 px-6 py-2.5 rounded-lg flex items-center space-x-2 font-bold text-sm transition-all ${
-                                !url || isAnalyzing 
-                                ? 'bg-dark-800 text-gray-600' 
+                                !url || isAnalyzing
+                                ? 'bg-dark-800 text-gray-600'
                                 : 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
                             }`}
                         >
@@ -279,54 +462,167 @@ const DownloaderTab = () => {
                 {/* Video Preview Info */}
                 <AnimatePresence>
                     {videoInfo && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
                             className="bg-dark-800/50 rounded-2xl border border-white/5 overflow-hidden backdrop-blur-sm"
                         >
-                            <div className="flex p-4 space-x-4">
-                                <div className="w-32 h-20 bg-dark-900 rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
-                                    <img src={videoInfo.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="text-white font-bold truncate leading-tight">{videoInfo.title}</h4>
+                            {isPlaylist ? (
+                                /* Playlist View */
+                                <div className="p-4">
+                                    <div className="flex items-center space-x-3 mb-4">
+                                        <div className="p-2 bg-red-600/20 rounded-lg">
+                                            <List className="w-5 h-5 text-red-400" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-white font-bold text-lg">{videoInfo.title}</h4>
+                                            <p className="text-xs text-gray-500">{playlistVideos.length} videos detected</p>
+                                        </div>
+                                    </div>
                                     
-                                    {/* Format Selection Dropdown */}
-                                    <div className="mt-3 space-y-2">
-                                        <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black">Choose Resolution / Quality</label>
-                                        <select 
-                                            value={selectedFormatId}
-                                            onChange={(e) => setSelectedFormatId(e.target.value)}
-                                            className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
-                                        >
-                                            {availableFormats.map(f => (
-                                                <option key={f.format_id} value={f.format_id}>
-                                                    {f.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                    {/* Select All / None */}
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center space-x-2 text-xs text-gray-500">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPlaylistVideos.length === playlistVideos.length}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedPlaylistVideos(playlistVideos.map(v => v.id));
+                                                    } else {
+                                                        setSelectedPlaylistVideos([]);
+                                                    }
+                                                }}
+                                                className="rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500"
+                                            />
+                                            <span>{selectedPlaylistVideos.length} / {playlistVideos.length} selected</span>
+                                        </div>
+                                        <div className="flex items-center space-x-2">
+                                            <button
+                                                onClick={() => setSelectedPlaylistVideos(playlistVideos.map(v => v.id))}
+                                                className="px-3 py-1 text-xs font-bold text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded"
+                                            >
+                                                All
+                                            </button>
+                                            <button
+                                                onClick={() => setSelectedPlaylistVideos([])}
+                                                className="px-3 py-1 text-xs font-bold text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded"
+                                            >
+                                                None
+                                            </button>
+                                        </div>
                                     </div>
-
-                                    {/* Subtitle Selection Dropdown */}
-                                    <div className="mt-3 space-y-2">
-                                        <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black flex items-center gap-1">
-                                            <Subtitles className="w-3 h-3" /> Subtitles / Captions
-                                        </label>
-                                        <select 
-                                            value={subtitles}
-                                            onChange={(e) => setSubtitles(e.target.value)}
-                                            className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
-                                        >
-                                            {availableSubtitleOptions.map(lang => (
-                                                <option key={lang.code} value={lang.code}>
-                                                    {lang.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                    
+                                    {/* Video List */}
+                                    <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
+                                        {playlistVideos.map((video, idx) => (
+                                            <div
+                                                key={video.id}
+                                                className={`flex items-center space-x-3 p-2 rounded-lg border ${
+                                                    selectedPlaylistVideos.includes(video.id)
+                                                        ? 'bg-primary-600/10 border-primary-500/30'
+                                                        : 'bg-dark-900/50 border-white/5'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPlaylistVideos.includes(video.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedPlaylistVideos([...selectedPlaylistVideos, video.id]);
+                                                        } else {
+                                                            setSelectedPlaylistVideos(selectedPlaylistVideos.filter(id => id !== video.id));
+                                                        }
+                                                    }}
+                                                    className="rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500"
+                                                />
+                                                <img 
+                                                    src={video.thumbnail} 
+                                                    alt={video.title} 
+                                                    className="w-16 h-12 rounded object-cover flex-shrink-0"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-white text-sm font-medium truncate">{video.title}</p>
+                                                    <p className="text-xs text-gray-500">{video.duration || 'N/A'}</p>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
-                            </div>
+                            ) : (
+                                /* Single Video View */
+                                <div className="flex p-4 space-x-4">
+                                    <div className="w-32 h-20 bg-dark-900 rounded-lg overflow-hidden flex-shrink-0 border border-white/5">
+                                        <img src={videoInfo.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center space-x-2 mb-1">
+                                            {videoInfo.id && (
+                                                <span className="text-[10px] font-mono text-primary-400 bg-primary-600/20 px-2 py-0.5 rounded">
+                                                    [{videoInfo.id}]
+                                                </span>
+                                            )}
+                                            <h4 className="text-white font-bold truncate leading-tight flex-1">{videoInfo.title}</h4>
+                                        </div>
+
+                                        {/* Format Selection Dropdown */}
+                                        <div className="mt-3 space-y-2">
+                                            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black">Choose Resolution / Quality</label>
+                                            <select
+                                                value={selectedFormatId}
+                                                onChange={(e) => setSelectedFormatId(e.target.value)}
+                                                className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
+                                            >
+                                                {availableFormats.map(f => (
+                                                    <option key={f.format_id} value={f.format_id}>
+                                                        {f.label} {f.filesize ? `(${(f.filesize / 1024 / 1024).toFixed(1)} MB)` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Remember Format Checkbox */}
+                                        <div className="mt-3 flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                id="remember-format"
+                                                checked={rememberFormat}
+                                                onChange={(e) => setRememberFormat(e.target.checked)}
+                                                className="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500 focus:ring-2 cursor-pointer"
+                                            />
+                                            <label
+                                                htmlFor="remember-format"
+                                                className="text-xs font-medium text-gray-300 cursor-pointer select-none"
+                                                title="Save selected format for this video ID"
+                                            >
+                                                Remember format for this video
+                                            </label>
+                                            {rememberFormat && lastVideoId === (new URLSearchParams(new URL(url).search).get('v') || videoInfo.id) && (
+                                                <CheckCircle className="w-3 h-3 text-emerald-400" />
+                                            )}
+                                        </div>
+
+                                        {/* Subtitle Selection Dropdown */}
+                                        <div className="mt-3 space-y-2">
+                                            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black flex items-center gap-1">
+                                                <Subtitles className="w-3 h-3" /> Subtitles / Captions
+                                            </label>
+                                            <select
+                                                value={subtitles}
+                                                onChange={(e) => setSubtitles(e.target.value)}
+                                                className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
+                                            >
+                                                {availableSubtitleOptions.map(lang => (
+                                                    <option key={lang.code} value={lang.code}>
+                                                        {lang.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
@@ -365,6 +661,7 @@ const DownloaderTab = () => {
                         whileTap={{ scale: 0.98 }}
                         onClick={handleAddToQueue}
                         disabled={!url || isAnalyzing}
+                        title={!url ? "Please enter a URL first" : isAnalyzing ? "Analyzing..." : "Add to download queue"}
                         className={`py-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center space-x-2 transition-all duration-300 overflow-hidden relative group border border-white/10
                             ${!url || isAnalyzing
                                 ? 'bg-dark-800 text-gray-600 cursor-not-allowed'
@@ -380,6 +677,12 @@ const DownloaderTab = () => {
                         whileTap={{ scale: 0.98 }}
                         onClick={handleDownload}
                         disabled={!url || status === 'processing' || isAnalyzing}
+                        title={
+                            !url ? "Please enter a URL first" :
+                            status === 'processing' ? "Download in progress..." :
+                            isAnalyzing ? "Analyzing..." :
+                            "Start download"
+                        }
                         className={`py-4 rounded-2xl font-bold text-lg shadow-2xl flex items-center justify-center space-x-2 transition-all duration-300 overflow-hidden relative group
                             ${!url || status === 'processing' || isAnalyzing
                                 ? 'bg-dark-800 text-gray-600 cursor-not-allowed border border-white/5'
@@ -406,13 +709,69 @@ const DownloaderTab = () => {
             {/* Error Toast */}
             <AnimatePresence>
                 {error && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="bg-red-500/10 border border-red-500/20 text-red-200 p-4 rounded-xl flex items-center justify-center space-x-3 backdrop-blur-md"
                     >
                         <AlertCircle className="w-5 h-5 flex-shrink-0 text-red-400" />
                         <span className="font-semibold">{error}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Playlist Confirmation Modal */}
+            <AnimatePresence>
+                {showPlaylistConfirm && playlistConfirmData && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setShowPlaylistConfirm(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-dark-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+                        >
+                            <div className="flex items-center space-x-3 mb-4">
+                                <div className="p-3 bg-red-600/20 rounded-full">
+                                    <Download className="w-6 h-6 text-red-400" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white">Confirm Playlist Download</h3>
+                            </div>
+                            
+                            <p className="text-gray-300 mb-6">
+                                Are you sure you want to download <strong className="text-white font-bold">{playlistConfirmData.videoCount}</strong> video{playlistConfirmData.videoCount !== 1 ? 's' : ''} 
+                                {playlistConfirmData.videoCount < playlistConfirmData.totalCount 
+                                    ? ` (out of ${playlistConfirmData.totalCount} total)` 
+                                    : ''} 
+                                to your queue?
+                            </p>
+                            
+                            <div className="bg-dark-800/50 rounded-lg p-4 mb-6">
+                                <p className="text-xs text-gray-400 mb-2">This will add all selected videos to the download queue.</p>
+                                <p className="text-xs text-gray-500">Processing may take a while depending on the number of videos.</p>
+                            </div>
+                            
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowPlaylistConfirm(false)}
+                                    className="flex-1 px-4 py-3 bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white rounded-xl font-bold transition-all border border-white/10"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleConfirmPlaylistDownload}
+                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-600/30"
+                                >
+                                    Download {playlistConfirmData.videoCount} Video{playlistConfirmData.videoCount !== 1 ? 's' : ''}
+                                </button>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>

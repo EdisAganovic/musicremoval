@@ -1,26 +1,14 @@
 [
     {
-        "id": "09c7c27b-0c28-4168-8bf3-b4e53567bb32",
+        "id": "3aacce7f-08f9-43d9-a5bc-615197429e7a",
         "type": "success",
-        "title": "Separation Complete",
-        "message": "'nomusic_converted_-6.mp4' vocals are ready",
+        "title": "Download Complete",
+        "message": "'New Apple Products Dropping Soon!.mkv' has been added to your library",
         "data": {
-            "file_path": "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_converted_-6.mp4",
-            "task_id": "f41b891b-4e3b-4fd5-afa0-ea4590e28882"
+            "file_path": "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\New Apple Products Dropping Soon!.mkv",
+            "task_id": "5c9d3930-2ba4-4659-bee7-8f08e960cee0"
         },
         "read": false,
-        "created_at": 1772334768.0222473
-    },
-    {
-        "id": "38875abe-09db-48d5-8cfe-62fbc0b84b6d",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "'nomusic_converted_-1.mp4' vocals are ready",
-        "data": {
-            "file_path": "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_converted_-1.mp4",
-            "task_id": "f49d61c0-7bb7-47c5-94a2-35c13034d61a"
-        },
-        "read": false,
-        "created_at": 1772334689.2053683
+        "created_at": 1772373118.450566
     }
 ]

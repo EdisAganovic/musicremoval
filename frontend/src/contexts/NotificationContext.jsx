@@ -1,3 +1,38 @@
+/**
+ * NOTIFICATIONCONTEXT.JSX - Notification State Management
+ * 
+ * ROLE: Centralized notification state and operations via React Context
+ * 
+ * PROVIDES:
+ *   - notifications: Array of all notifications
+ *   - unreadCount: Count of unread notifications
+ *   - isOpen: Panel visibility state
+ *   - setIsOpen: Setter for panel state
+ *   - fetchNotifications: Manual refresh function
+ *   - markAllRead: Mark all as read
+ *   - markSingleRead: Mark single notification as read
+ *   - clearAll: Clear all notifications
+ *   - getNotificationIcon: Icon emoji by type
+ *   - getNotificationColor: CSS classes by type
+ * 
+ * FEATURES:
+ *   - Auto-polling every 3 seconds
+ *   - Optimistic UI updates (immediate state change before API response)
+ *   - Type-based styling (success/error/warning/info)
+ * 
+ * API ENDPOINTS:
+ *   - GET /api/notifications - Fetch notifications + unread count
+ *   - POST /api/notifications/mark-read - Mark all as read
+ *   - POST /api/notifications/mark-single-read - Mark single as read
+ *   - POST /api/notifications/clear - Clear all
+ * 
+ * USAGE:
+ *   import { useNotifications } from './NotificationContext';
+ *   const { notifications, unreadCount, markAllRead } = useNotifications();
+ * 
+ * DEPENDENCIES:
+ *   - axios: HTTP client
+ */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
@@ -19,7 +54,7 @@ export const NotificationProvider = ({ children }) => {
     // Fetch notifications
     const fetchNotifications = useCallback(async () => {
         try {
-            const response = await axios.get('http://localhost:8000/api/notifications');
+            const response = await axios.get('http://localhost:5170/api/notifications');
             setNotifications(response.data.notifications || []);
             setUnreadCount(response.data.unread_count || 0);
         } catch (err) {
@@ -37,7 +72,7 @@ export const NotificationProvider = ({ children }) => {
     // Mark all as read
     const markAllRead = async () => {
         try {
-            await axios.post('http://localhost:8000/api/notifications/mark-read');
+            await axios.post('http://localhost:5170/api/notifications/mark-read');
             setUnreadCount(0);
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         } catch (err) {
@@ -48,7 +83,7 @@ export const NotificationProvider = ({ children }) => {
     // Mark single as read
     const markSingleRead = async (id) => {
         try {
-            await axios.post('http://localhost:8000/api/notifications/mark-single-read', { id });
+            await axios.post('http://localhost:5170/api/notifications/mark-single-read', { id });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (err) {
@@ -59,7 +94,7 @@ export const NotificationProvider = ({ children }) => {
     // Clear all notifications
     const clearAll = async () => {
         try {
-            await axios.post('http://localhost:8000/api/notifications/clear');
+            await axios.post('http://localhost:5170/api/notifications/clear');
             setNotifications([]);
             setUnreadCount(0);
         } catch (err) {

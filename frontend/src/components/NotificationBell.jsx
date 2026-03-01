@@ -1,3 +1,45 @@
+/**
+ * NOTIFICATIONBELL.JSX - Notification System UI
+ * 
+ * ROLE: Display and manage in-app notifications
+ * 
+ * FEATURES:
+ *   - Bell icon with unread count badge
+ *   - Dropdown panel with notification list
+ *   - Color-coded by type (success/error/warning/info)
+ *   - Timestamp with "time ago" formatting
+ *   - Mark as read (single/all)
+ *   - Clear all notifications
+ *   - Test notification button
+ *   - Click notification to open file
+ *   - Backdrop click to close
+ *   - Auto-refresh every 3 seconds
+ * 
+ * NOTIFICATION TYPES:
+ *   - success: Green background, ✅ icon
+ *   - error: Red background, ❌ icon
+ *   - warning: Amber background, ⚠️ icon
+ *   - info: Blue background, ℹ️ icon
+ * 
+ * STATE (from context):
+ *   - notifications: Array of notification objects
+ *   - unreadCount: Number of unread notifications
+ *   - isOpen: Panel open/closed state
+ * 
+ * API ENDPOINTS:
+ *   - GET /api/notifications - Fetch all notifications
+ *   - POST /api/notifications/mark-read - Mark all as read
+ *   - POST /api/notifications/mark-single-read - Mark single as read
+ *   - POST /api/notifications/clear - Clear all notifications
+ *   - POST /api/notifications/test - Send test notification
+ *   - POST /api/open-file - Open file from notification
+ * 
+ * DEPENDENCIES:
+ *   - axios: HTTP client
+ *   - framer-motion: Animations
+ *   - lucide-react: Icons
+ *   - ../contexts/NotificationContext: State management
+ */
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Check, CheckCheck, Trash2, X, Download } from 'lucide-react';
 import axios from 'axios';
@@ -90,7 +132,7 @@ const NotificationBell = () => {
                                     <button
                                         onClick={async () => {
                                             try {
-                                                await axios.post('http://localhost:8000/api/notifications/test');
+                                                await axios.post('http://localhost:5170/api/notifications/test');
                                                 fetchNotifications();
                                             } catch (err) {
                                                 console.error("Failed to send test notification", err);
@@ -180,7 +222,7 @@ const NotificationBell = () => {
                                                                         onClick={async (e) => {
                                                                             e.stopPropagation();
                                                                             try {
-                                                                                await axios.post('http://localhost:8000/api/open-file', { 
+                                                                                await axios.post('http://localhost:5170/api/open-file', { 
                                                                                     path: notification.data.file_path 
                                                                                 });
                                                                             } catch (err) {

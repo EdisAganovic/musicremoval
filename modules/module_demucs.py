@@ -1,6 +1,34 @@
 """
-Module for audio source separation using Demucs.
-Includes segmentation logic for long files to prevent OOM/processing errors.
+MODULE: module_demucs.py - Demucs AI MODEL WRAPPER
+
+ROLE: Separates vocals using Facebook's Demucs (htdemucs model)
+
+RESPONSIBILITIES:
+  - Runs Demucs source separation on audio files
+  - Splits audio >10min into 600s segments for parallel processing
+  - Handles OOM prevention via segmentation
+  - Creates silence fallback on model failure
+
+KEY FUNCTIONS:
+  separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, 
+                       base_audio_name_no_ext, max_workers) → tuple
+    - Returns: (path_to_vocal_wav, temp_segments_dir)
+    - max_workers: Parallel segment processing (default: 2)
+
+SEGMENTATION STRATEGY:
+  - Files ≤10min: Process directly
+  - Files >10min: Split into 600s chunks, process in parallel, concatenate
+
+OUTPUT:
+  - Saves to demucs_out/htdemucs/<basename>/vocals.wav
+  - Temp segments stored in _temp/ (caller responsible for cleanup)
+
+DEPENDENCIES:
+  - module_ffmpeg: get_audio_duration(), FFMPEG_EXE for splitting/concatenation
+
+MODEL:
+  - Uses htdemucs (hybrid transformer Demucs)
+  - Command: python -m demucs.separate -n htdemucs -o <output> <input>
 """
 import os
 import subprocess

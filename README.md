@@ -1,50 +1,123 @@
 # Demucs & Spleeter Vocal Extractor
 
-**Version:** 0.0.2 | **Last Updated:** 2026-03-01
+**Version:** 0.0.3 | **Last Updated:** 2026-03-01
 
 A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.2-blue)
+![Version](https://img.shields.io/badge/version-0.0.3-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.100+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
 
 ---
 
+## 👋 First Time? Start Here!
+
+### Quick Setup (5 minutes)
+
+**1. Install Python & Node.js:**
+
+- Python 3.10+: https://www.python.org/downloads/
+- Node.js 18+: https://nodejs.org/ (LTS version)
+
+**2. Clone & Install:**
+
+```bash
+cd demucspleeter
+
+# Python dependencies
+uv venv --python 3.10
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # Linux/macOS
+uv pip install -r requirements.txt
+
+# Frontend dependencies
+cd frontend
+npm install
+cd ..
+```
+
+**3. Run:**
+
+```bash
+run_app.bat  # Windows
+./run_app.sh  # Linux/macOS
+```
+
+**4. Open Browser:**
+
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:5170
+
+---
+
 ## ✨ Key Features
 
 ### 🎯 Core Functionality
+
 - **Dual AI Models**: Combines Demucs (htdemucs) and Spleeter for best-in-class separation
 - **Smart Audio Alignment**: Automatic cross-correlation alignment for perfect sync
 - **Long Audio Segmentation**: Auto-splits files >10 minutes for reliable processing
 - **Multi-Track Support**: Handles videos with multiple audio tracks (auto-select by language)
 - **GPU Acceleration**: Full CUDA support for 5-10x faster processing
 
+### 🚀 New in v0.0.3
+
+#### Playlist & Channel Download
+
+- **Playlist Support**: Download entire YouTube playlists
+  - Auto-detects playlist/channel URLs
+  - Shows all videos with thumbnails
+  - Select/deselect individual videos
+  - Confirmation modal before adding to queue
+- **Channel Support**: Download all videos from a channel
+- **Video ID Display**: Shows YouTube video ID for verification
+- **Remember Format**: Saves your format preference per video
+- **File Size Preview**: Shows estimated download size
+
+#### Library Improvements
+
+- **Folder Filter**: Filter by Download / NoMusic folders
+- **Open Folder Actions**: Quick access to folders
+- **Smart Separate Button**: Hides for already-separated files
+- **Compact Table Layout**: 2-3x more files visible
+
+#### Configuration
+
+- **Centralized Port Config**: Single `.env` file for backend port
+- **API Client Layer**: Centralized API communication
+- **No More Hardcoded URLs**: All calls through API client
+
 ### 🚀 New in v0.0.2
 
 #### Queue System
+
 - **Download Queue**: Schedule multiple YouTube downloads
 - **Batch Folder Processing**: Process entire folders of media files
 - **Queue Management**: Start, pause, remove from queue
 - **Persistent Queue**: Survives app restarts
 
 #### Notifications
+
 - **In-App Notifications**: Real-time alerts for all operations
 - **Smart Notifications**: Download complete, separation done, errors
 - **Notification History**: View all past notifications with unread counter
 
 #### Reliability
+
 - **Auto-Retry Downloads**: 3 retry attempts with exponential backoff
 - **Auto-Cleanup**: Removes temp files older than 24 hours
 - **Duplicate Detection**: Warns before downloading duplicate content
 
 #### Quality & Control
+
 - **Quality Presets**: Fast, Balanced, High Quality presets
 - **Output Configuration**: Customizable codec, bitrate, format
 - **Search & Filter**: Find files in library by name or duration
 - **Bulk Operations**: Multi-select and batch delete
 
 #### UI/UX
+
 - **Modern Dark Theme**: Beautiful glassmorphism design
 - **Responsive Layout**: Works on desktop and tablet
 - **Real-Time Progress**: Live progress bars and status updates
@@ -65,11 +138,13 @@ A professional AI-powered vocal separation tool with a modern web interface. Rem
 #### 1. Install UV (Package Manager)
 
 **Windows:**
+
 ```powershell
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 **Linux/macOS:**
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
@@ -105,24 +180,104 @@ For NVIDIA GPU acceleration:
 # First uninstall CPU version
 uv pip uninstall torch torchvision torchaudio
 
-# Install GPU version (replace cu130 with your CUDA version)
-uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
+# Install GPU version (replace cu128 with your CUDA version)
+uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
 ```
 
 **Check your CUDA version:**
+
 ```bash
 nvidia-smi
 ```
 
-#### 4. Install FFmpeg (Auto-downloaded)
+#### 4. Install Node.js (Required for Frontend)
+
+**Download Node.js:**
+
+1. Go to https://nodejs.org/
+2. Download **LTS version** (18.x or higher)
+3. Run installer (accept defaults)
+
+**Verify installation:**
+
+```bash
+node --version  # Should show v18.x.x or higher
+npm --version   # Should show 9.x.x or higher
+```
+
+**Alternative: Use nvm (Node Version Manager)**
+
+Windows (nvm-windows):
+
+```powershell
+# Download from: https://github.com/coreybutler/nvm-windows/releases
+# Run installer, then:
+nvm install 18
+nvm use 18
+```
+
+Linux/macOS (nvm):
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install 18
+nvm use 18
+```
+
+#### 5. Install Frontend Dependencies
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install all dependencies (first time only)
+npm install
+
+# This installs:
+# - React 18
+# - Vite (build tool)
+# - Framer Motion (animations)
+# - Lucide React (icons)
+# - Axios (HTTP client)
+# - Tailwind CSS (styling)
+```
+
+**Troubleshooting:**
+
+If `npm install` fails:
+
+```bash
+# Clear npm cache
+npm cache clean --force
+
+# Delete node_modules and package-lock.json
+rm -rf node_modules package-lock.json  # Linux/macOS
+rmdir /s /q node_modules del package-lock.json  # Windows
+
+# Reinstall
+npm install
+```
+
+#### 6. Configure Backend Port
+
+Create `.env` file in `frontend/` directory:
+
+```bash
+# frontend/.env
+VITE_API_BASE_URL=http://localhost:5170/api
+```
+
+**Important:** Change port `5170` to match your backend port if different.
+
+#### 7. Install FFmpeg (Auto-downloaded)
 
 FFmpeg and FFprobe are automatically downloaded on first run to the `modules/` directory.
 
 ---
 
-## 🚀 Usage
+## 🚀 Running the Application
 
-### Quick Start (Recommended)
+### Option 1: Quick Start (Recommended)
 
 **Run the complete application:**
 
@@ -135,8 +290,40 @@ run_app.bat
 ```
 
 This starts both:
-- **Backend**: http://localhost:8000
+
+- **Backend**: http://localhost:5170
 - **Frontend**: http://localhost:5173
+
+### Option 2: Manual Start (Development)
+
+**Terminal 1 - Backend:**
+
+```bash
+# Activate virtual environment
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+source .venv/bin/activate
+
+# Start backend with hot reload
+python -m uvicorn backend.main:app --reload --port 5170
+```
+
+**Terminal 2 - Frontend:**
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Start development server
+npm run dev
+```
+
+This gives you:
+
+- **Backend**: http://localhost:5170
+- **Frontend**: http://localhost:5173
+- **Hot reload**: Changes auto-refresh
 
 ### Command Line Interface
 
@@ -144,7 +331,7 @@ This starts both:
 
 ```bash
 # Download audio (default: video)
-python main.py download "https://youtube.com/watch?v=..." 
+python main.py download "https://youtube.com/watch?v=..."
 
 # Download with custom filename
 python main.py download "https://youtube.com/watch?v=..." "MyVideo.mp4"
@@ -265,25 +452,11 @@ Edit `video.json` to customize output quality:
 
 ### Preset Descriptions
 
-| Preset | Video Codec | Bitrate | Audio | Best For |
-|--------|-------------|---------|-------|----------|
-| **Fast** | Copy (no re-encode) | N/A | 128k | Quick previews, small files |
-| **Balanced** | h264_nvenc (GPU) | 2500k | 192k | Everyday use (recommended) |
-| **Quality** | hevc_nvenc (GPU) | 8000k | 256k | Archival, high-quality output |
-
-### Supported Formats
-
-**Video Input:**
-- MP4, MKV, MOV, AVI, FLV, WEBM, WMV
-
-**Audio Input:**
-- MP3, WAV, FLAC, AAC, OGG, M4A, WMA
-
-**Output:**
-- Video: MP4 (default), MKV, MOV (configurable)
-- Audio: MP3 (from YouTube), WAV, FLAC, M4A
-
----
+| Preset       | Video Codec         | Bitrate | Audio | Best For                      |
+| ------------ | ------------------- | ------- | ----- | ----------------------------- |
+| **Fast**     | Copy (no re-encode) | N/A     | 128k  | Quick previews, small files   |
+| **Balanced** | h264_nvenc (GPU)    | 2500k   | 192k  | Everyday use (recommended)    |
+| **Quality**  | hevc_nvenc (GPU)    | 8000k   | 256k  | Archival, high-quality output |
 
 ## 🏗️ Architecture
 
@@ -320,29 +493,34 @@ frontend/
 ### API Endpoints
 
 **Downloads:**
+
 - `POST /api/download` - Start YouTube download
 - `POST /api/queue/add` - Add to download queue
 - `GET /api/queue` - Get queue status
 - `POST /api/queue/*` - Queue management
 
 **Separation:**
+
 - `POST /api/separate` - Upload file for separation
 - `POST /api/separate-file` - Separate existing file
 - `POST /api/folder/scan` - Scan folder for batch processing
 - `POST /api/folder-queue/process` - Start batch processing
 
 **Library:**
+
 - `GET /api/library` - Get all processed files
 - `POST /api/delete-file` - Delete file from library
 - `POST /api/open-file` - Open file with default player
 - `POST /api/open-folder` - Open file location in Explorer
 
 **Notifications:**
+
 - `GET /api/notifications` - Get all notifications
 - `POST /api/notifications/mark-read` - Mark all as read
 - `POST /api/notifications/clear` - Clear all notifications
 
 **Utilities:**
+
 - `GET /api/presets` - Get quality presets
 - `POST /api/presets` - Set current preset
 - `GET /api/status/{task_id}` - Get task progress
@@ -355,40 +533,51 @@ frontend/
 ### Common Issues
 
 #### 1. "No audio tracks found"
+
 **Cause:** Video has no audio or unsupported format  
 **Fix:** Try a different video or convert to MP4 first
 
 #### 2. "CUDA not available"
+
 **Cause:** CUDA toolkit not installed or PyTorch CPU version  
-**Fix:** 
+**Fix:**
+
 1. Install CUDA from NVIDIA
 2. Reinstall PyTorch with GPU support (see Installation step 3)
 3. Check with `python -c "import torch; print(torch.cuda.is_available())"`
 
 #### 3. "Download failed after 3 attempts"
+
 **Cause:** Network issues or YouTube blocking  
 **Fix:**
+
 1. Update yt-dlp: `uv pip install --upgrade yt-dlp`
 2. Try using cookies: add `--cookies` flag
 3. Use a different format
 
 #### 4. "Out of memory" during batch processing
+
 **Cause:** Too many concurrent jobs for available RAM  
 **Fix:**
+
 1. Process fewer files at once
 2. Close other applications
 3. Consider upgrading RAM (Demucs uses ~8GB per job)
 
 #### 5. "File not found in library"
+
 **Cause:** File was moved or deleted externally  
 **Fix:**
+
 1. Click refresh button in Library tab
 2. Missing files auto-removed on next refresh
 3. Check `library.json` for stale entries
 
 #### 6. Backend won't start
+
 **Cause:** Port 8000 already in use  
 **Fix:**
+
 ```bash
 # Windows - find and kill process
 netstat -ano | findstr :8000
@@ -402,14 +591,14 @@ lsof -ti:8000 | xargs kill -9
 
 ## 📊 Performance Benchmarks
 
-| File Type | Duration | GPU (RTX 3060) | CPU (i7-12700K) |
-|-----------|----------|----------------|-----------------|
-| Music Video | 3:30 | 45 seconds | 4 minutes |
-| Full Song | 5:00 | 1 minute | 6 minutes |
-| Long Mix | 30:00 | 6 minutes | 35 minutes |
-| Podcast | 60:00 | 12 minutes | 70 minutes |
+| File Type   | Duration | GPU (RTX 3060) | CPU (i7-12700K) |
+| ----------- | -------- | -------------- | --------------- |
+| Music Video | 3:30     | 45 seconds     | 4 minutes       |
+| Full Song   | 5:00     | 1 minute       | 6 minutes       |
+| Long Mix    | 30:00    | 6 minutes      | 35 minutes      |
+| Podcast     | 60:00    | 12 minutes     | 70 minutes      |
 
-*Times include both Spleeter + Demucs processing with alignment*
+_Times include both Spleeter + Demucs processing with alignment_
 
 ---
 
@@ -418,6 +607,7 @@ lsof -ti:8000 | xargs kill -9
 See [changelog.md](changelog.md) for detailed version history.
 
 ### v0.0.2 (2026-03-01)
+
 - ✅ Queue system for downloads
 - ✅ Batch folder processing
 - ✅ In-app notifications
@@ -427,6 +617,7 @@ See [changelog.md](changelog.md) for detailed version history.
 - ✅ Library search & bulk delete
 
 ### v0.0.1 (2025-02-19)
+
 - Initial release with core separation functionality
 
 ---
@@ -461,24 +652,28 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 ## 💡 Tips & Best Practices
 
 ### For Best Separation Quality:
+
 1. Use **Both** models (Spleeter + Demucs)
 2. Start with high-quality source files (FLAC > MP3)
 3. Ensure files are stereo (not mono)
 4. Use GPU acceleration for faster processing
 
 ### For Batch Processing:
+
 1. Organize files in dedicated folders
 2. Remove unwanted files before starting batch
 3. Monitor first file to verify quality
 4. Process in small batches (5-10 files) for stability
 
 ### For Library Management:
+
 1. Regular cleanup of unwanted files
 2. Use search to quickly find specific tracks
 3. Bulk delete old/failed processes
 4. Backup `library.json` for archival
 
 ### System Optimization:
+
 1. Close memory-intensive apps during processing
 2. Use SSD for faster temp file I/O
 3. Enable GPU acceleration in BIOS

@@ -1,3 +1,53 @@
+/**
+ * SEPARATIONTAB.JSX - Vocal Separation Interface
+ * 
+ * ROLE: Main UI for uploading files and processing vocal separation
+ * 
+ * MODES:
+ *   - single: Upload/drag-drop single file for processing
+ *   - folder: Batch process entire folder of media files
+ * 
+ * FEATURES:
+ *   - Drag & drop file upload with animation
+ *   - Model selection (Spleeter, Demucs, Both)
+ *   - Folder path input with batch processing
+ *   - File selection/deselection for batch
+ *   - Real-time progress polling (1s interval)
+ *   - Batch progress polling (2s interval)
+ *   - Metadata display (duration, resolution, codec)
+ *   - Result file preview with open/play actions
+ * 
+ * STATE:
+ *   - file: Selected file object
+ *   - libraryFilePath: Pre-loaded file from Library tab
+ *   - folderPath: Folder path for batch processing
+ *   - queueId/batchId: Backend queue/batch identifiers
+ *   - batchFiles: Array of files in batch with status
+ *   - taskId: Current processing task ID
+ *   - status: 'idle' | 'uploading' | 'processing' | 'completed' | 'error'
+ *   - progress: 0-100 progress percentage
+ *   - currentStep: Current processing step description
+ *   - model: 'spleeter' | 'demucs' | 'both'
+ *   - processingMode: 'single' | 'folder'
+ * 
+ * API ENDPOINTS:
+ *   - POST /api/separate - Upload file for separation
+ *   - POST /api/separate-file - Process library file
+ *   - POST /api/folder/scan - Scan folder for media files
+ *   - POST /api/folder-queue/process - Start batch processing
+ *   - POST /api/folder-queue/remove - Remove file from queue
+ *   - GET /api/status/:taskId - Poll task progress
+ *   - GET /api/batch-status/:batchId - Poll batch progress
+ * 
+ * PROPS:
+ *   - libraryFile: Pre-selected file path from Library tab
+ *   - onFileCleared: Callback when file is reset
+ * 
+ * DEPENDENCIES:
+ *   - axios: HTTP client
+ *   - framer-motion: Animations
+ *   - lucide-react: Icons
+ */
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import {
@@ -36,6 +86,14 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [processingMode, setProcessingMode] = useState("single");
 
   const fileInputRef = useRef(null);
+  const batchListRef = useRef(null);
+
+  // Auto-scroll batch list when files are loaded
+  useEffect(() => {
+    if (batchFiles.length > 5 && batchListRef.current) {
+      batchListRef.current.scrollTop = batchListRef.current.scrollHeight / 2;
+    }
+  }, [batchFiles]);
 
   // Handle library file pre-load
   useEffect(() => {
@@ -71,13 +129,20 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   // Polling effect
   useEffect(() => {
     let interval;
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 3;
+    
     if (taskId && status === "processing") {
       interval = setInterval(async () => {
         try {
           const response = await axios.get(
-            `http://localhost:8000/api/status/${taskId}`,
+            `http://localhost:5170/api/status/${taskId}`,
+            { timeout: 10000 } // 10 second timeout
           );
           const data = response.data;
+
+          // Reset error counter on successful response
+          consecutiveErrors = 0;
 
           setProgress(data.progress);
           setCurrentStep(data.currentStep || data.current_step);
@@ -97,6 +162,14 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           }
         } catch (err) {
           console.error("Polling error", err);
+          consecutiveErrors++;
+          
+          // Show error after 3 consecutive failures
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            setError("Connection lost to backend. Refresh page to reconnect.");
+            setStatus("error");
+            clearInterval(interval);
+          }
         }
       }, 1000);
     }
@@ -106,21 +179,32 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   // Batch polling effect
   useEffect(() => {
     let interval;
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 3;
+    
     if (batchId && processingMode === "folder") {
       interval = setInterval(async () => {
         try {
-          const response = await axios.get(`http://localhost:8000/api/batch-status/${batchId}`);
+          const response = await axios.get(
+            `http://localhost:5170/api/batch-status/${batchId}`,
+            { timeout: 10000 } // 10 second timeout
+          );
           const batch = response.data;
+
+          // Reset error counter on successful response
+          consecutiveErrors = 0;
 
           // Update batch files with latest status
           setBatchFiles(batch.files || []);
-          setProgress(batch.total_files > 0 ? Math.round((batch.processed / batch.total_files) * 100) : 0);
-          
+          const totalFiles = batch.total_files || 0;
+          const processed = batch.processed || 0;
+          setProgress(totalFiles > 0 ? Math.round((processed / totalFiles) * 100) : 0);
+
           // Update current step with progress
           const processingCount = batch.files.filter(f => f.status === "processing").length;
           const completedCount = batch.files.filter(f => f.status === "completed").length;
           const failedCount = batch.files.filter(f => f.status === "failed").length;
-          
+
           if (processingCount > 0) {
             setCurrentStep(`Processing: ${completedCount + failedCount + 1} / ${batch.total_files} files...`);
           }
@@ -137,6 +221,14 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           }
         } catch (err) {
           console.error("Batch polling error", err);
+          consecutiveErrors++;
+          
+          // Show error after 3 consecutive failures
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            setError("Connection lost to backend. Refresh page to reconnect.");
+            setStatus("error");
+            clearInterval(interval);
+          }
         }
       }, 2000);
     }
@@ -167,7 +259,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     
     // Scan folder using Python backend
     try {
-      const response = await axios.post('http://localhost:8000/api/folder/scan', {
+      const response = await axios.post('http://localhost:5170/api/folder/scan', {
         folder_path: folderPath
       });
       
@@ -193,7 +285,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     if (!queueId) return;
     
     try {
-      const response = await axios.post('http://localhost:8000/api/folder-queue/remove', {
+      const response = await axios.post('http://localhost:5170/api/folder-queue/remove', {
         queue_id: queueId,
         file_id: fileId
       });
@@ -230,7 +322,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
     try {
       console.log("Sending process request with queue_id:", queueId);
-      const response = await axios.post('http://localhost:8000/api/folder-queue/process', {
+      const response = await axios.post('http://localhost:5170/api/folder-queue/process', {
         queue_id: queueId,
         model: model
       });
@@ -260,7 +352,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
       try {
         const response = await axios.post(
-          "http://localhost:8000/api/separate-file",
+          "http://localhost:5170/api/separate-file",
           { file_path: libraryFilePath, model },
         );
 
@@ -288,7 +380,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
     try {
       const response = await axios.post(
-        "http://localhost:8000/api/separate",
+        "http://localhost:5170/api/separate",
         formData,
         {
           headers: {
@@ -419,6 +511,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   <button
                     onClick={handleFolderScan}
                     disabled={!folderPath}
+                    title={!folderPath ? "Please enter a folder path first" : "Scan folder for media files"}
                     className="px-6 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-all flex items-center space-x-2"
                   >
                     <FolderInput className="w-4 h-4" />
@@ -453,13 +546,19 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                           onClick={() => setBatchFiles(prev => prev.map(f => ({ ...f, selected: true })))}
                           className="px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-lg transition-all"
                         >
-                          Select All
+                          All
                         </button>
                         <button
                           onClick={() => setBatchFiles(prev => prev.map(f => ({ ...f, selected: false })))}
                           className="px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-lg transition-all"
                         >
                           None
+                        </button>
+                        <button
+                          onClick={() => setBatchFiles(prev => prev.map(f => ({ ...f, selected: !f.selected })))}
+                          className="px-3 py-1.5 text-xs font-bold text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-lg transition-all"
+                        >
+                          Invert
                         </button>
                       </div>
                     </div>
@@ -478,7 +577,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                     </div>
                   )}
 
-                  <div className="max-h-80 overflow-y-auto space-y-2 pr-2">
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-2" ref={batchListRef}>
                     {batchFiles.map((fileInfo, idx) => (
                       <div
                         key={fileInfo.task_id || fileInfo.id}
@@ -658,8 +757,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   Click or Drag File Here
                 </h3>
                 <p className="text-gray-500 text-sm mt-2 max-w-xs mx-auto">
-                  Supports MP3, WAV, FLAC, MP4, MKV. Max file size: 500MB
-                  recommended.
+                  Supports MP3, WAV, FLAC, MP4, MKV...
                 </p>
               </motion.div>
             )}
@@ -740,6 +838,11 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             whileTap={{ scale: 0.95 }}
             onClick={handleStartBatchProcessing}
             disabled={status === "processing" || !batchFiles.some(f => f.selected)}
+            title={
+              status === "processing" ? "Processing in progress..." :
+              !batchFiles.some(f => f.selected) ? "Select at least one file" :
+              "Start batch processing"
+            }
             className={`
               relative overflow-hidden px-10 py-4 rounded-full font-bold text-lg shadow-2xl transition-all duration-300 group
               ${
@@ -771,6 +874,12 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             whileTap={{ scale: 0.95 }}
             onClick={handleUpload}
             disabled={!file || status === "uploading" || status === "processing"}
+            title={
+              !file ? "Please select a file first" :
+              status === "uploading" ? "Upload in progress..." :
+              status === "processing" ? "Processing in progress..." :
+              "Start separation"
+            }
             className={`
               relative overflow-hidden px-10 py-4 rounded-full font-bold text-lg shadow-2xl transition-all duration-300 group
               ${
@@ -878,11 +987,11 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                 <button
                   onClick={async () => {
                     try {
-                      await axios.post("http://localhost:8000/api/open-file", {
+                      await axios.post("http://localhost:5170/api/open-file", {
                         path: resultFiles[0],
                       });
                     } catch (err) {
-                      alert("Ne mogu otvoriti fajl.");
+                      alert("Cannot open file.");
                     }
                   }}
                   className="px-8 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 text-white rounded-xl text-lg font-black transition-all shadow-xl shadow-primary-500/25 active:scale-95 flex items-center space-x-3 group"
@@ -894,11 +1003,11 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   onClick={async () => {
                     try {
                       await axios.post(
-                        "http://localhost:8000/api/open-folder",
+                        "http://localhost:5170/api/open-folder",
                         { path: resultFiles[0] },
                       );
                     } catch (err) {
-                      alert("Ne mogu otvoriti folder.");
+                      alert("Cannot open folder.");
                     }
                   }}
                   className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-xl text-sm font-bold transition-all border border-white/5 active:scale-95 flex items-center space-x-2"

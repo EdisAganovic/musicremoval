@@ -1,14 +1,35 @@
 """
-Module for audio source separation using Spleeter.
-Includes segmentation logic for long files (> 10 minutes).
+MODULE: module_spleeter.py - Spleeter AI MODEL WRAPPER
+
+ROLE: Separates vocals using Deezer's Spleeter (2stems model)
+
+RESPONSIBILITIES:
+  - Runs Spleeter source separation on audio files
+  - Splits audio >10min into 600s segments for processing
+  - Handles long audio files that would cause memory issues
+
+KEY FUNCTIONS:
+  separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, 
+                         base_audio_name_no_ext) → tuple
+    - Returns: (path_to_vocal_wav, temp_segments_dir)
+    - Returns (None, None) on failure
+
+SEGMENTATION STRATEGY:
+  - Files ≤10min: Process directly
+  - Files >10min: Split into 600s chunks, process sequentially, concatenate
+
+OUTPUT:
+  - Saves to spleeter_out/<basename>/vocals.wav
+  - Temp segments stored in _temp/ (caller responsible for cleanup)
+
+DEPENDENCIES:
+  - module_ffmpeg: get_audio_duration(), FFMPEG_EXE for splitting/concatenation
+
+MODEL:
+  - Uses spleeter:2stems (vocals + accompaniment)
+  - Command: python -m spleeter separate -p spleeter:2stems -o <output> <input>
 """
 import os
-"""
-Module for advanced audio operations: alignment via cross-correlation and mixing.
-"""
-import numpy as np
-from scipy import signal
-import soundfile as sf
 import subprocess
 import sys
 import tempfile

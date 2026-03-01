@@ -1,6 +1,30 @@
-import hashlib
-import requests
-import time
+"""
+MODULE: module_file.py - FILE UTILITIES
+
+ROLE: Provides file download and integrity verification utilities
+
+KEY FUNCTIONS:
+  calculate_file_hash(filepath, hash_algorithm) → str | None
+    - Returns: SHA256 hex digest (default) or specified algorithm
+    - Reads file in 8KB chunks for memory efficiency
+    - Returns None on file not found or error
+  
+  download_file_concurrent(url, filename) → tuple
+    - Returns: (success: bool, filename: str)
+    - Streams download to disk in 8KB chunks
+    - Reports download speed and file size on completion
+    - Timeout: 120 seconds for connection
+
+USE CASES:
+  - Downloading FFmpeg binaries
+  - Verifying downloaded file integrity
+  - Large file streaming downloads
+
+DEPENDENCIES:
+  - hashlib: File hashing (SHA256, MD5, etc.)
+  - requests: HTTP downloads with streaming
+  - time: Download speed calculation
+"""
 
 def calculate_file_hash(filepath, hash_algorithm="sha256"):
     """
