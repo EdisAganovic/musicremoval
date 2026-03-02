@@ -3,6 +3,8 @@ Safe file system operations with error handling.
 """
 import os
 import shutil
+from contextlib import contextmanager
+from typing import IO, Any
 
 
 def safe_remove(filepath: str) -> bool:
@@ -81,3 +83,22 @@ def safe_get_file_size(filepath: str) -> int:
         return os.path.getsize(filepath)
     except (OSError, FileNotFoundError):
         return 0
+
+
+@contextmanager
+def safe_open(filepath, mode='r', **kwargs):
+    """
+    A context manager that provides a safe way to open files,
+    especially handling directories on Windows which raise PermissionError.
+    
+    On Windows, open() on a directory raises PermissionError (Errno 13).
+    This wrapper ensures IsADirectoryError is raised instead, matching Unix behavior.
+    """
+    if os.path.isdir(filepath):
+        raise IsADirectoryError(f"[Errno 21] Is a directory: {filepath}")
+    
+    f = open(filepath, mode, **kwargs)
+    try:
+        yield f
+    finally:
+        f.close()

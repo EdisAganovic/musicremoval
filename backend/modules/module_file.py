@@ -30,6 +30,7 @@ import hashlib
 import time
 
 import requests
+from utils.file_ops import safe_open
 
 def calculate_file_hash(filepath, hash_algorithm="sha256"):
     """
@@ -38,7 +39,7 @@ def calculate_file_hash(filepath, hash_algorithm="sha256"):
     """
     hasher = hashlib.new(hash_algorithm)
     try:
-        with open(filepath, 'rb') as f:
+        with safe_open(filepath, 'rb') as f:
             while chunk := f.read(8192):
                 hasher.update(chunk)
         return hasher.hexdigest()
