@@ -91,12 +91,23 @@ async def clear_console_logs():
     return {"status": "cleared"}
 
 
+# Cache for system info to avoid expensive subprocess calls every time
+_system_info_cache = {"data": None, "expiry": 0}
+SYSTEM_INFO_CACHE_TTL = 300  # 5 minutes
+
 @router.get("/system-info")
 async def get_system_info():
     """Get system information including GPU, CUDA, and package versions."""
     import torch
     import asyncio
+    import time
     
+    global _system_info_cache
+    
+    now = time.time()
+    if _system_info_cache["data"] and now < _system_info_cache["expiry"]:
+        return _system_info_cache["data"]
+
     def gather_info():
         info = {
             "gpu": {
@@ -249,7 +260,12 @@ async def get_system_info():
 
         return info
 
-    return await asyncio.to_thread(gather_info)
+    info = await asyncio.to_thread(gather_info)
+    _system_info_cache = {
+        "data": info,
+        "expiry": time.time() + SYSTEM_INFO_CACHE_TTL
+    }
+    return info
 
 
 @router.get("/deno-info")

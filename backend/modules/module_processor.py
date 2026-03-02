@@ -528,14 +528,12 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 # For video files, create new video with vocals
                 print(f"\n{Fore.CYAN}5. Creating final video...{Style.RESET_ALL}")
                 
-                video_codec_setting = video_settings.get('codec', 'copy')
+                video_codec = video_settings.get('codec', 'copy')
                 video_bitrate = video_settings.get('bitrate')
                 output_format = output_settings.get('format', 'mp4')
 
                 output_video = os.path.join(output_folder, f"{base_filename}.{output_format}")
                 print(f"{Fore.CYAN}Output video file: {output_video}{Style.RESET_ALL}")
-
-                video_codec = video_codec_setting
 
                 final_ffmpeg_cmd = [
                     FFMPEG_EXE,
@@ -543,11 +541,16 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     "-y",
                     "-i", input_file,
                     "-i", combined_vocals_aac_path,
-                    "-vf", "scale=1920:1080",
-                    "-c:v", video_codec,
                 ]
-                if video_bitrate:
-                    final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
+
+                # Only apply scaling if we are transcoding (not using 'copy')
+                # Filtering and streamcopy cannot be used together in FFmpeg
+                if video_codec != "copy":
+                    final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080", "-c:v", video_codec])
+                    if video_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
+                else:
+                    final_ffmpeg_cmd.extend(["-c:v", "copy"])
                 
                 final_ffmpeg_cmd.extend([
                     "-c:a", audio_codec,
@@ -559,9 +562,15 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     "-map", "0:v:0",
                     "-map", "1:a:0",
                     "-shortest",
-                    "-f", output_format,
-                    output_video
                 ])
+                
+                # Use appropriate muxer for the file extension
+                if output_format == "mp4":
+                    final_ffmpeg_cmd.extend(["-f", "mp4"])
+                elif output_format == "mkv":
+                    final_ffmpeg_cmd.extend(["-f", "matroska"])
+                
+                final_ffmpeg_cmd.append(output_video)
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
                 update_progress("Finalizing output", 95)
                 subprocess.run(final_ffmpeg_cmd, check=True)

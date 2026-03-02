@@ -185,16 +185,19 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         } catch (err) {
           consecutiveErrors++;
 
-          // Treat 404 as task completion (task was cleaned up by backend)
+          // Treat 404 as task completion only after several retries
+          // (prevents race conditions during server reloads)
           if (err.response?.status === 404) {
-            setStatus("completed");
-            setTaskId(null);
-            clearInterval(interval);
+            if (consecutiveErrors > 15) {
+                setStatus("completed");
+                setTaskId(null);
+                clearInterval(interval);
+            }
             return;
           }
 
-          // Show error after 3 consecutive failures
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          // Show error after 30 consecutive failures
+          if (consecutiveErrors >= 30) {
             setError("Connection lost to backend. Refresh page to reconnect.");
             setStatus("error");
             clearInterval(interval);

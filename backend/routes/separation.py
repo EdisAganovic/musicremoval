@@ -46,7 +46,7 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         "files": []
     }
 
-    # Create child task
+    import time
     tasks[task_id] = {
         "task_id": task_id,
         "batch_id": batch_id,
@@ -55,8 +55,11 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         "current_step": "File uploaded",
         "result_files": [],
         "metadata": metadata,
-        "file_path": file_path
+        "file_path": file_path,
+        "created_at": time.time()
     }
+    from services.persistence import save_tasks_sync
+    save_tasks_sync()
 
     batch_tasks_data = {
         "task_id": task_id,
@@ -105,7 +108,7 @@ async def separate_file(background_tasks: BackgroundTasks, payload: dict):
         "files": []
     }
 
-    # Create child task
+    import time
     tasks[task_id] = {
         "task_id": task_id,
         "batch_id": batch_id,
@@ -114,8 +117,11 @@ async def separate_file(background_tasks: BackgroundTasks, payload: dict):
         "current_step": "File queued for separation",
         "result_files": [],
         "metadata": metadata,
-        "file_path": file_path
+        "file_path": file_path,
+        "created_at": time.time()
     }
+    from services.persistence import save_tasks_sync
+    save_tasks_sync()
 
     batch_tasks_data = {
         "task_id": task_id,

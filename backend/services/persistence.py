@@ -74,19 +74,24 @@ async def load_tasks_async():
             try:
                 with open(TASKS_FILE, "r", encoding="utf-8") as f:
                     loaded_tasks = json.load(f)
+                
+                # Merge with current tasks if any exist (usually empty on startup)
                 # Only load incomplete tasks (not completed/failed/cancelled)
-                active_tasks = {
-                    k: v for k, v in loaded_tasks.items()
-                    if v.get("status") not in ["completed", "failed", "cancelled"]
-                }
-                tasks.clear()
+                # OR recently completed tasks (last 5 minutes)
+                now = time.time()
+                active_tasks = {}
+                for k, v in loaded_tasks.items():
+                    status = v.get("status")
+                    if status not in ["completed", "failed", "cancelled"]:
+                        active_tasks[k] = v
+                    elif v.get("created_at", 0) > now - 3600: # Keep recent for UI
+                        active_tasks[k] = v
+                
                 tasks.update(active_tasks)
-                print(f"{Fore.CYAN}Loaded {len(tasks)} active tasks from persistence{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}Loaded {len(active_tasks)} tasks from persistence{Style.RESET_ALL}")
             except (json.JSONDecodeError, OSError, IOError) as e:
                 print(f"{Fore.YELLOW}Warning: Could not load tasks: {e}{Style.RESET_ALL}")
-                tasks.clear()
-        else:
-            tasks.clear()
+        # If file doesn't exist, we just start with empty tasks (already initialized)
 
 
 async def save_tasks_async():
@@ -128,14 +133,31 @@ async def update_task_async(task_id: str, updates: dict):
     async with tasks_lock:
         if task_id in tasks:
             tasks[task_id].update(updates)
-    await save_tasks_async()
+            # If status changed to completed/failed, ensure it's saved
+            await _save_tasks_internal()
+        else:
+            # If task doesn't exist, create it if it has enough info
+            if "status" in updates:
+                tasks[task_id] = updates
+                await _save_tasks_internal()
 
+async def _save_tasks_internal():
+    """Save tasks to disk - internal helper without lock (assumes caller has it)."""
+    try:
+        # Create a copy to avoid mutation during save
+        tasks_copy = dict(tasks)
+        # Filter to only save persistent-worthy tasks (exclude very transient data if needed)
+        # But for now, save all.
+        with open(TASKS_FILE, "w", encoding="utf-8") as f:
+            json.dump(tasks_copy, f, indent=4)
+    except (OSError, IOError, TypeError) as e:
+        print(f"Error saving tasks: {e}")
 
 async def delete_task_async(task_id: str):
     """Delete task with lock protection and persistence."""
     async with tasks_lock:
         tasks.pop(task_id, None)
-    await save_tasks_async()
+        await _save_tasks_internal()
 
 
 async def get_all_tasks_async():

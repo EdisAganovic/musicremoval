@@ -84,6 +84,10 @@ def run_yt_dlp(
                     "total_bytes": total_bytes,
                     "progress": progress
                 }
+                # Periodically save (every 20%)
+                if int(progress) % 20 == 0:
+                    from services.persistence import save_tasks_sync
+                    save_tasks_sync()
         elif d.get('status') == 'finished':
             progress_state["progress"] = 90
             progress_state["current_step"] = "Processing file..."
@@ -165,6 +169,8 @@ def run_yt_dlp(
                     "duration": info.get('duration', 0),
                     "thumbnail": info.get('thumbnail', '')
                 }
+                from services.persistence import save_tasks_sync
+                save_tasks_sync()
 
                 # Save to library with actual file metadata
                 library_entry = {

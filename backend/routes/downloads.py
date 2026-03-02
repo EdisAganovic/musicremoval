@@ -200,6 +200,7 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
 
     task_id = str(uuid.uuid4())
     
+    import time
     # Initialize task immediately to prevent 404 on polling
     tasks[task_id] = {
         "task_id": task_id,
@@ -207,8 +208,11 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
         "progress": 0,
         "current_step": "Initializing download",
         "result_files": [],
-        "url": url
+        "url": url,
+        "created_at": time.time()
     }
+    from services.persistence import save_tasks_sync
+    save_tasks_sync()
     
     background_tasks.add_task(run_yt_dlp, task_id, url, format_type, format_id, None, auto_separate)
     return {"task_id": task_id}

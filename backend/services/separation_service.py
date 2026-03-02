@@ -37,6 +37,11 @@ def run_separation(task_id: str, file_path: str, duration=None):
             if task_id in tasks:
                 tasks[task_id]["current_step"] = step
                 tasks[task_id]["progress"] = progress
+                
+                # Periodically save to disk (every 10%)
+                if int(progress) % 10 == 0:
+                    from services.persistence import save_tasks_sync
+                    save_tasks_sync()
 
             # Update batch parent progress
             batch_id = tasks.get(task_id, {}).get("batch_id")
@@ -57,6 +62,8 @@ def run_separation(task_id: str, file_path: str, duration=None):
             tasks[task_id]["status"] = "completed"
             tasks[task_id]["progress"] = 100
             tasks[task_id]["current_step"] = "Separation complete"
+            from services.persistence import save_tasks_sync
+            save_tasks_sync()
 
             # Update parent batch counters
             batch_id = tasks[task_id].get("batch_id")
