@@ -22,30 +22,74 @@ async def get_library():
     """Returns a list of all completed tasks and scans for existing files."""
     from colorama import Fore, Style
     
-    library = get_full_library()
+    def scan_library():
+        library = get_full_library()
 
-    existing_ids = {item.get("task_id") for item in library}
-    existing_files = {item.get("result_files", [""])[0] for item in library if item.get("result_files")}
+        existing_ids = {item.get("task_id") for item in library}
+        existing_files = {item.get("result_files", [""])[0] for item in library if item.get("result_files")}
 
-    VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.wmv', '.flv', '.m4v', '.mpeg', '.mpg', '.3gp'}
-    AUDIO_EXTENSIONS = {'.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.wma', '.opus'}
-    NOMUSIC_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
+        VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.wmv', '.flv', '.m4v', '.mpeg', '.mpg', '.3gp'}
+        AUDIO_EXTENSIONS = {'.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.wma', '.opus'}
+        NOMUSIC_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
 
-    # Scan download folder
-    download_folder = "download"
-    if os.path.exists(download_folder):
-        for root, dirs, files in os.walk(download_folder):
-            for filename in files:
-                _, ext = os.path.splitext(filename)
-                if ext.lower() not in VIDEO_EXTENSIONS:
-                    continue
+        # Scan download folder
+        download_folder = "download"
+        if os.path.exists(download_folder):
+            for root, dirs, files in os.walk(download_folder):
+                for filename in files:
+                    _, ext = os.path.splitext(filename)
+                    if ext.lower() not in VIDEO_EXTENSIONS:
+                        continue
 
-                file_path = os.path.join(root, filename)
-                if os.path.isfile(file_path) and file_path not in existing_files:
+                    file_path = os.path.join(root, filename)
+                    if os.path.isfile(file_path) and file_path not in existing_files:
+                        task_id = hashlib.md5(file_path.encode()).hexdigest()
+
+                        if task_id in existing_ids:
+                            continue
+
+                        metadata = get_file_metadata_cached(file_path)
+
+                        library.insert(0, {
+                            "task_id": task_id,
+                            "status": "completed",
+                            "progress": 100,
+                            "current_step": "Finished",
+                            "result_files": [file_path],
+                            "metadata": metadata,
+                            "url": "",
+                            "filename": filename
+                        })
+
+        # Scan nomusic folder
+        nomusic_folder = "nomusic"
+        nomusic_added = 0
+        if os.path.exists(nomusic_folder):
+            nomusic_total = 0
+            nomusic_found = 0
+            nomusic_skipped_existing = 0
+
+            for root, dirs, files in os.walk(nomusic_folder):
+                for filename in files:
+                    _, ext = os.path.splitext(filename)
+
+                    if ext.lower() not in NOMUSIC_EXTENSIONS:
+                        continue
+                    nomusic_total += 1
+                    file_path = os.path.join(root, filename)
+
+                    if file_path in existing_files:
+                        nomusic_skipped_existing += 1
+                        continue
+
                     task_id = hashlib.md5(file_path.encode()).hexdigest()
 
                     if task_id in existing_ids:
+                        nomusic_skipped_existing += 1
                         continue
+
+                    nomusic_found += 1
+                    nomusic_added += 1
 
                     metadata = get_file_metadata_cached(file_path)
 
@@ -59,56 +103,14 @@ async def get_library():
                         "url": "",
                         "filename": filename
                     })
+            print(f"{Fore.CYAN}[Library Scan] Nomusic: {nomusic_total} total, {nomusic_found} new, {nomusic_skipped_existing} skipped{Style.RESET_ALL}")
 
-    # Scan nomusic folder
-    nomusic_folder = "nomusic"
-    nomusic_added = 0
-    if os.path.exists(nomusic_folder):
-        nomusic_total = 0
-        nomusic_found = 0
-        nomusic_skipped_existing = 0
+        library.sort(key=lambda x: x.get("task_id", ""), reverse=True)
+        save_metadata_cache()
+        return library
 
-        for root, dirs, files in os.walk(nomusic_folder):
-            for filename in files:
-                _, ext = os.path.splitext(filename)
-
-                if ext.lower() not in NOMUSIC_EXTENSIONS:
-                    continue
-                nomusic_total += 1
-                file_path = os.path.join(root, filename)
-
-                if file_path in existing_files:
-                    nomusic_skipped_existing += 1
-                    continue
-
-                task_id = hashlib.md5(file_path.encode()).hexdigest()
-
-                if task_id in existing_ids:
-                    nomusic_skipped_existing += 1
-                    continue
-
-                nomusic_found += 1
-                nomusic_added += 1
-
-                metadata = get_file_metadata_cached(file_path)
-
-                library.insert(0, {
-                    "task_id": task_id,
-                    "status": "completed",
-                    "progress": 100,
-                    "current_step": "Finished",
-                    "result_files": [file_path],
-                    "metadata": metadata,
-                    "url": "",
-                    "filename": filename
-                })
-        print(f"{Fore.CYAN}[Library Scan] Nomusic: {nomusic_total} total, {nomusic_found} new, {nomusic_skipped_existing} skipped{Style.RESET_ALL}")
-
-    library.sort(key=lambda x: x.get("task_id", ""), reverse=True)
-
-    save_metadata_cache()
-
-    return library
+    import asyncio
+    return await asyncio.to_thread(scan_library)
 
 
 @router.post("/delete-file")

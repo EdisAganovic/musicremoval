@@ -95,166 +95,175 @@ async def clear_console_logs():
 async def get_system_info():
     """Get system information including GPU, CUDA, and package versions."""
     import torch
+    import asyncio
     
-    info = {
-        "gpu": {
-            "available": False,
-            "name": "N/A",
-            "vram_total": "N/A",
-            "vram_free": "N/A",
-            "cuda_version": "N/A"
-        },
-        "packages": {
-            "python": sys.version.split()[0],
-            "yt-dlp": "N/A",
-            "demucs": "N/A",
-            "spleeter": "N/A",
-            "pytorch": torch.__version__,
-            "torchaudio": "N/A",
-            "ffmpeg": "N/A"
-        },
-        "processing": {
-            "demucs_workers": 2,
-            "segment_duration": "600s"
-        },
-        "memory": {
-            "total": "N/A",
-            "available": "N/A",
-            "demucs_usage": "~8GB per job"
-        },
-        "storage": {
-            "total": "N/A",
-            "free": "N/A",
-            "output_folder": os.path.abspath("nomusic"),
-            "download_folder": os.path.abspath("download"),
-            "output_size": "0 MB",
-            "download_size": "0 MB"
-        },
-        "library": {
-            "total_files": 0,
-            "total_size": "0 MB"
+    def gather_info():
+        info = {
+            "gpu": {
+                "available": False,
+                "name": "N/A",
+                "vram_total": "N/A",
+                "vram_free": "N/A",
+                "cuda_version": "N/A"
+            },
+            "packages": {
+                "python": sys.version.split()[0],
+                "yt-dlp": "N/A",
+                "demucs": "N/A",
+                "spleeter": "N/A",
+                "pytorch": torch.__version__,
+                "torchaudio": "N/A",
+                "ffmpeg": "N/A"
+            },
+            "processing": {
+                "demucs_workers": 2,
+                "segment_duration": "600s"
+            },
+            "memory": {
+                "total": "N/A",
+                "available": "N/A",
+                "demucs_usage": "~8GB per job"
+            },
+            "storage": {
+                "total": "N/A",
+                "free": "N/A",
+                "output_folder": os.path.abspath("nomusic"),
+                "download_folder": os.path.abspath("download"),
+                "output_size": "0 MB",
+                "download_size": "0 MB"
+            },
+            "library": {
+                "total_files": 0,
+                "total_size": "0 MB"
+            }
         }
-    }
 
-    # Check GPU
-    if torch.cuda.is_available():
-        info["gpu"]["available"] = True
-        info["gpu"]["name"] = torch.cuda.get_device_name(0)
-        info["gpu"]["cuda_version"] = torch.version.cuda
+        # Check GPU
+        if torch.cuda.is_available():
+            info["gpu"]["available"] = True
+            info["gpu"]["name"] = torch.cuda.get_device_name(0)
+            info["gpu"]["cuda_version"] = torch.version.cuda
 
+            try:
+                total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                info["gpu"]["vram_total"] = f"{total_vram:.1f} GB"
+            except:
+                pass
+
+        # Get package versions
         try:
-            total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            info["gpu"]["vram_total"] = f"{total_vram:.1f} GB"
-        except:
-            pass
-
-    # Get package versions
-    try:
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "yt-dlp"],
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
-                if line.startswith('Version:'):
-                    info["packages"]["yt-dlp"] = line.split(':')[1].strip()
-    except:
-        pass
-
-    try:
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "demucs"],
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
-                if line.startswith('Version:'):
-                    info["packages"]["demucs"] = line.split(':')[1].strip()
-    except:
-        pass
-
-    try:
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "spleeter"],
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
-                if line.startswith('Version:'):
-                    info["packages"]["spleeter"] = line.split(':')[1].strip()
-    except:
-        pass
-
-    try:
-        result = subprocess.run([sys.executable, "-m", "pip", "show", "torchaudio"],
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            for line in result.stdout.split('\n'):
-                if line.startswith('Version:'):
-                    info["packages"]["torchaudio"] = line.split(':')[1].strip()
-    except:
-        pass
-
-    # Check FFmpeg
-    ffmpeg_path = shutil.which("ffmpeg")
-    if ffmpeg_path:
-        info["packages"]["ffmpeg"] = ffmpeg_path
-        try:
-            result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+            result = subprocess.run([sys.executable, "-m", "pip", "show", "yt-dlp"],
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
             if result.returncode == 0:
-                version_line = result.stdout.split('\n')[0]
-                info["packages"]["ffmpeg"] = version_line
+                for line in result.stdout.split('\n'):
+                    if line.startswith('Version:'):
+                        info["packages"]["yt-dlp"] = line.split(':')[1].strip()
         except:
             pass
 
-    # Get memory info
-    try:
-        import psutil
-        mem = psutil.virtual_memory()
-        info["memory"]["total"] = f"{mem.total / (1024**3):.1f} GB"
-        info["memory"]["available"] = f"{mem.available / (1024**3):.1f} GB"
-    except:
-        pass
+        try:
+            result = subprocess.run([sys.executable, "-m", "pip", "show", "demucs"],
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.startswith('Version:'):
+                        info["packages"]["demucs"] = line.split(':')[1].strip()
+        except:
+            pass
 
-    # Get storage info
-    try:
-        import psutil
-        disk = psutil.disk_usage(os.path.abspath("."))
-        info["storage"]["total"] = f"{disk.total / (1024**3):.1f} GB"
-        info["storage"]["free"] = f"{disk.free / (1024**3):.1f} GB"
-    except:
-        pass
+        try:
+            result = subprocess.run([sys.executable, "-m", "pip", "show", "spleeter"],
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.startswith('Version:'):
+                        info["packages"]["spleeter"] = line.split(':')[1].strip()
+        except:
+            pass
 
-    # Calculate folder sizes
-    def get_folder_size(folder):
-        total = 0
-        if os.path.exists(folder):
-            for root, dirs, files in os.walk(folder):
-                for f in files:
-                    try:
-                        total += os.path.getsize(os.path.join(root, f))
-                    except:
-                        pass
-        return total
+        try:
+            result = subprocess.run([sys.executable, "-m", "pip", "show", "torchaudio"],
+                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    if line.startswith('Version:'):
+                        info["packages"]["torchaudio"] = line.split(':')[1].strip()
+        except:
+            pass
 
-    output_size = get_folder_size("nomusic")
-    download_size = get_folder_size("download")
-    info["storage"]["output_size"] = f"{output_size / (1024**2):.1f} MB"
-    info["storage"]["download_size"] = f"{download_size / (1024**2):.1f} MB"
+        # Check FFmpeg
+        ffmpeg_path = shutil.which("ffmpeg")
+        if ffmpeg_path:
+            info["packages"]["ffmpeg"] = ffmpeg_path
+            try:
+                result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, encoding='utf-8', errors='replace')
+                if result.returncode == 0:
+                    version_line = result.stdout.split('\n')[0]
+                    info["packages"]["ffmpeg"] = version_line
+            except:
+                pass
 
-    # Library stats
-    library = get_full_library()
-    info["library"]["total_files"] = len(library)
-    library_size = sum(
-        sum(os.path.getsize(f) for f in item.get("result_files", []) if os.path.exists(f))
-        for item in library
-    )
-    info["library"]["total_size"] = f"{library_size / (1024**2):.1f} MB"
+        # Get memory info
+        try:
+            import psutil
+            mem = psutil.virtual_memory()
+            info["memory"]["total"] = f"{mem.total / (1024**3):.1f} GB"
+            info["memory"]["available"] = f"{mem.available / (1024**3):.1f} GB"
+        except:
+            pass
 
-    return info
+        # Get storage info
+        try:
+            import psutil
+            disk = psutil.disk_usage(os.path.abspath("."))
+            info["storage"]["total"] = f"{disk.total / (1024**3):.1f} GB"
+            info["storage"]["free"] = f"{disk.free / (1024**3):.1f} GB"
+        except:
+            pass
+
+        # Calculate folder sizes
+        def get_folder_size(folder):
+            total = 0
+            if os.path.exists(folder):
+                for root, dirs, files in os.walk(folder):
+                    for f in files:
+                        try:
+                            total += os.path.getsize(os.path.join(root, f))
+                        except:
+                            pass
+            return total
+
+        output_size = get_folder_size("nomusic")
+        download_size = get_folder_size("download")
+        info["storage"]["output_size"] = f"{output_size / (1024**2):.1f} MB"
+        info["storage"]["download_size"] = f"{download_size / (1024**2):.1f} MB"
+
+        # Library stats
+        library = get_full_library()
+        info["library"]["total_files"] = len(library)
+        library_size = sum(
+            sum(os.path.getsize(f) for f in item.get("result_files", []) if os.path.exists(f))
+            for item in library
+        )
+        info["library"]["total_size"] = f"{library_size / (1024**2):.1f} MB"
+
+        return info
+
+    return await asyncio.to_thread(gather_info)
 
 
 @router.get("/deno-info")
 async def get_deno_info():
     """Get Deno version and status."""
-    try:
-        result = subprocess.run(["deno", "--version"], capture_output=True, text=True)
-        if result.returncode == 0:
-            return {"available": True, "version": result.stdout.split('\n')[0]}
-    except:
-        pass
-    return {"available": False, "version": "Not installed"}
+    import asyncio
+    
+    def check_deno():
+        try:
+            result = subprocess.run(["deno", "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace')
+            if result.returncode == 0:
+                return {"available": True, "version": result.stdout.split('\n')[0]}
+        except:
+            pass
+        return {"available": False, "version": "Not installed"}
+
+    return await asyncio.to_thread(check_deno)

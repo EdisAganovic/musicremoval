@@ -37,6 +37,8 @@ import { Layers, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, Alert
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 
+const BACKEND_URL = 'http://127.0.0.1:5170';
+
 function AppContent() {
   const [activeTab, setActiveTab] = useState('separation');
   const [libraryFileToSeparate, setLibraryFileToSeparate] = useState(null);
@@ -74,7 +76,7 @@ function AppContent() {
 
   const fetchConsoleLogs = async () => {
     try {
-      const response = await axios.get('http://localhost:5170/api/console-logs');
+      const response = await axios.get(`${BACKEND_URL}/api/console-logs`);
       setConsoleLogs(response.data.logs || []);
     } catch (err) {
       console.error("Failed to fetch console logs", err);
@@ -83,7 +85,7 @@ function AppContent() {
 
   const fetchSystemInfo = async () => {
     try {
-      const response = await axios.get('http://localhost:5170/api/system-info');
+      const response = await axios.get(`${BACKEND_URL}/api/system-info`);
       setSystemInfo(response.data);
     } catch (err) {
       console.error("Failed to fetch system info", err);
@@ -92,7 +94,7 @@ function AppContent() {
 
   const clearConsoleLogs = async () => {
     try {
-      await axios.post('http://localhost:5170/api/console-logs/clear');
+      await axios.post(`${BACKEND_URL}/api/console-logs/clear`);
       setConsoleLogs([]);
     } catch (err) {
       console.error("Failed to clear console logs", err);

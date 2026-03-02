@@ -7,7 +7,7 @@ import asyncio
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException
 from typing import List
 
-from config import tasks, add_notification, log_console, get_full_library
+from config import tasks, add_notification, log_console, get_full_library, save_to_library
 from models import SeparateRequest, FolderScanRequest, FolderQueueProcessRequest
 
 router = APIRouter(prefix="/api", tags=["separation"])
@@ -25,22 +25,44 @@ def run_separation(task_id: str, file_path: str, duration=None):
         if not download_ffmpeg():
             raise Exception("FFmpeg download failed")
 
-        success = process_file(file_path, temp=False, duration=duration)
+        def on_progress(step, progress):
+            if task_id in tasks:
+                tasks[task_id]["current_step"] = step
+                tasks[task_id]["progress"] = progress
+
+        filename = os.path.basename(file_path)
+        success = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress)
 
         if success:
             tasks[task_id]["status"] = "completed"
             tasks[task_id]["progress"] = 100
             tasks[task_id]["current_step"] = "Separation complete"
+            
+            # Update parent batch counters
+            batch_id = tasks[task_id].get("batch_id")
+            if batch_id and batch_id in tasks:
+                tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
+                tasks[batch_id]["success"] = tasks[batch_id].get("success", 0) + 1
 
-            # Find output files
-            output_dir = os.path.join(os.path.dirname(__file__), '..', 'nomusic')
-            filename = os.path.basename(file_path)
-            base_name = os.path.splitext(filename)[0]
+            # Find output files - fix path to be relative to project root
+            output_dir = os.path.abspath('nomusic')
+            
+            # Support both audio and video filenames by stripping UUID if present
+            raw_name = filename
+            if "_" in raw_name and len(raw_name.split("_")[0]) == 36:
+                clean_name_base = os.path.splitext("_".join(raw_name.split("_")[1:]))[0]
+            else:
+                clean_name_base = os.path.splitext(raw_name)[0]
             
             result_files = []
-            for f in os.listdir(output_dir):
-                if f.startswith(base_name) and f != filename:
-                    result_files.append(os.path.join(output_dir, f))
+            if os.path.exists(output_dir):
+                for f in os.listdir(output_dir):
+                    if clean_name_base in f and f != filename:
+                        result_files.append(os.path.join(output_dir, f))
+
+            # Fallback to the direct return value if we couldn't find matching files via scan
+            if not result_files and isinstance(success, str):
+                result_files = [success]
 
             tasks[task_id]["result_files"] = result_files
 
@@ -54,7 +76,7 @@ def run_separation(task_id: str, file_path: str, duration=None):
                 "format": "separation",
                 "source_file": file_path
             }
-            get_full_library()  # This will save the entry
+            save_to_library(library_entry)
 
             add_notification(
                 "success",
@@ -65,6 +87,13 @@ def run_separation(task_id: str, file_path: str, duration=None):
         else:
             tasks[task_id]["status"] = "failed"
             tasks[task_id]["current_step"] = "Separation failed"
+            
+            # Update parent batch counters
+            batch_id = tasks[task_id].get("batch_id")
+            if batch_id and batch_id in tasks:
+                tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
+                tasks[batch_id]["failed"] = tasks[batch_id].get("failed", 0) + 1
+                
             add_notification("error", "Separation Failed", f"Failed to process {filename}")
 
     except Exception as e:
@@ -136,43 +165,51 @@ async def scan_folder(payload: FolderScanRequest):
     """Scan a folder and return list of media files."""
     from colorama import Fore, Style
     from modules.module_ffmpeg import get_file_metadata
+    import asyncio
     
-    print(f"\n{Fore.CYAN}=== Folder Scan Request ==={Style.RESET_ALL}")
-    print(f"Folder path: {payload.folder_path}")
+    def perform_scan():
+        print(f"\n{Fore.CYAN}=== Folder Scan Request ==={Style.RESET_ALL}")
+        print(f"Folder path: {payload.folder_path}")
 
-    if not payload.folder_path or not os.path.isdir(payload.folder_path):
-        print(f"{Fore.RED}Folder not found: {payload.folder_path}{Style.RESET_ALL}")
+        if not payload.folder_path or not os.path.isdir(payload.folder_path):
+            print(f"{Fore.RED}Folder not found: {payload.folder_path}{Style.RESET_ALL}")
+            return None
+
+        video_extensions = ('.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.wmv')
+        audio_extensions = ('.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma')
+        supported_extensions = video_extensions + audio_extensions
+
+        media_files = []
+        for f in os.listdir(payload.folder_path):
+            if f.lower().endswith(supported_extensions):
+                file_path = os.path.join(payload.folder_path, f)
+                try:
+                    metadata = get_file_metadata(file_path)
+                    media_files.append({
+                        "id": str(uuid.uuid4()),
+                        "file_path": file_path,
+                        "filename": f,
+                        "metadata": metadata,
+                        "selected": True
+                    })
+                    print(f"  Found: {f} ({metadata.get('duration', 'N/A')})")
+                except Exception as e:
+                    print(f"{Fore.YELLOW}Error getting metadata for {f}: {e}{Style.RESET_ALL}")
+                    media_files.append({
+                        "id": str(uuid.uuid4()),
+                        "file_path": file_path,
+                        "filename": f,
+                        "metadata": {"duration": "N/A", "resolution": "N/A"},
+                        "selected": True
+                    })
+
+        print(f"Total files found: {len(media_files)}")
+        return media_files
+
+    media_files = await asyncio.to_thread(perform_scan)
+    
+    if media_files is None:
         raise HTTPException(status_code=404, detail="Folder not found")
-
-    video_extensions = ('.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.wmv')
-    audio_extensions = ('.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma')
-    supported_extensions = video_extensions + audio_extensions
-
-    media_files = []
-    for f in os.listdir(payload.folder_path):
-        if f.lower().endswith(supported_extensions):
-            file_path = os.path.join(payload.folder_path, f)
-            try:
-                metadata = get_file_metadata(file_path)
-                media_files.append({
-                    "id": str(uuid.uuid4()),
-                    "file_path": file_path,
-                    "filename": f,
-                    "metadata": metadata,
-                    "selected": True
-                })
-                print(f"  Found: {f} ({metadata.get('duration', 'N/A')})")
-            except Exception as e:
-                print(f"{Fore.YELLOW}Error getting metadata for {f}: {e}{Style.RESET_ALL}")
-                media_files.append({
-                    "id": str(uuid.uuid4()),
-                    "file_path": file_path,
-                    "filename": f,
-                    "metadata": {"duration": "N/A", "resolution": "N/A"},
-                    "selected": True
-                })
-
-    print(f"Total files found: {len(media_files)}")
 
     if not media_files:
         print(f"{Fore.RED}No media files found in folder{Style.RESET_ALL}")
@@ -233,7 +270,11 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
         print(f"{Fore.RED}Not a queue task{Style.RESET_ALL}")
         raise HTTPException(status_code=400, detail="Not a queue task")
 
-    selected_files = [f for f in queue_data["files"] if f.get("selected", True)]
+    # Use explicitly selected files from payload if available, else use queue's internal state
+    if payload.selected_files is not None:
+        selected_files = [f for f in queue_data["files"] if f["file_path"] in payload.selected_files]
+    else:
+        selected_files = [f for f in queue_data["files"] if f.get("selected", True)]
 
     print(f"Total files in queue: {len(queue_data['files'])}")
     print(f"Selected files: {len(selected_files)}")
@@ -322,27 +363,22 @@ async def get_batch_status(batch_id: str):
     if not batch_data.get("batch"):
         raise HTTPException(status_code=400, detail="Not a batch task")
 
-    # Update progress from individual tasks
-    processed = 0
-    success = 0
-    failed = 0
-    
+    # Update status for currently active tasks
     for file_item in batch_data.get("files", []):
         task_id = file_item.get("task_id")
         if task_id in tasks:
             task = tasks[task_id]
-            if task.get("status") == "completed":
-                success += 1
-                file_item["status"] = "completed"
-            elif task.get("status") == "failed":
-                failed += 1
-                file_item["status"] = "failed"
-            elif task.get("status") == "processing":
-                file_item["status"] = "processing"
-            processed += 1
-
-    batch_data["processed"] = processed
-    batch_data["success"] = success
-    batch_data["failed"] = failed
+            file_item["status"] = task.get("status", file_item["status"])
+            file_item["progress"] = task.get("progress", 0)
+            file_item["current_step"] = task.get("current_step", "")
 
     return batch_data
+
+
+@router.get("/status/{task_id}")
+async def get_task_status(task_id: str):
+    """Get status of a specific task."""
+    if task_id not in tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return tasks[task_id]

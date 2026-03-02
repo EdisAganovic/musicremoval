@@ -36,6 +36,8 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
+const BACKEND_URL = 'http://127.0.0.1:5170';
+
 const NotificationContext = createContext();
 
 export const useNotifications = () => {
@@ -54,7 +56,7 @@ export const NotificationProvider = ({ children }) => {
     // Fetch notifications
     const fetchNotifications = useCallback(async () => {
         try {
-            const response = await axios.get('http://localhost:5170/api/notifications');
+            const response = await axios.get(`${BACKEND_URL}/api/notifications`);
             setNotifications(response.data.notifications || []);
             setUnreadCount(response.data.unread_count || 0);
         } catch (err) {
@@ -72,7 +74,7 @@ export const NotificationProvider = ({ children }) => {
     // Mark all as read
     const markAllRead = async () => {
         try {
-            await axios.post('http://localhost:5170/api/notifications/mark-read');
+            await axios.post(`${BACKEND_URL}/api/notifications/mark-read`);
             setUnreadCount(0);
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         } catch (err) {
@@ -83,7 +85,7 @@ export const NotificationProvider = ({ children }) => {
     // Mark single as read
     const markSingleRead = async (id) => {
         try {
-            await axios.post('http://localhost:5170/api/notifications/mark-single-read', { id });
+            await axios.post(`${BACKEND_URL}/api/notifications/mark-single-read`, { id });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
             setUnreadCount(prev => Math.max(0, prev - 1));
         } catch (err) {
@@ -94,7 +96,7 @@ export const NotificationProvider = ({ children }) => {
     // Clear all notifications
     const clearAll = async () => {
         try {
-            await axios.post('http://localhost:5170/api/notifications/clear');
+            await axios.post(`${BACKEND_URL}/api/notifications/clear`);
             setNotifications([]);
             setUnreadCount(0);
         } catch (err) {

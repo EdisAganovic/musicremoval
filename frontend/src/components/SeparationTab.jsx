@@ -68,6 +68,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
+const BACKEND_URL = 'http://127.0.0.1:5170';
+
 const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [file, setFile] = useState(null);
   const [libraryFilePath, setLibraryFilePath] = useState(null);
@@ -85,16 +87,24 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [model, setModel] = useState("both");
   const [metadata, setMetadata] = useState(null);
   const [processingMode, setProcessingMode] = useState("single");
+  const [isScanning, setIsScanning] = useState(false);
 
   const fileInputRef = useRef(null);
   const batchListRef = useRef(null);
 
-  // Auto-scroll batch list when files are loaded
+
+  // Auto-scroll to currently processing file in batch mode
   useEffect(() => {
-    if (batchFiles.length > 5 && batchListRef.current) {
-      batchListRef.current.scrollTop = batchListRef.current.scrollHeight / 2;
+    if (batchFiles.length > 0 && batchListRef.current && status === "processing") {
+      const processingIndex = batchFiles.findIndex(f => f.status === "processing");
+      if (processingIndex !== -1) {
+        const processingElement = batchListRef.current.children[processingIndex];
+        if (processingElement) {
+          processingElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
     }
-  }, [batchFiles]);
+  }, [batchFiles, status]);
 
   // Handle library file pre-load
   useEffect(() => {
@@ -143,13 +153,13 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   useEffect(() => {
     let interval;
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 3;
+    const MAX_CONSECUTIVE_ERRORS = 10;
     
     if (taskId && status === "processing") {
       interval = setInterval(async () => {
         try {
           const response = await axios.get(
-            `http://localhost:5170/api/status/${taskId}`,
+            `${BACKEND_URL}/api/status/${taskId}`,
             { timeout: 10000 } // 10 second timeout
           );
           const data = response.data;
@@ -200,13 +210,13 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   useEffect(() => {
     let interval;
     let consecutiveErrors = 0;
-    const MAX_CONSECUTIVE_ERRORS = 3;
+    const MAX_CONSECUTIVE_ERRORS = 10;
     
     if (batchId && processingMode === "folder") {
       interval = setInterval(async () => {
         try {
           const response = await axios.get(
-            `http://localhost:5170/api/batch-status/${batchId}`,
+            `${BACKEND_URL}/api/batch-status/${batchId}`,
             { timeout: 10000 } // 10 second timeout
           );
           const batch = response.data;
@@ -273,10 +283,12 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     setQueueId(null);
     setStatus(null); // Reset status
     setBatchId(null); // Reset batch ID
+    setIsScanning(true);
 
     // Scan folder using Python backend
     try {
-      const response = await axios.post('http://localhost:5170/api/folder/scan', {
+      setIsScanning(true);
+      const response = await axios.post(`${BACKEND_URL}/api/folder/scan`, {
         folder_path: folderPath
       });
 
@@ -285,6 +297,9 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
       if (response.data.files && response.data.files.length > 0) {
         // Files found
+        if (batchListRef.current) {
+          batchListRef.current.scrollTop = 0;
+        }
       }
     } catch (err) {
       if (err.response?.data?.detail) {
@@ -293,6 +308,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         setError("Failed to scan folder. Make sure it contains media files.");
       }
       setBatchFiles([]);
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -300,7 +317,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     if (!queueId) return;
 
     try {
-      const response = await axios.post('http://localhost:5170/api/folder-queue/remove', {
+      const response = await axios.post(`${BACKEND_URL}/api/folder-queue/remove`, {
         queue_id: queueId,
         file_id: fileId
       });
@@ -323,20 +340,23 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       return;
     }
 
-    const selectedCount = batchFiles.filter(f => f.selected).length;
-    if (selectedCount === 0) {
-      setError("No files selected for processing");
-      return;
-    }
-
-    setStatus("processing");
-    setCurrentStep(`Starting batch processing (${selectedCount} files)...`);
-    setProgress(0);
-
     try {
-      const response = await axios.post('http://localhost:5170/api/folder-queue/process', {
+      const selectedFiles = batchFiles.filter(f => f.selected).map(f => f.file_path);
+      if (selectedFiles.length === 0) {
+        // Assuming toast is available, otherwise use setError
+        // toast.error("Please select at least one file");
+        setError("Please select at least one file");
+        return;
+      }
+
+      setStatus("processing");
+      setProgress(0);
+      setCurrentStep("Starting batch process...");
+      
+      const response = await axios.post(`${BACKEND_URL}/api/folder-queue/process`, {
         queue_id: queueId,
-        model: model
+        selected_files: selectedFiles,
+        model
       });
 
       setBatchId(response.data.batch_id);
@@ -352,46 +372,31 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   };
 
   const handleUpload = async () => {
-    if (!file) return;
-
-    // If it's a library file, use a different endpoint
-    if (libraryFilePath) {
-      setStatus("processing");
-      setCurrentStep("Starting separation...");
-      setProgress(0);
-
-      try {
-        const response = await axios.post(
-          "http://localhost:5170/api/separate-file",
-          { file_path: libraryFilePath, model },
-        );
-
-        setTaskId(response.data.task_id);
-        if (response.data.metadata) {
-          setMetadata(response.data.metadata);
-        }
-        setStatus("processing");
-      } catch (err) {
-        setError("Failed to contact server. Is backend running?");
-        setStatus("error");
-      }
-      return;
-    }
-
-    // Regular file upload flow
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("model", model);
-
-    setStatus("uploading");
-    setCurrentStep("Transferring file...");
-    setProgress(0);
+    if (!file && !libraryFilePath) return;
 
     try {
-      const response = await axios.post(
-        "http://localhost:5170/api/separate",
-        formData,
-        {
+      if (libraryFilePath) {
+        // Library file processing
+        setStatus("processing");
+        setCurrentStep("Starting separation...");
+        setProgress(0);
+
+        const response = await axios.post(`${BACKEND_URL}/api/separate-file`, {
+          file_path: libraryFilePath,
+          model,
+        });
+        setTaskId(response.data.task_id);
+      } else {
+        // Direct upload processing
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("model", model);
+
+        setStatus("uploading");
+        setCurrentStep("Transferring file...");
+        setProgress(0);
+
+        const response = await axios.post(`${BACKEND_URL}/api/separate`, formData, {
           headers: {
             "Content-Type": "multipart/form-data",
           },
@@ -405,16 +410,14 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
               setCurrentStep("Upload complete. Queuing task...");
             }
           },
-        },
-      );
-
-      setTaskId(response.data.task_id);
-      if (response.data.metadata) {
-        setMetadata(response.data.metadata);
+        });
+        setTaskId(response.data.task_id);
       }
+      
       setStatus("processing");
     } catch (err) {
-      setError("Failed to contact server. Is backend running?");
+      console.error("Separation failed:", err);
+      setError("Failed to start processing. Check backend connection.");
       setStatus("error");
     }
   };
@@ -510,6 +513,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                 <div className="flex items-center space-x-2">
                   <input
                     type="text"
+                    disabled={isScanning}
                     value={folderPath || ''}
                     onChange={(e) => setFolderPath(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleFolderScan()}
@@ -518,12 +522,21 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   />
                   <button
                     onClick={handleFolderScan}
-                    disabled={!folderPath}
+                    disabled={!folderPath || isScanning}
                     title={!folderPath ? "Please enter a folder path first" : "Scan folder for media files"}
-                    className="px-6 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-all flex items-center space-x-2"
+                    className="px-6 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-all flex items-center space-x-2 min-w-[120px] justify-center"
                   >
-                    <FolderInput className="w-4 h-4" />
-                    <span>Scan</span>
+                    {isScanning ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Scanning...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FolderInput className="w-4 h-4" />
+                        <span>Scan</span>
+                      </>
+                    )}
                   </button>
                 </div>
                 

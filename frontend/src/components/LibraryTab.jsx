@@ -6,6 +6,8 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const BACKEND_URL = 'http://127.0.0.1:5170';
+
 const LibraryTab = ({ onSeparate }) => {
     const [items, setItems] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -60,7 +62,7 @@ const LibraryTab = ({ onSeparate }) => {
         sizeAbortRef.current = new AbortController();
 
         try {
-            const response = await axios.get('http://localhost:5170/api/system-info', {
+            const response = await axios.get(`${BACKEND_URL}/api/system-info`, {
                 signal: sizeAbortRef.current.signal
             });
             setFolderSizes({

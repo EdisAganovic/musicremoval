@@ -206,8 +206,13 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
     base_audio_name_no_ext = os.path.splitext(os.path.basename(temp_audio_wav_path))[0]
 
-    spleeter_out_path = "spleeter_out"
-    demucs_base_out_path = "demucs_out"
+    # Create a unique workspace for this specific process call to avoid collisions in batch mode
+    task_id_name = os.path.basename(temp_audio_wav_path).split('.')[0]
+    task_workspace = os.path.join(TEMP_DIR, task_id_name)
+    os.makedirs(task_workspace, exist_ok=True)
+
+    spleeter_out_path = os.path.join(task_workspace, "spleeter_out")
+    demucs_base_out_path = os.path.join(task_workspace, "demucs_out")
 
     temp_vocal_mixture_wav_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=TEMP_DIR)
     vocal_mixture_wav_path = temp_vocal_mixture_wav_file.name
@@ -286,8 +291,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
         print(f"{Fore.MAGENTA}Executing: {' '.join(ffmpeg_cmd)}\n")
         try:
-            # FIX: Capture stderr to show meaningful error messages
-            result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+            # FIX: Capture stderr to show meaningful error messages, use UTF-8 to handle emojis
+            result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             print(f"{Fore.GREEN}Audio extraction complete.\n{Style.RESET_ALL}")
         except subprocess.CalledProcessError as e:
             # FIX: Display FFmpeg error output for debugging
@@ -503,7 +508,9 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 final_ffmpeg_cmd.append(output_audio)
                 
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
+                update_progress("Finalizing output", 95)
                 subprocess.run(final_ffmpeg_cmd, check=True)
+                update_progress("Completed", 100)
                 print(f"\n{Fore.GREEN}✔ Successfully created {output_audio}{Style.RESET_ALL}")
                 
                 # Get final audio duration and compare
@@ -602,13 +609,13 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 except OSError as e:
                     print(f"{Fore.RED}Error removing temporary directory {temp_demucs_segments_dir}: {e}{Style.RESET_ALL}")
 
-            for dir_path in [spleeter_out_path, demucs_base_out_path]:
-                if os.path.exists(dir_path):
-                    try:
-                        shutil.rmtree(dir_path)
-                        print(f"{Fore.BLUE}Removed output directory: {dir_path}{Style.RESET_ALL}")
-                    except OSError as e:
-                        print(f"{Fore.RED}Error removing output directory {dir_path}: {e}{Style.RESET_ALL}")
+            # Cleanup the task-specific workspace
+            if os.path.exists(task_workspace):
+                try:
+                    shutil.rmtree(task_workspace)
+                    print(f"{Fore.BLUE}Removed task workspace: {task_workspace}{Style.RESET_ALL}")
+                except OSError as e:
+                    print(f"{Fore.RED}Error removing task workspace {task_workspace}: {e}{Style.RESET_ALL}")
         else:
             print(f"\n{Fore.YELLOW}--- Skipping cleanup of temporary files ---")
             print(f"Temporary audio WAV file: {temp_audio_wav_path}")

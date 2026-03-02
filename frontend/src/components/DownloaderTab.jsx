@@ -52,6 +52,8 @@ import axios from 'axios';
 import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const BACKEND_URL = 'http://127.0.0.1:5170';
+
 const DownloaderTab = ({ analyzingProgress }) => {
     const [url, setUrl] = useState('');
     const [taskId, setTaskId] = useState(null);
@@ -99,7 +101,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
     // Fetch queue
     const fetchQueue = async () => {
         try {
-            const response = await axios.get('http://localhost:5170/api/queue');
+            const response = await axios.get(`${BACKEND_URL}/api/queue`);
             setQueue(response.data.queue || []);
             setQueueProcessing(response.data.processing || false);
         } catch (err) {
@@ -126,7 +128,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
     useEffect(() => {
         let interval;
         let consecutiveErrors = 0;
-        const MAX_CONSECUTIVE_ERRORS = 3;
+        const MAX_CONSECUTIVE_ERRORS = 10;
         let currentPollingTaskId = taskId; // Capture taskId at effect start
 
         if (taskId && (status === 'processing')) {
@@ -139,7 +141,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 
                 try {
                     const response = await axios.get(
-                        `http://localhost:5170/api/status/${taskId}`,
+                        `${BACKEND_URL}/api/status/${taskId}`,
                         { timeout: 10000 } // 10 second timeout
                     );
                     const data = response.data;
@@ -188,7 +190,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
     // Queue polling effect
     useEffect(() => {
         let consecutiveErrors = 0;
-        const MAX_CONSECUTIVE_ERRORS = 3;
+        const MAX_CONSECUTIVE_ERRORS = 10;
 
         const queueInterval = setInterval(async () => {
             try {
@@ -210,7 +212,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
     // Active downloads polling effect
     const fetchActiveDownloads = async () => {
         try {
-            const response = await axios.get('http://localhost:5170/api/downloads');
+            const response = await axios.get(`${BACKEND_URL}/api/downloads`);
             setActiveDownloads(response.data || []);
         } catch (err) {
             // Silent fail for polling
@@ -219,7 +221,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     useEffect(() => {
         let consecutiveErrors = 0;
-        const MAX_CONSECUTIVE_ERRORS = 3;
+        const MAX_CONSECUTIVE_ERRORS = 10;
 
         const downloadsInterval = setInterval(async () => {
             try {
@@ -258,7 +260,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
         // Single video - add directly
         try {
-            await axios.post('http://localhost:5170/api/queue/add', {
+            await axios.post(`${BACKEND_URL}/api/queue/add`, {
                 url,
                 format,
                 format_id: selectedFormatId,
@@ -279,7 +281,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 selectedPlaylistVideos.includes(v.id)
             );
 
-            await axios.post('http://localhost:5170/api/queue/add-batch', {
+            await axios.post(`${BACKEND_URL}/api/queue/add-batch`, {
                 videos: videosToAdd.map(v => ({
                     url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
                     title: v.title
@@ -304,7 +306,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     const handleRemoveFromQueue = async (queueId) => {
         try {
-            await axios.post('http://localhost:5170/api/queue/remove', { queue_id: queueId });
+            await axios.post(`${BACKEND_URL}/api/queue/remove`, { queue_id: queueId });
             fetchQueue();
         } catch (err) {
             // Silent fail
@@ -313,7 +315,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     const handleClearQueue = async () => {
         try {
-            await axios.post('http://localhost:5170/api/queue/clear');
+            await axios.post(`${BACKEND_URL}/api/queue/clear`);
             fetchQueue();
         } catch (err) {
             // Silent fail
@@ -322,7 +324,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     const handleStartQueue = async () => {
         try {
-            await axios.post('http://localhost:5170/api/queue/start');
+            await axios.post(`${BACKEND_URL}/api/queue/start`);
             fetchQueue();
         } catch (err) {
             // Silent fail
@@ -331,7 +333,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     const handleStopQueue = async () => {
         try {
-            await axios.post('http://localhost:5170/api/queue/stop');
+            await axios.post(`${BACKEND_URL}/api/queue/stop`);
             fetchQueue();
         } catch (err) {
             // Silent fail
@@ -349,7 +351,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
         setIsPlaylist(false);
 
         try {
-            const response = await axios.post('http://localhost:5170/api/yt-formats', {
+            const response = await axios.post(`${BACKEND_URL}/api/yt-formats`, {
                 url,
                 check_playlist: true
             });
@@ -424,7 +426,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
         setError(null);
 
         try {
-            const response = await axios.post('http://localhost:5170/api/download', {
+            const response = await axios.post(`${BACKEND_URL}/api/download`, {
                 url,
                 format,
                 format_id: selectedFormatId
@@ -443,7 +445,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
         if (!targetId) return;
 
         try {
-            const response = await axios.post('http://localhost:5170/api/download/cancel', {
+            const response = await axios.post(`${BACKEND_URL}/api/download/cancel`, {
                 task_id: targetId
             });
 

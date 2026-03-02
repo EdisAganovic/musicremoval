@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.0.5] - 2026-03-02 🚀
+
+Production-grade batch processing stability and UI responsiveness.
+
+### [Fixed]
+
+#### Batch Processing & Scaling
+
+- **Fixed Polling Race Condition**: Parent batch now tracks successes/failures in memory, preventing "0% complete" UI errors when polling finishes faster than the last file task is cleaned.
+- **Persistent Counters**: Batch status results (success/fail counts) no longer disappear when individual file task objects are removed from memory.
+- **Queue Synchronization**: Backend now correctly processes ONLY the files explicitly selected in the frontend list, ignoring deselected items in the same queue.
+- **Task Worker Stability**: Resolved `NameError: name 'save_to_library' is not defined` and `UnboundLocalError: local variable 'filename' referenced before assignment` during process finalization.
+
+#### CLI & Logs
+
+- **UTF-8 Encoding for Subprocess**: FFmpeg and model subprocesses now use UTF-8 encoding with error replacement to handle emojis and special characters in filenames on Windows.
+- **Log Formatting**: Improved colorized console output for folder scans and batch status updates.
+
+### [Added]
+
+#### Separation UI
+
+- **Scanning Loading State**: Added "Scanning..." indicator and disabled input field during metadata extraction for large folders.
+- **Follow-Process Auto-Scrolling**: The batch list now automatically scrolls to keep the currently processing file visible in the UI.
+- **Individual Task Polling**: Implemented `/api/status/{task_id}` for granular progress tracking of single-file or batch-member tasks.
+
+#### Backend Logic
+
+- **Batch Metadata Injection**: Batch tasks now correctly inject per-file metadata (resolution, duration) into the task dictionary.
+
+### [Changed]
+
+- **Max Consecutive Errors**: Increased UI error tolerance from 3 to 10 for task polling to handle transient network fluctuations during heavy CPU/GPU loads.
+- **Unified Backend URL**: Frontend now uses a centralized `BACKEND_URL` variable in `SeparationTab.jsx` for easier deployment configuration.
+
+---
+
 ## [0.0.4] - 2026-03-02 ⚡
 
 Backend restructuring and improved gitignore configuration.

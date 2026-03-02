@@ -4,4 +4,4 @@
 
 ## Codebase Navigation
 
-Use arhictecture.md for to navigate the codebase.
+Use arhitecture.md for to navigate the codebase.

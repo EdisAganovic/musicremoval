@@ -25,6 +25,7 @@ DEPENDENCIES:
 FLAGS:
   -A: Allow all permissions (network, read, write, etc.)
 """
+import subprocess
 
 def run_deno_script(script_path: str, args: list = None):
     """Executes a Deno script and returns the output ✨."""

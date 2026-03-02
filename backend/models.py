@@ -88,6 +88,8 @@ class FolderQueueRemoveRequest(BaseModel):
 class FolderQueueProcessRequest(BaseModel):
     queue_id: str
     model: str = "htdemucs"
+    selected_files: Optional[List[str]] = None
+    duration: Optional[int] = None
 
 
 class DeleteFileRequest(BaseModel):

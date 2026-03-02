@@ -45,6 +45,8 @@ import { Bell, Check, CheckCheck, Trash2, X, Download } from 'lucide-react';
 import axios from 'axios';
 import { useNotifications } from '../contexts/NotificationContext';
 
+const BACKEND_URL = 'http://127.0.0.1:5170';
+
 const NotificationBell = () => {
     const {
         notifications,
@@ -132,7 +134,7 @@ const NotificationBell = () => {
                                     <button
                                         onClick={async () => {
                                             try {
-                                                await axios.post('http://localhost:5170/api/notifications/test');
+                                                await axios.post(`${BACKEND_URL}/api/notifications/test`);
                                                 fetchNotifications();
                                             } catch (err) {
                                                 console.error("Failed to send test notification", err);
@@ -222,7 +224,7 @@ const NotificationBell = () => {
                                                                         onClick={async (e) => {
                                                                             e.stopPropagation();
                                                                             try {
-                                                                                await axios.post('http://localhost:5170/api/open-file', { 
+                                                                                await axios.post(`${BACKEND_URL}/api/open-file`, { 
                                                                                     path: notification.data.file_path 
                                                                                 });
                                                                             } catch (err) {

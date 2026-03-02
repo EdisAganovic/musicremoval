@@ -84,28 +84,31 @@ async def get_yt_formats(payload: dict):
                 'remote_components': ['ejs:github'],
             }
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                videos = []
-                entries = info.get('entries', []) if info.get('_type') == 'playlist' else [info]
+            def get_playlist_info():
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    return ydl.extract_info(url, download=False)
 
-                for entry in entries:
-                    if entry:
-                        videos.append({
-                            "id": entry.get('id', ''),
-                            "title": entry.get('title', 'Unknown'),
-                            "thumbnail": entry.get('thumbnail', ''),
-                            "duration": format_duration(entry.get('duration', 0)),
-                            "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
-                        })
+            info = await asyncio.to_thread(get_playlist_info)
+            videos = []
+            entries = info.get('entries', []) if info.get('_type') == 'playlist' else [info]
 
-                return {
-                    "is_playlist": True,
-                    "title": info.get("title", "Playlist"),
-                    "thumbnail": info.get("thumbnail", ""),
-                    "video_count": len(videos),
-                    "videos": videos
-                }
+            for entry in entries:
+                if entry:
+                    videos.append({
+                        "id": entry.get('id', ''),
+                        "title": entry.get('title', 'Unknown'),
+                        "thumbnail": entry.get('thumbnail', ''),
+                        "duration": format_duration(entry.get('duration', 0)),
+                        "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
+                    })
+
+            return {
+                "is_playlist": True,
+                "title": info.get("title", "Playlist"),
+                "thumbnail": info.get("thumbnail", ""),
+                "video_count": len(videos),
+                "videos": videos
+            }
 
         # Single video
         ydl_opts = {
@@ -115,43 +118,46 @@ async def get_yt_formats(payload: dict):
             'impersonate': ImpersonateTarget(client='chrome'),
         }
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            formats = []
-            for f in info.get('formats', []):
-                format_info = {
-                    "format_id": f.get("format_id"),
-                    "ext": f.get("ext"),
-                    "resolution": f.get("resolution"),
-                    "vcodec": f.get("vcodec"),
-                    "acodec": f.get("acodec"),
-                    "note": f.get("format_note"),
-                    "filesize": f.get("filesize"),
-                    "url": f.get("url")
-                }
-                label = f"{f.get('ext')} - {f.get('resolution')} ({f.get('format_note') or ''})"
-                if f.get('vcodec') == 'none':
-                    label = f"Audio: {f.get('ext')} ({f.get('format_note') or ''})"
-                format_info["label"] = label
-                formats.append(format_info)
+        def get_video_info():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
 
-            available_subs = []
-            if 'subtitles' in info:
-                for lang in info['subtitles']:
-                    available_subs.append({"code": lang, "label": f"{lang} (Subtitle)"})
-            if 'automatic_captions' in info:
-                for lang in info['automatic_captions']:
-                    if not any(s['code'] == lang for s in available_subs):
-                        available_subs.append({"code": lang, "label": f"{lang} (Auto-generated)"})
-
-            return {
-                "is_playlist": False,
-                "title": info.get("title"),
-                "thumbnail": info.get("thumbnail"),
-                "id": info.get("id"),
-                "formats": formats,
-                "subtitles": available_subs
+        info = await asyncio.to_thread(get_video_info)
+        formats = []
+        for f in info.get('formats', []):
+            format_info = {
+                "format_id": f.get("format_id"),
+                "ext": f.get("ext"),
+                "resolution": f.get("resolution"),
+                "vcodec": f.get("vcodec"),
+                "acodec": f.get("acodec"),
+                "note": f.get("format_note"),
+                "filesize": f.get("filesize"),
+                "url": f.get("url")
             }
+            label = f"{f.get('ext')} - {f.get('resolution')} ({f.get('format_note') or ''})"
+            if f.get('vcodec') == 'none':
+                label = f"Audio: {f.get('ext')} ({f.get('format_note') or ''})"
+            format_info["label"] = label
+            formats.append(format_info)
+
+        available_subs = []
+        if 'subtitles' in info:
+            for lang in info['subtitles']:
+                available_subs.append({"code": lang, "label": f"{lang} (Subtitle)"})
+        if 'automatic_captions' in info:
+            for lang in info['automatic_captions']:
+                if not any(s['code'] == lang for s in available_subs):
+                    available_subs.append({"code": lang, "label": f"{lang} (Auto-generated)"})
+
+        return {
+            "is_playlist": False,
+            "title": info.get("title"),
+            "thumbnail": info.get("thumbnail"),
+            "id": info.get("id"),
+            "formats": formats,
+            "subtitles": available_subs
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

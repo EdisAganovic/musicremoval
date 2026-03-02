@@ -1,45 +1,60 @@
-# TODO - Codebase Improvements & Optimizations
+# 🚀 DemucsPleeter - Performance & Quality Roadmap
 
-> Last Updated: 2026-03-02
+Following the stabilization of the batch processing system, the following high-priority improvements are planned to reach a professional production standard.
+
+## 🏎️ 1. Performance: Model Warmup Optimization
+
+- **Goal**: Reduce per-file overhead by avoiding model reloads.
+- **Tasks**:
+  - [ ] Implement a **Global Model Manager** class to keep Spleeter/Demucs in memory.
+  - [ ] Replace `subprocess.run` calls with direct Python module imports for AI models.
+  - [ ] **Impact**: Estimated 70% reduction in processing time for batch files.
+
+## 🚦 2. Concurrency: Hardware-Aware Worker Queue
+
+- **Goal**: Prevent GPU/CPU OOM (Out of Memory) crashes.
+- **Tasks**:
+  - [ ] Implement an `asyncio.Queue` system for separation tasks.
+  - [ ] Limit concurrent processes to 1 (or 2 for high-end GPUs).
+  - [ ] **Impact**: Stable background processing even with ultra-large batches.
+
+## 💾 3. State Persistence: "Restart Proof" Tasks
+
+- **Goal**: Prevent data loss after app restarts or crashes.
+- **Tasks**:
+  - [ ] Persist the global `tasks` dictionary to `tasks.json` on every change.
+  - [ ] Implement "Resume" logic on backend startup to re-attach to unfinished tasks.
+  - [ ] **Impact**: Users never lose batch progress after a code edit or power loss.
+
+## 🧹 6. Maintenance: Automated Cleanup
+
+- **Goal**: Maintain healthy disk space without manual intervention.
+- **Tasks**:
+  - [ ] Add a background "Garbage Collector" to prune `_temp` files older than 2 hours.
+  - [ ] Auto-cleanup empty folders in `spleeter_out` and `demucs_out` after final mix.
+  - [ ] **Impact**: Set-and-forget reliability for long-term server usage.
 
 ---
 
-## 🚀 HIGH PRIORITY (Performance & Stability)
+## ✅ Completed (v0.0.5 - 2026-03-02)
 
-#### 1. Implement WebSockets for Progress Updates
+### 🏗️ Batch Scaling & Stability
 
-**Files:** `backend/backend.py`, `frontend/src/components/`
-**Current:** HTTP polling every 200ms-1s.
-**Optimization:** Replace polling with FastAPI WebSockets (`/ws/status/{task_id}`).
+- **Fixed Polling Race Condition**: Parent batch now tracks successes/failures in memory, preventing "0% complete" UI errors.
+- **Persistent Counters**: Batch status no longer disappears after individual file tasks are cleaned up.
+- **Fixed NameErrors**: Resolved missing `save_to_library` and `filename` UnboundLocalErrors in the backend worker.
+- **Queue Synchronization**: Backend now correctly processes only the files explicitly selected in the UI list.
 
-- **Benefit:** Reduces server overhead by 90%, near-zero latency progress bars.
+### ✨ UI & User Experience
 
-#### 2. Persistent AI Model Loading
+- **Loading Status**: Added "Scanning..." state with spinner for folder scanning.
+- **Intelligent Scrolling**: Fixed the "jumping scrollbar" bug; the list now auto-scrolls only to the _current_ processing file.
+- **Input Locking**: Folder path is now disabled while scanning to prevent configuration conflicts.
 
-**File:** `backend/modules/module_processor.py`, `backend/modules/module_demucs.py`
-**Current:** Models load from disk for every single file.
-**Optimization:** Implement a "Keep Model Warm" system.
+### 🔧 API Enhancements
 
-- **Benefit:** Saves 10-20 seconds of load time per file in batch processing.
+- **Task Status Polling**: Implemented the missing `/api/status/{task_id}` endpoint for per-file progress tracking.
+- **UTF-8 Support**: Improved emoji support in the Python console logs for better cross-platform compatibility.
 
-#### 3. Optimized Library Scanning
-
-**File:** `backend/routes/library.py`
-**Current:** Full folder traversal (`os.walk`) on every library tab refresh.
-**Optimization:** Implement a database (SQLite) that only updates on file system events.
-
-- **Benefit:** Instant library loading even with 1000+ files.
-
----
-
-## 🎯 MEDIUM PRIORITY (UX & Features)
-
----
-
-## 🛠️ LOW PRIORITY (Polish & Housekeeping)
-
-#### 7. Metadata Extraction Refactoring
-
-**File:** `backend/config.py`
-**Current:** Multiple ffprobe calls.
-**Optimization:** Use `tinytag` or `mutagen` for faster metadata reading where video streams aren't needed.
+_Last Updated: 2026-03-02_
+_Current Version: 0.0.5 (Production Stable Batching)_
