@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+/data/metadata_cache.json
+/data/notifications.json

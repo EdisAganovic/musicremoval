@@ -16,8 +16,6 @@ KEY FUNCTIONS:
     - Returns path to downloaded file, None on failure
   check_and_update_ytdlp() → bool
     - Updates yt-dlp via uv pip
-  sanitize_filename(filename, max_length) → str
-    - Removes invalid chars, limits length to 200
   is_playlist_url(url) → bool
     - Detects if URL is a playlist
 
@@ -36,6 +34,7 @@ OUTPUT:
 
 DEPENDENCIES:
   - module_ffmpeg.get_video_resolution(): For displaying video info
+  - utils.validation.sanitize_filename(): For safe filename handling
 """
 import subprocess
 import sys
@@ -44,6 +43,7 @@ import re
 import time
 from colorama import Fore, Style
 from module_ffmpeg import get_video_resolution
+from utils.validation import sanitize_filename
 
 
 def is_playlist_url(url):
@@ -73,40 +73,6 @@ def is_playlist_url(url):
     
     return False
 
-
-def sanitize_filename(filename: str, max_length: int = 200) -> str:
-    """
-    Sanitizes a filename by removing invalid characters and limiting length.
-    Also prevents path traversal attacks.
-
-    Args:
-        filename: The original filename to sanitize
-        max_length: Maximum length for the filename (default 200)
-
-    Returns:
-        Sanitized filename that's safe for the filesystem
-    """
-    # SECURITY: Remove path traversal attempts
-    filename = filename.replace('..', '_')
-    
-    # SECURITY: Only keep the basename (prevent directory traversal)
-    filename = os.path.basename(filename)
-    
-    # Replace invalid characters for Windows filesystem
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
-
-    # Remove leading/trailing spaces and dots which are invalid on Windows
-    sanitized = sanitized.strip(' .')
-
-    # Limit the length of the filename, preserving the extension
-    name, ext = os.path.splitext(sanitized)
-    if len(sanitized) > max_length:
-        # Truncate the name part to fit within max_length, keeping extension
-        max_name_length = max_length - len(ext)
-        name = name[:max_name_length]
-        sanitized = name + ext
-
-    return sanitized
 
 def check_and_update_ytdlp():
     """

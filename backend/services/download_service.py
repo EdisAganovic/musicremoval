@@ -10,18 +10,7 @@ from config import (
     tasks, active_downloads, save_to_library, add_notification,
     log_console, download_queue, save_queue, get_full_library
 )
-
-
-def format_duration(seconds):
-    """Format duration in seconds to human readable string."""
-    if not seconds:
-        return "N/A"
-    minutes = int(seconds // 60)
-    secs = int(seconds % 60)
-    hours = minutes // 60
-    if hours > 0:
-        return f"{hours}:{minutes % 60:02d}:{secs:02d}"
-    return f"{minutes}:{secs:02d}"
+from utils.helpers import format_duration
 
 
 def run_yt_dlp(

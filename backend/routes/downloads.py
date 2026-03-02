@@ -13,9 +13,10 @@ from config import (
 from services.download_service import run_yt_dlp
 from services.queue_service import process_queue
 from models import (
-    DownloadRequest, DownloadCancelRequest, QueueAddRequest, 
+    DownloadRequest, DownloadCancelRequest, QueueAddRequest,
     QueueBatchRequest, QueueActionRequest
 )
+from utils.helpers import format_duration
 
 router = APIRouter(prefix="/api", tags=["downloads"])
 
@@ -160,18 +161,6 @@ async def get_yt_formats(payload: dict):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-def format_duration(seconds):
-    """Format duration in seconds to human readable string."""
-    if not seconds:
-        return "N/A"
-    minutes = int(seconds // 60)
-    secs = int(seconds % 60)
-    hours = minutes // 60
-    if hours > 0:
-        return f"{hours}:{minutes % 60:02d}:{secs:02d}"
-    return f"{minutes}:{secs:02d}"
 
 
 @router.post("/download")

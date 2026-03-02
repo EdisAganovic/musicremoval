@@ -263,8 +263,6 @@ main.py (CLI)
 | POST | `/api/delete-file` | Delete file from library |
 | POST | `/api/open-file` | Open file with default app |
 | POST | `/api/open-folder` | Open folder in explorer |
-| GET | `/api/presets` | Get quality presets |
-| POST | `/api/presets` | Set current preset |
 
 ### Notifications & System
 
@@ -289,37 +287,9 @@ main.py (CLI)
 | `notifications.json` | User notification history | Backend (save_notifications) |
 | `metadata_cache.json` | File metadata cache | Backend (save_metadata_cache) |
 | `tasks.json` | Active task persistence | Backend (save_tasks_async) |
-| `video.json` | Quality presets + configuration | Frontend/Backend |
+| `video.json` | Processing configuration | Frontend/Backend |
 
-## Configuration (video.json)
-
-```json
-{
-  "presets": {
-    "fast": { 
-      "video": { "codec": "copy", "bitrate": "0" },
-      "audio": { "codec": "aac", "bitrate": "128k" },
-      "output": { "format": "mp4" }
-    },
-    "balanced": { 
-      "video": { "codec": "h264_nvenc", "bitrate": "2500k" },
-      "audio": { "codec": "aac", "bitrate": "192k" },
-      "output": { "format": "mp4" }
-    },
-    "quality": { 
-      "video": { "codec": "hevc_nvenc", "bitrate": "8000k" },
-      "audio": { "codec": "aac", "bitrate": "256k" },
-      "output": { "format": "mp4" }
-    }
-  },
-  "video": { "codec": "...", "bitrate": "..." },
-  "audio": { "codec": "...", "bitrate": "..." },
-  "output": { "format": "mp4" },
-  "processing": { "demucs_workers": 2 }
-}
-```
-
-## Environment Configuration
+## Temporary Files
 
 ### API Base URL (.env)
 
@@ -375,14 +345,6 @@ VITE_API_BASE_URL=http://localhost:5170/api
 - **Metadata Cache**: Fast library scanning with cached file metadata
 - **Non-blocking Downloads**: yt-dlp runs in thread pool executor
 - **Hot Reload**: Uvicorn excludes temp directories to prevent crashes
-
-## Quality Presets
-
-| Preset | Video Codec | Video Bitrate | Audio Codec | Audio Bitrate | Use Case |
-|--------|-------------|---------------|-------------|---------------|----------|
-| **Fast** | copy | 0 | AAC | 128k | Quick downloads, small size |
-| **Balanced** | h264_nvenc | 2500k | AAC | 192k | Default, good quality/size |
-| **Quality** | hevc_nvenc | 8000k | AAC | 256k | Best quality, larger files |
 
 ---
 
@@ -571,7 +533,6 @@ const handleUpload = async () => {
 - **Download Retry Logic**: Exponential backoff (3 attempts)
 - **Auto Disk Cleanup**: Cleans temp files >24h on startup
 - **Duplicate Detection**: Prevents downloading same content twice
-- **Quality Presets System**: Fast/Balanced/Quality presets
 - **Library Search & Bulk Operations**: Advanced library management
 
 #### UI Additions
@@ -656,7 +617,7 @@ demucspleeter/
 │   ├── notifications.json  # Notification history
 │   ├── tasks.json          # Active task persistence
 │   ├── metadata_cache.json # File metadata cache
-│   └── video.json          # Quality presets + config
+│   └── video.json          # Processing config
 ├── download/               # YouTube downloads (user data)
 ├── nomusic/                # Separated output (user data)
 ├── uploads/                # Temporary upload folder

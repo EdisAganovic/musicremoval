@@ -129,7 +129,6 @@ run_app.bat  # Windows
 
 #### Quality & Control
 
-- **Quality Presets**: Fast, Balanced, High Quality presets
 - **Output Configuration**: Customizable codec, bitrate, format
 - **Search & Filter**: Find files in library by name or duration
 - **Bulk Operations**: Multi-select and batch delete
@@ -441,40 +440,28 @@ python main.py separate --file "video.mp4" --temp
 
 ## ⚙️ Configuration
 
-### Quality Presets (`video.json`)
+### Processing Settings (`video.json`)
 
-Edit `video.json` to customize output quality:
+Edit `data/video.json` to customize output settings:
 
 ```json
 {
-  "presets": {
-    "fast": {
-      "label": "Fast (Small Size)",
-      "video": { "codec": "copy", "bitrate": null },
-      "audio": { "codec": "aac", "bitrate": "128k" }
-    },
-    "balanced": {
-      "label": "Balanced (Recommended)",
-      "video": { "codec": "h264_nvenc", "bitrate": "2500k" },
-      "audio": { "codec": "aac", "bitrate": "192k" }
-    },
-    "quality": {
-      "label": "High Quality (Large Size)",
-      "video": { "codec": "hevc_nvenc", "bitrate": "8000k" },
-      "audio": { "codec": "aac", "bitrate": "256k" }
-    }
+  "video": {
+    "codec": "h264_nvenc",
+    "bitrate": "2500k"
   },
-  "current_preset": "balanced"
+  "audio": {
+    "codec": "aac",
+    "bitrate": "192k"
+  },
+  "output": {
+    "format": "mp4"
+  },
+  "processing": {
+    "demucs_workers": 2
+  }
 }
 ```
-
-### Preset Descriptions
-
-| Preset       | Video Codec         | Bitrate | Audio | Best For                      |
-| ------------ | ------------------- | ------- | ----- | ----------------------------- |
-| **Fast**     | Copy (no re-encode) | N/A     | 128k  | Quick previews, small files   |
-| **Balanced** | h264_nvenc (GPU)    | 2500k   | 192k  | Everyday use (recommended)    |
-| **Quality**  | hevc_nvenc (GPU)    | 8000k   | 256k  | Archival, high-quality output |
 
 ## 🏗️ Architecture
 
@@ -493,7 +480,7 @@ backend/
 │   ├── module_cuda.py         # GPU detection
 │   └── module_ytdlp.py        # YouTube downloading
 data/                    # Persistent state and configuration
-├── video.json           # Quality presets
+├── video.json           # Processing configuration
 ├── library.json         # Processed files database
 ├── download_queue.json  # YT download queue
 ├── notifications.json   # User alerts
@@ -551,8 +538,6 @@ frontend/
 
 **Utilities:**
 
-- `GET /api/presets` - Get quality presets
-- `POST /api/presets` - Set current preset
 - `GET /api/status/{task_id}` - Get task progress
 - `POST /api/download/cancel` - Cancel active download
 

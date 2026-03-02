@@ -8,7 +8,7 @@ KEY FUNCTIONS:
     - Returns: SHA256 hex digest (default) or specified algorithm
     - Reads file in 8KB chunks for memory efficiency
     - Returns None on file not found or error
-  
+
   download_file_concurrent(url, filename) → tuple
     - Returns: (success: bool, filename: str)
     - Streams download to disk in 8KB chunks
@@ -25,6 +25,11 @@ DEPENDENCIES:
   - requests: HTTP downloads with streaming
   - time: Download speed calculation
 """
+
+import hashlib
+import time
+
+import requests
 
 def calculate_file_hash(filepath, hash_algorithm="sha256"):
     """

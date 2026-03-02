@@ -101,12 +101,6 @@ class NotificationRequest(BaseModel):
     id: Optional[str] = None
 
 
-class PresetRequest(BaseModel):
-    name: str
-    format: str
-    quality: str
-
-
 class URLFormatRequest(BaseModel):
     url: str
     check_playlist: bool = False

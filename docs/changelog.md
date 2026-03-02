@@ -1,5 +1,57 @@
 # Changelog
 
+## [0.0.8] - 2026-03-02 🐛
+
+Bug fix for library delete confirmation modal.
+
+### [Fixed]
+
+- **Delete Confirmation Modal Not Showing**: Fixed modal appearing as blurred background only
+  - Root cause: Modal was not portaled to `document.body`, causing z-index stacking issues
+  - Now uses `createPortal()` same as context menu
+  - Increased z-index from `z-50` to `z-[100]` for guaranteed visibility
+
+---
+
+## [0.0.7] - 2026-03-02 🔧
+
+Code deduplication and service layer refactoring.
+
+### [Refactored]
+
+#### Code Deduplication
+
+- **Shared `format_duration` Helper**: Extracted duplicate `format_duration()` function to `utils/helpers.py`
+  - Previously existed in both `services/download_service.py` and `routes/downloads.py`
+  - Now imported from single source
+
+- **Shared `sanitize_filename` Function**: Consolidated filename sanitization
+  - Enhanced `utils/validation.sanitize_filename()` with `max_length` parameter
+  - Added security improvements: path traversal prevention, basename extraction
+  - Removed duplicate from `modules/module_ytdlp.py`
+  - Now imports from `utils.validation`
+
+#### Service Layer Separation
+
+- **New `separation_service.py`**: Extracted business logic from routes
+  - Moved `run_separation()` function (~130 lines) from `routes/separation.py`
+  - Routes now delegate to service layer (proper separation of concerns)
+  - Cleaner route definitions focused on HTTP handling only
+
+### [Added]
+
+#### New Files
+
+- `backend/utils/helpers.py` - Shared helper functions (`format_duration`)
+- `backend/services/separation_service.py` - Vocal separation business logic
+
+### [Changed]
+
+- `modules/module_ytdlp.py` - Now imports `sanitize_filename` from `utils.validation`
+- `utils/validation.py` - Enhanced `sanitize_filename` with `max_length` param and security fixes
+
+---
+
 ## [0.0.6] - 2026-03-02 🔧
 
 Metadata extraction fixes and timeout improvements for long-running operations.
@@ -269,13 +321,6 @@ Major feature expansion with queue management, batch processing, notifications, 
 - **Duplicate Detection**: Prevent downloading same content twice
   - Check library for existing files before download
   - Returns duplicate warning with existing file path
-
-- **Quality Presets System**: Pre-configured output quality settings
-  - **Fast**: Small size, copy codec, 128k audio
-  - **Balanced**: h264_nvenc, 2500k, 192k audio (default)
-  - **Quality**: hevc_nvenc, 8000k, 256k audio
-  - `/api/presets` endpoints for getting/setting presets
-  - Stored in `video.json` with preset metadata
 
 - **Library Search & Bulk Operations**: Advanced library management
   - Real-time search by filename or duration
