@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
     }
 }
 
-def load_config(config_path='video.json'):
+def load_config(config_path='data/video.json'):
     """
     Loads and validates the video.json configuration file.
     Returns a validated config dict, falling back to defaults on any error.
@@ -302,7 +302,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             return False
 
         # Step 2 & 3: Run AI Source Separation Models
-        settings = load_config('video.json')
+        settings = load_config('data/video.json')
         demucs_workers = settings.get('processing', {}).get('demucs_workers', 2)
 
         # Both models return (path_to_wav, temp_segments_dir)
@@ -452,10 +452,10 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
         output_folder = "nomusic"
         os.makedirs(output_folder, exist_ok=True)
-        
+
         # Load and validate configuration
-        settings = load_config('video.json')
-        
+        settings = load_config('data/video.json')
+
         video_settings = settings.get('video', {})
         audio_settings = settings.get('audio', {})
         output_settings = settings.get('output', {})

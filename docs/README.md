@@ -1,10 +1,10 @@
 # Demucs & Spleeter Vocal Extractor
 
-**Version:** 0.0.3 | **Last Updated:** 2026-03-01
+**Version:** 0.0.5 | **Last Updated:** 2026-03-02
 
 A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.3-blue)
+![Version](https://img.shields.io/badge/version-0.0.5-blue)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.100+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
@@ -60,6 +60,24 @@ run_app.bat  # Windows
 - **Long Audio Segmentation**: Auto-splits files >10 minutes for reliable processing
 - **Multi-Track Support**: Handles videos with multiple audio tracks (auto-select by language)
 - **GPU Acceleration**: Full CUDA support for 5-10x faster processing
+
+### 🚀 New in v0.0.5
+
+#### Production-Grade Batch Processing
+
+- **Enhanced Stability**: Fixed polling race conditions that caused "0% complete" UI errors.
+- **Persistent Counters**: Batch success/fail tracking survives even after individual task cleanup.
+- **Intelligent Scrolling**: Batch list now automatically scrolls to follow the currently processing file.
+- **Scanning Feedback**: Visual "Scanning..." state and input locking during folder metadata extraction.
+- **Individual Task Polling**: Detailed progress tracking for every single file in a batch.
+
+### 🚀 New in v0.0.4
+
+#### Architecture & Organization
+
+- **Clean Structure**: Core logic moved to `backend/modules/` and state files to `data/`.
+- **Improved Git Shielding**: Recursive pattern matching to keep bytecode and temp files out of the repository.
+- **UTF-8 Subprocess Support**: Reliable handling of emojis and special characters in filenames on Windows.
 
 ### 🚀 New in v0.0.3
 
@@ -271,7 +289,7 @@ VITE_API_BASE_URL=http://localhost:5170/api
 
 #### 7. Install FFmpeg (Auto-downloaded)
 
-FFmpeg and FFprobe are automatically downloaded on first run to the `modules/` directory.
+FFmpeg and FFprobe are automatically downloaded on first run to the `backend/modules/` directory.
 
 ---
 
@@ -465,7 +483,8 @@ Edit `video.json` to customize output quality:
 ```
 backend/
 ├── main.py              # FastAPI server, all API endpoints
-├── modules/
+├── config.py            # Global state and shared settings
+├── modules/             # AI core and processing logic
 │   ├── module_processor.py    # Main separation orchestrator
 │   ├── module_demucs.py       # Demucs AI model wrapper
 │   ├── module_spleeter.py     # Spleeter AI model wrapper
@@ -473,6 +492,17 @@ backend/
 │   ├── module_audio.py        # Audio alignment & mixing
 │   ├── module_cuda.py         # GPU detection
 │   └── module_ytdlp.py        # YouTube downloading
+data/                    # Persistent state and configuration
+├── video.json           # Quality presets
+├── library.json         # Processed files database
+├── download_queue.json  # YT download queue
+├── notifications.json   # User alerts
+└── metadata_cache.json  # File metadata cache
+docs/                    # Documentation and roadmap
+├── README.md            # This file
+├── changelog.md         # Detailed version history
+├── TODO.MD              # Development roadmap
+└── ARCHITECTURE.md      # System design
 ```
 
 ### Frontend (React + Vite)
@@ -606,15 +636,20 @@ _Times include both Spleeter + Demucs processing with alignment_
 
 See [changelog.md](changelog.md) for detailed version history.
 
-### v0.0.2 (2026-03-01)
+### v0.0.5 (2026-03-02)
 
-- ✅ Queue system for downloads
-- ✅ Batch folder processing
-- ✅ In-app notifications
-- ✅ Auto-retry failed downloads
-- ✅ Auto-cleanup temp files
-- ✅ Quality presets
-- ✅ Library search & bulk delete
+- ✅ Production-grade batch processing stability
+- ✅ UI follow-process auto-scrolling
+- ✅ Individual task polling (v0.0.5)
+- ✅ Data directory reorganization
+
+### v0.0.4 (2026-03-02)
+
+- ✅ Backend module relocation
+- ✅ UTF-8 subprocess encoding fixes
+- ✅ Documentation restrucutring
+
+### v0.0.3 (2026-03-01)
 
 ### v0.0.1 (2025-02-19)
 

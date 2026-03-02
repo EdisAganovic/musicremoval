@@ -4,16 +4,16 @@ MAIN ENTRY POINT - CLI for vocal separation workflow.
 WORKFLOW:
   1. download → module_ytdlp.download_video() → saves to ./downloads/
   2. separate → module_processor.process_file() → orchestrates Demucs/Spleeter
-  3. output → saved to ./nomusic/ with metadata in video.json
+  3. output → saved to ./nomusic/ with metadata in data/video.json
 
 COMMANDS:
   - download <url> [filename] [--separate]  → Download from YouTube
   - separate --file|--folder [--duration]   → Separate vocals from file/folder
 
 KEY FILES:
-  - video.json: Library database + quality presets
-  - download_queue.json: Queue state
-  - notifications.json: Alert history
+  - data/video.json: Library database + quality presets
+  - data/download_queue.json: Queue state
+  - data/notifications.json: Alert history
 
 MODULES USED:
   - module_ffmpeg: FFmpeg management (auto-downloads if missing)

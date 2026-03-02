@@ -223,7 +223,7 @@ async def open_folder(payload: dict):
 @router.get("/presets")
 async def get_presets():
     """Get available quality presets."""
-    presets_file = "video.json"
+    presets_file = "data/video.json"
 
     if os.path.exists(presets_file):
         try:
@@ -250,7 +250,7 @@ async def get_presets():
 async def set_preset(payload: dict):
     """Set the current quality preset."""
     preset_name = payload.get("preset")
-    presets_file = "video.json"
+    presets_file = "data/video.json"
 
     data = {"presets": {}, "current_preset": preset_name}
 

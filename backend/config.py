@@ -8,10 +8,10 @@ from typing import Dict, List
 from colorama import Fore, Style
 
 # File paths
-LIBRARY_FILE = "library.json"
-QUEUE_FILE = "download_queue.json"
-NOTIFICATIONS_FILE = "notifications.json"
-METADATA_CACHE_FILE = "metadata_cache.json"
+LIBRARY_FILE = "data/library.json"
+QUEUE_FILE = "data/download_queue.json"
+NOTIFICATIONS_FILE = "data/notifications.json"
+METADATA_CACHE_FILE = "data/metadata_cache.json"
 
 # Shared state
 tasks: Dict[str, dict] = {}  # task_id -> task data
