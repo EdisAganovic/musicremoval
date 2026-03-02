@@ -64,7 +64,8 @@ import {
   FileAudio,
   Files,
   Trash2,
-  Video
+  Video,
+  AudioLines
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
@@ -94,7 +95,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
   // Auto-scroll to currently processing file in batch mode
   useEffect(() => {
-    if (batchFiles.length > 0 && batchListRef.current && status === "processing") {
+    if (batchFiles.length > 0 && batchListRef.current && (status === "processing" || status === "pending")) {
       const processingIndex = batchFiles.findIndex(f => f.status === "processing");
       if (processingIndex !== -1) {
         const processingElement = batchListRef.current.children[processingIndex];
@@ -140,7 +141,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Esc to clear inputs
-      if (e.key === 'Escape' && status !== 'processing') {
+      if (e.key === 'Escape' && status !== 'processing' && status !== 'pending') {
         handleReset();
       }
     };
@@ -154,7 +155,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 10;
     
-    if (taskId && status === "processing") {
+    if (taskId && (status === "processing" || status === "pending" || status === "uploading")) {
       interval = setInterval(async () => {
         try {
           const response = await axios.get(
@@ -443,7 +444,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   };
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
+    <div className="space-y-6 max-w-2xl mx-auto">
       {/* Processing Mode Selection */}
       <div className="flex justify-center space-x-4 mb-6">
         <button
@@ -706,7 +707,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       <motion.div
         whileHover={{ scale: 1.01 }}
         whileTap={{ scale: 0.99 }}
-        className={`relative group rounded-2xl border-2 border-dashed p-10 transition-all duration-300 cursor-pointer overflow-hidden
+        className={`relative group rounded-2xl border-2 border-dashed p-6 transition-all duration-300 cursor-pointer overflow-hidden
                     ${
                       dragging
                         ? "border-primary-500 bg-primary-500/10"
@@ -735,11 +736,11 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-4"
               >
-                <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/30 mx-auto transform group-hover:rotate-3 transition-transform duration-300">
-                  <PlayCircle className="w-10 h-10 text-white" />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/30 mx-auto transform group-hover:rotate-3 transition-transform duration-300">
+                  <PlayCircle className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-white tracking-tight">
+                  <h3 className="text-lg font-bold text-white tracking-tight">
                     {file.name}
                   </h3>
                   {libraryFilePath ? (
@@ -759,7 +760,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                       e.stopPropagation();
                       handleReset();
                     }}
-                    className="flex items-center justify-center mx-auto space-x-2 px-5 py-2.5 mt-4 text-sm font-bold text-white bg-dark-700 hover:bg-dark-600 border border-white/10 hover:border-white/20 rounded-xl transition-all shadow-lg group"
+                    className="flex items-center justify-center mx-auto space-x-2 px-4 py-2 mt-4 text-xs font-bold text-white bg-dark-700 hover:bg-dark-600 border border-white/10 hover:border-white/20 rounded-xl transition-all shadow-lg group"
                   >
                     <RefreshCw className="w-4 h-4 text-primary-400 group-hover:rotate-180 transition-transform duration-500" />
                     <span className="tracking-wide">Select new file</span>
@@ -773,10 +774,10 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-4 mx-auto group-hover:bg-primary-500/20 group-hover:border-primary-500/50 transition-colors duration-300">
-                  <UploadCloud className="w-8 h-8 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3 mx-auto group-hover:bg-primary-500/20 group-hover:border-primary-500/50 transition-colors duration-300">
+                  <UploadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary-400 transition-colors" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-200 group-hover:text-white transition-colors">
+                <h3 className="text-base font-semibold text-gray-200 group-hover:text-white transition-colors">
                   Click or Drag File Here
                 </h3>
                 <p className="text-gray-500 text-sm mt-2 max-w-xs mx-auto">
@@ -800,7 +801,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
+            className="grid grid-cols-2 md:grid-cols-4 gap-3"
           >
             {[
               { label: "Duration", value: metadata.duration, icon: "🕒" },
@@ -822,13 +823,13 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                 !item.hidden && (
                   <div
                     key={idx}
-                    className="bg-dark-800/50 border border-white/5 p-4 rounded-xl backdrop-blur-sm shadow-lg"
+                    className="bg-dark-800/50 border border-white/5 p-3 rounded-xl backdrop-blur-sm shadow-lg"
                   >
-                    <div className="text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-1 flex items-center space-x-2">
+                    <div className="text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-1 flex items-center space-x-2">
                       <span>{item.icon}</span>
                       <span>{item.label}</span>
                     </div>
-                    <div className="text-sm font-black text-white truncate">
+                    <div className="text-xs font-black text-white truncate">
                       {item.value || "Unknown"}
                     </div>
                   </div>
@@ -867,7 +868,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
               "Start batch processing"
             }
             className={`
-              relative overflow-hidden px-10 py-4 rounded-full font-bold text-lg shadow-2xl transition-all duration-300 group
+              relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-300 group
               ${
                 status === "processing" || !batchFiles.some(f => f.selected)
                   ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
@@ -896,15 +897,15 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleUpload}
-            disabled={!file || status === "uploading" || status === "processing"}
+            disabled={!file || status === "uploading" || status === "processing" || status === "pending"}
             title={
               !file ? "Please select a file first" :
               status === "uploading" ? "Upload in progress..." :
-              status === "processing" ? "Processing in progress..." :
+              status === "processing" || status === "pending" ? "Processing in progress..." :
               "Start separation"
             }
             className={`
-              relative overflow-hidden px-10 py-4 rounded-full font-bold text-lg shadow-2xl transition-all duration-300 group
+              relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-300 group
               ${
                 !file ||
                 status === "uploading" ||
@@ -915,13 +916,13 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             `}
           >
             <span className="relative z-10 flex items-center space-x-3">
-              {status === "processing" || status === "uploading" ? (
+              {status === "processing" || status === "pending" || status === "uploading" ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <PlayCircle className="w-5 h-5" />
               )}
               <span>
-                {status === "processing" ? "Processing..." : "Start Separation"}
+                {status === "processing" || status === "pending" ? "Processing..." : "Start Separation"}
               </span>
             </span>
           </motion.button>
@@ -932,6 +933,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       <AnimatePresence>
         {(status === "uploading" ||
           status === "processing" ||
+          status === "pending" ||
           status === "completed") && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}

@@ -37,6 +37,7 @@ async def get_all_downloads():
     active_tasks = [
         task for task in tasks.values()
         if task.get("status") in ["processing", "downloading", "separating"]
+        and task.get("type") == "download"
     ]
     active_tasks.sort(key=lambda t: (t.get("status") != "processing", -t.get("progress", 0)))
     return active_tasks
@@ -209,6 +210,7 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
         "current_step": "Initializing download",
         "result_files": [],
         "url": url,
+        "type": "download",
         "created_at": time.time()
     }
     from services.persistence import save_tasks_sync

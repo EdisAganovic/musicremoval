@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { libraryAPI } from '../api/index.js';
 import { BACKEND_URL } from '../config';
-import { Video, Music, FolderOpen, Trash2, Layers, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
+import { Video, Music, FolderOpen, Trash2, AudioLines, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,9 @@ const LibraryTab = ({ onSeparate, isActive }) => {
     
     // Context menu state
     const [contextMenu, setContextMenu] = useState(null); // { x, y, item }
+
+    // Rename state
+    const [renameConfirm, setRenameConfirm] = useState(null); // { item, newName }
 
     // Refs for cleanup
     const abortControllerRef = useRef(null);
@@ -184,6 +187,28 @@ const LibraryTab = ({ onSeparate, isActive }) => {
     const handleBulkDelete = () => {
         if (selectedItems.length === 0) return;
         setDeleteConfirm({ type: 'bulk', count: selectedItems.length });
+    };
+
+    const handleRename = (item) => {
+        const currentName = item.result_files?.[0]?.split(/[\\/]/).pop() || '';
+        const nameWithoutExt = currentName.substring(0, currentName.lastIndexOf('.')) || currentName;
+        setRenameConfirm({ item, newName: nameWithoutExt });
+    };
+
+    const executeRename = async () => {
+        if (!renameConfirm || !renameConfirm.newName) return;
+        
+        const loadingToast = toast.loading("Renaming file...");
+        try {
+            const { item, newName } = renameConfirm;
+            await libraryAPI.rename(item.task_id, newName);
+            toast.success(`Renamed file`, { id: loadingToast });
+            setRenameConfirm(null);
+            fetchLibrary();
+        } catch (err) {
+            console.error("Failed to rename file", err);
+            toast.error(err.response?.data?.detail || "Failed to rename file", { id: loadingToast });
+        }
     };
 
     const toggleSelect = (taskId) => {
@@ -545,11 +570,11 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                             {/* Show Separate button only for files from download folder */}
                                             {!item.result_files?.[0].toLowerCase().includes('nomusic') && (
                                                 <button
-                                                    className="p-1.5 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded transition-all"
+                                                    className="p-1.5 bg-emerald-600/5 hover:bg-emerald-600/20 text-emerald-400 rounded-lg transition-all border border-emerald-500/20 hover:border-emerald-500/40"
                                                     onClick={() => onSeparate?.(item.result_files?.[0])}
                                                     title="Separate vocals"
                                                 >
-                                                    <Layers className="w-3.5 h-3.5" />
+                                                    <AudioLines className="w-4 h-4" />
                                                 </button>
                                             )}
                                             <button
@@ -634,6 +659,69 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                 document.body
             )}
 
+            {/* Rename Modal - Portaled to Body */}
+            {renameConfirm && createPortal(
+                <AnimatePresence>
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                        onClick={() => setRenameConfirm(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-dark-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+                        >
+                            <div className="flex items-center space-x-3 mb-4">
+                                <div className="p-3 bg-primary-600/20 rounded-full">
+                                    <Edit3 className="w-6 h-6 text-primary-500" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white">Rename File</h3>
+                            </div>
+                            
+                            <div className="space-y-4 mb-6">
+                                <p className="text-xs text-gray-400">
+                                    Enter a new name for the file. The extension will be preserved.
+                                </p>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={renameConfirm.newName}
+                                    onChange={(e) => setRenameConfirm({ ...renameConfirm, newName: e.target.value })}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') executeRename();
+                                        if (e.key === 'Escape') setRenameConfirm(null);
+                                    }}
+                                    className="w-full bg-dark-800 text-white text-sm border border-white/10 rounded-lg px-4 py-3 outline-none focus:border-primary-500/50 transition-colors"
+                                    placeholder="Enter new filename"
+                                />
+                            </div>
+                            
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setRenameConfirm(null)}
+                                    className="flex-1 px-4 py-3 bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white rounded-xl font-bold transition-all border border-white/10"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={executeRename}
+                                    disabled={!renameConfirm.newName || !renameConfirm.newName.trim()}
+                                    className="flex-1 px-4 py-3 bg-gradient-to-r from-primary-600 to-indigo-600 hover:from-primary-500 hover:to-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-primary-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Rename
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                </AnimatePresence>,
+                document.body
+            )}
+
             {/* Context Menu - Portaled to Body for fixed positioning */}
             {contextMenu && createPortal(
                 <div
@@ -662,6 +750,16 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                     </button>
                     <button
                         onClick={() => {
+                            handleRename(contextMenu.item);
+                            setContextMenu(null);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
+                    >
+                        <Edit3 className="w-4 h-4" />
+                        Rename
+                    </button>
+                    <button
+                        onClick={() => {
                             libraryAPI.openFolder(contextMenu.item?.result_files?.[0]).catch(() => {});
                             setContextMenu(null);
                         }}
@@ -676,9 +774,9 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                 onSeparate?.(contextMenu.item?.result_files?.[0]);
                                 setContextMenu(null);
                             }}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
+                            className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-600/10 flex items-center gap-2"
                         >
-                            <Layers className="w-4 h-4" />
+                            <AudioLines className="w-4 h-4" />
                             Separate Vocals
                         </button>
                     )}

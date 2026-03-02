@@ -30,7 +30,7 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    metadata = get_file_metadata(file_path)
+    metadata = await asyncio.to_thread(get_file_metadata, file_path)
 
     print(f"\n{Fore.CYAN}=== File Upload Separation ==={Style.RESET_ALL}")
     print(f"File: {file_path}")
@@ -56,6 +56,7 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         "result_files": [],
         "metadata": metadata,
         "file_path": file_path,
+        "type": "separation",
         "created_at": time.time()
     }
     from services.persistence import save_tasks_sync
@@ -95,7 +96,7 @@ async def separate_file(background_tasks: BackgroundTasks, payload: dict):
 
     task_id = str(uuid.uuid4())
     batch_id = str(uuid.uuid4())
-    metadata = get_file_metadata(file_path)
+    metadata = await asyncio.to_thread(get_file_metadata, file_path)
 
     # Create batch parent task for consistent UI polling
     tasks[batch_id] = {
@@ -118,6 +119,7 @@ async def separate_file(background_tasks: BackgroundTasks, payload: dict):
         "result_files": [],
         "metadata": metadata,
         "file_path": file_path,
+        "type": "separation",
         "created_at": time.time()
     }
     from services.persistence import save_tasks_sync
@@ -295,6 +297,7 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             "progress": 0,
             "current_step": "Queued",
             "file_path": file_path,
+            "type": "separation",
             "result_files": [],
             "metadata": file_item.get("metadata", {})
         }

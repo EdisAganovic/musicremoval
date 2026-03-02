@@ -1,6 +1,7 @@
 """
 Path sanitization and URL validation.
 """
+import os
 from typing import Optional
 from pathlib import Path
 from urllib.parse import urlparse

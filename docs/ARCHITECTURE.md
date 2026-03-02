@@ -10,7 +10,10 @@
 | `backend/__main__.py` | FastAPI server entry point | `uvicorn.run()` |
 | `backend/backend.py` | FastAPI app, mounts all routers | `startup_event()`, `shutdown_event()` |
 | `backend/models.py` | Pydantic schemas for API requests/responses | `DownloadRequest`, `TaskStatus`, `QueueItem` |
-| `backend/config.py` | Shared state, config, utility functions | `tasks`, `download_queue`, `save_to_library()`, `log_console()` |
+| `backend/config.py` | Legacy config, re-exports from core/ | Compatibility layer |
+| **backend/core/** | Core state and constants | |
+| `core/state.py` | Shared global state with locks | `tasks`, `download_queue`, `notifications`, `*_lock` |
+| `core/constants.py` | Hardcoded paths and settings | `LIBRARY_FILE`, `MAX_LOGS`, `QUEUE_FILE` |
 | **backend/routes/** | API endpoint handlers | |
 | `routes/downloads.py` | YouTube download & queue endpoints | `get_yt_formats()`, `download_video()`, `add_to_queue()` |
 | `routes/separation.py` | Vocal separation endpoints | `separate_audio()`, `scan_folder()`, `process_folder_queue()` |
@@ -19,6 +22,14 @@
 | **backend/services/** | Business logic layer | |
 | `services/download_service.py` | YouTube download logic (yt-dlp) | `run_yt_dlp()` |
 | `services/queue_service.py` | Queue processing logic | `process_queue()` |
+| `services/separation_service.py` | Vocal separation orchestration | `run_separation()` |
+| `services/persistence.py` | JSON data persistence layer | `save_library()`, `load_library()`, `save_tasks_async()` |
+| `services/cleanup.py` | Background cleanup scheduler | `cleanup_temp_files()`, `start_cleanup_scheduler()` |
+| **backend/utils/** | Utility functions | |
+| `utils/file_ops.py` | Safe file system operations | `safe_remove()`, `safe_makedirs()`, `safe_file_copy()` |
+| `utils/validation.py` | Input validation | `validate_url()`, `validate_youtube_url()`, `safe_path()` |
+| `utils/helpers.py` | General helper functions | `sanitize_filename()`, `format_duration()` |
+| `utils/async_tools.py` | Async utilities | Async helpers and wrappers |
 | **backend/modules/** | Core processing modules | |
 | `modules/module_processor.py` | Main orchestrator for vocal separation | `process_file()` |
 | `modules/module_demucs.py` | Demucs AI model wrapper | `separate_with_demucs()` |
@@ -50,7 +61,11 @@ backend/
 ├── backend.py            # FastAPI app, mounts routers (~145 lines)
 ├── __main__.py           # Entry point for python -m backend
 ├── models.py             # Pydantic schemas
-├── config.py             # Shared state, utilities, cleanup scheduler (~950 lines)
+├── config.py             # Re-exports from core/ for backward compatibility
+├── core/                 # Core state and constants (NEW)
+│   ├── __init__.py
+│   ├── state.py          # Global state variables and asyncio locks
+│   └── constants.py      # File paths and threshold settings
 ├── routes/
 │   ├── __init__.py
 │   ├── downloads.py        # /api/download, /api/queue/*, /api/yt-formats (~355 lines)
@@ -60,7 +75,16 @@ backend/
 ├── services/
 │   ├── __init__.py
 │   ├── download_service.py # yt-dlp integration (~236 lines)
-│   └── queue_service.py    # Download queue processor (~61 lines)
+│   ├── queue_service.py    # Download queue processor (~61 lines)
+│   ├── separation_service.py # Vocal separation service (NEW)
+│   ├── persistence.py      # JSON persistence layer (NEW)
+│   └── cleanup.py          # Background cleanup scheduler (NEW)
+├── utils/                # Utility functions (NEW)
+│   ├── __init__.py
+│   ├── file_ops.py         # Safe file operations
+│   ├── validation.py       # Input validation
+│   ├── helpers.py          # General helper functions
+│   └── async_tools.py      # Async utilities
 └── modules/
     ├── __init__.py
     ├── module_processor.py   # Main orchestrator (calls all other modules)
@@ -200,16 +224,23 @@ backend.py (FastAPI)
         ├── downloads.py
         │     ├── services/download_service.py (run_yt_dlp)
         │     ├── services/queue_service.py (process_queue)
-        │     └── config.py (tasks, download_queue, save_to_library)
+        │     ├── services/persistence.py (save_library, load_library)
+        │     ├── core/state.py (tasks, download_queue, active_downloads)
+        │     └── utils/validation.py (validate_youtube_url)
         ├── separation.py
+        │     ├── services/separation_service.py (run_separation)
+        │     ├── services/persistence.py (save_tasks_async)
         │     ├── backend/modules/module_processor.py (process_file)
         │     ├── backend/modules/module_ffmpeg.py (get_file_metadata)
-        │     └── config.py (tasks, add_notification)
+        │     └── core/state.py (tasks)
         ├── library.py
+        │     ├── services/persistence.py (get_full_library, save_to_library)
         │     ├── backend/modules/module_ffmpeg.py (get_file_metadata_cached)
-        │     └── config.py (get_full_library, save_to_library)
+        │     ├── utils/file_ops.py (safe_remove)
+        │     └── core/state.py (metadata_cache)
         └── notifications.py
-              └── config.py (console_logs, notifications, get_full_library)
+              ├── services/persistence.py (save_notifications)
+              └── core/state.py (console_logs, notifications)
 
 backend/modules/module_processor.py
   ├── backend/modules/module_cuda (check_gpu_cuda_support)
@@ -218,11 +249,94 @@ backend/modules/module_processor.py
   ├── backend/modules/module_demucs (separate_with_demucs)
   └── backend/modules/module_audio (align_audio_tracks, mix_audio_tracks)
 
+services/separation_service.py
+  ├── backend/modules/module_processor.py (process_file)
+  ├── backend/modules/module_ffmpeg.py (download_ffmpeg)
+  ├── services/persistence.py (save_tasks_sync)
+  └── core/state.py (tasks)
+
+services/download_service.py
+  ├── backend/modules/module_ytdlp.py (download_video)
+  ├── services/persistence.py (save_to_library, add_notification)
+  ├── utils/file_ops.py (safe_makedirs)
+  └── core/state.py (tasks, active_downloads)
+
+services/persistence.py
+  ├── core/state.py (all state variables and locks)
+  ├── core/constants.py (file paths, limits)
+  └── utils/file_ops.py (safe_makedirs)
+
+services/cleanup.py
+  ├── services/persistence.py (save_metadata_cache)
+  ├── utils/file_ops.py (safe_remove)
+  └── core/state.py (tasks, metadata_cache)
+
 main.py (CLI)
   ├── backend/modules/module_ffmpeg (download_ffmpeg)
   ├── backend/modules/module_ytdlp (download_video)
-  └── backend/modules/module_processor (process_file)
+  ├── backend/modules/module_processor (process_file)
+  └── utils/validation.py (validate_url)
 ```
+
+## Core Layer (backend/core/)
+
+The `core/` directory contains the foundational layer of the application, separating state management and constants from business logic.
+
+### state.py
+Global state variables with asyncio.Lock objects for thread-safe access:
+
+| Variable | Type | Purpose |
+|----------|------|---------|
+| `tasks` | Dict[str, dict] | Active task storage (task_id -> task data) |
+| `download_queue` | List[dict] | YouTube download queue items |
+| `notifications` | List[dict] | User notification history |
+| `active_downloads` | Dict[str, dict] | Running downloads with cancel flags |
+| `metadata_cache` | Dict[str, dict] | Cached file metadata |
+| `console_logs` | List[dict] | Console logs for frontend display |
+| `*_lock` | asyncio.Lock | Thread-safe locks for each state variable |
+
+### constants.py
+Centralized configuration constants:
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `LIBRARY_FILE` | "data/library.json" | Processed files metadata |
+| `QUEUE_FILE` | "data/download_queue.json" | Download queue persistence |
+| `NOTIFICATIONS_FILE` | "data/notifications.json" | Notification history |
+| `METADATA_CACHE_FILE` | "data/metadata_cache.json" | File metadata cache |
+| `TASKS_FILE` | "data/tasks.json" | Active tasks persistence |
+| `MAX_LOGS` | 500 | Maximum console logs to retain |
+| `MAX_NOTIFICATIONS` | 50 | Maximum notifications to retain |
+
+## Utility Layer (backend/utils/)
+
+The `utils/` directory contains reusable utility functions used across the backend.
+
+### file_ops.py
+Safe file system operations with error handling:
+- `safe_remove()` - Remove files with error handling
+- `safe_makedirs()` - Create directories safely
+- `safe_file_copy()` - Copy files with validation
+- `safe_file_move()` - Move files atomically
+- `TransactionContext` - Context manager for rollback support
+
+### validation.py
+Input validation and sanitization:
+- `safe_path()` - Prevent path traversal attacks
+- `validate_url()` - Basic URL validation
+- `validate_youtube_url()` - YouTube-specific URL validation
+- `sanitize_filename()` - Remove invalid filename characters
+
+### helpers.py
+General helper functions:
+- `sanitize_filename()` - Clean filenames for filesystem
+- `format_duration()` - Format seconds to human-readable duration
+- `format_file_size()` - Format bytes to human-readable size
+
+### async_tools.py
+Async utility functions:
+- Async helpers for concurrent operations
+- Lock management utilities
 
 ## API Endpoints
 
@@ -277,6 +391,47 @@ main.py (CLI)
 | POST | `/api/console-logs/clear` | Clear console logs |
 | GET | `/api/system-info` | Get system info (GPU, packages, storage) |
 | GET | `/api/deno-info` | Get Deno runtime info |
+
+## Services Layer (backend/services/)
+
+The `services/` directory contains business logic layer, separating domain operations from API routing and data persistence.
+
+### download_service.py
+YouTube download orchestration using yt-dlp:
+- `run_yt_dlp()` - Main download function with retry logic
+- Handles format selection, subtitles, playlist extraction
+- Progress callbacks for real-time updates
+- Auto-separation integration after download
+
+### queue_service.py
+Download queue management:
+- `process_queue()` - Sequential queue processor
+- Handles queue state transitions
+- Integration with download_service for each item
+
+### separation_service.py
+Vocal separation orchestration:
+- `run_separation()` - Main separation workflow
+- Manages task lifecycle (pending → processing → completed/failed)
+- Calls module_processor for actual AI processing
+- Handles batch progress updates
+
+### persistence.py
+JSON data persistence layer:
+- Library operations: `save_library()`, `load_library()`, `get_full_library()`
+- Task persistence: `save_tasks_async()`, `save_tasks_sync()`, `load_tasks()`
+- Queue persistence: `save_queue()`, `load_queue()`
+- Notification persistence: `save_notifications()`, `load_notifications()`
+- Metadata cache: `save_metadata_cache()`, `load_metadata_cache()`
+- Console logs: `log_console()`, `get_console_logs()`
+- Initialization: `init_data_directory()`
+
+### cleanup.py
+Background maintenance and cleanup:
+- `cleanup_temp_files()` - Remove temp files older than 24h
+- `cleanup_metadata_cache()` - Remove stale cache entries
+- `cleanup_old_tasks()` - Remove completed tasks older than 24h
+- `start_cleanup_scheduler()` - Periodic cleanup runner (hourly)
 
 ## Key JSON Files
 
@@ -472,7 +627,36 @@ const handleUpload = async () => {
 
 ---
 
-## Recent Changes (2026-03-02)
+## Recent Changes
+
+### Version 0.0.7 - Backend Architecture Refactoring
+
+#### New Directory Structure
+- **`backend/core/`** - Core state and constants layer
+  - `state.py` - Global state variables with asyncio locks (thread-safe)
+  - `constants.py` - Centralized file paths and threshold settings
+- **`backend/utils/`** - Utility functions layer
+  - `file_ops.py` - Safe file operations with error handling
+  - `validation.py` - Input validation and sanitization
+  - `helpers.py` - General helper functions
+  - `async_tools.py` - Async utility functions
+- **`backend/services/`** - Expanded business logic layer
+  - `persistence.py` - JSON data persistence layer (moved from config.py)
+  - `cleanup.py` - Background cleanup scheduler (moved from config.py)
+  - `separation_service.py` - Vocal separation orchestration
+
+#### Separation of Concerns
+- **Core Layer**: Stateless constants and global state with locks
+- **Utils Layer**: Pure functions with no side effects
+- **Services Layer**: Business logic with dependency injection
+- **Routes Layer**: API endpoints only, no business logic
+- **Modules Layer**: AI/FFmpeg processing (unchanged)
+
+#### Benefits
+- **Testability**: Each layer can be tested in isolation
+- **Maintainability**: Clear boundaries between responsibilities
+- **Thread Safety**: All state access protected by locks
+- **Type Safety**: Better type hints with explicit dependencies
 
 ### Version 0.0.6 - Task Persistence & Background Cleanup
 

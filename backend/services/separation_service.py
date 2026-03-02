@@ -102,6 +102,7 @@ def run_separation(task_id: str, file_path: str, duration=None):
             tasks[task_id]["result_files"] = result_files
 
             # Save to library
+            from services.persistence import get_file_metadata_cached
             library_entry = {
                 "task_id": task_id,
                 "url": "",
@@ -109,7 +110,8 @@ def run_separation(task_id: str, file_path: str, duration=None):
                 "result_files": result_files,
                 "status": "completed",
                 "format": "separation",
-                "source_file": file_path
+                "source_file": file_path,
+                "metadata": get_file_metadata_cached(result_files[0]) if result_files else {}
             }
             save_to_library(library_entry)
 

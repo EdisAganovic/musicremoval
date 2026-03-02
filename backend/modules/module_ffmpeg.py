@@ -183,8 +183,18 @@ def get_file_metadata(file_path):
             "-show_format",
             file_path
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
-        data = json.loads(result.stdout)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
+            if result.returncode != 0:
+                print(f"ffprobe failed for {file_path}. Return code: {result.returncode}, stderr: {result.stderr}")
+                return metadata
+            data = json.loads(result.stdout)
+        except subprocess.TimeoutExpired:
+            print(f"ffprobe timed out (10s) for {file_path}")
+            return metadata
+        except json.JSONDecodeError:
+            print(f"Failed to parse ffprobe JSON output for {file_path}")
+            return metadata
 
         # Get duration - try format first, then fall back to video stream
         format_info = data.get('format', {})
@@ -247,6 +257,33 @@ def get_video_codec(file_path):
     except Exception as e:
         print(f"{Fore.RED}An unexpected error occurred while getting video codec for {file_path}: {e}{Style.RESET_ALL}")
         return None
+
+def get_ffmpeg_version():
+    """
+    Retrieves a clean version string (e.g., "8.0.1") from the local FFmpeg binary.
+    """
+    if not os.path.exists(FFMPEG_EXE):
+        return "N/A"
+    
+    try:
+        # Run ffmpeg -version
+        result = subprocess.run([FFMPEG_EXE, "-version"], capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        # First line usually looks like: "ffmpeg version 8.0.1-full_build-www.gyan.dev Copyright..."
+        first_line = result.stdout.split('\n')[0]
+        
+        # Look for "version " and take the next part
+        if "version " in first_line:
+            version_part = first_line.split("version ")[1].split(" ")[0]
+            # Strip extra build info if present (e.g. "-full_build...")
+            clean_version = version_part.split("-")[0]
+            # Strip leading 'n' if present (e.g. "n5.1.2" -> "5.1.2")
+            if clean_version.startswith('n'):
+                clean_version = clean_version[1:]
+            return clean_version
+            
+        return "Available"
+    except (subprocess.CalledProcessError, FileNotFoundError, IndexError):
+        return "N/A"
 
 def check_fdk_aac_codec():
     """

@@ -201,6 +201,14 @@ def save_to_library(task_data):
         existing_ids = {t.get("task_id") for t in library if isinstance(t, dict)}
         existing_urls = {t.get("url") for t in library if isinstance(t, dict) and t.get("url")}
 
+        # Normalize paths in task_data before saving
+        if "result_files" in task_data:
+            task_data["result_files"] = [os.path.abspath(os.path.normpath(f)) for f in task_data["result_files"] if f]
+        if "source_file" in task_data and task_data["source_file"]:
+            task_data["source_file"] = os.path.abspath(os.path.normpath(task_data["source_file"]))
+        if "file_path" in task_data and task_data["file_path"]:
+            task_data["file_path"] = os.path.abspath(os.path.normpath(task_data["file_path"]))
+
         task_id = task_data.get("task_id")
         task_url = task_data.get("url")
 
@@ -401,11 +409,38 @@ async def load_metadata_cache_async():
                     loaded = json.load(f)
                     metadata_cache.clear()
                     metadata_cache.update(loaded)
+                _normalize_cache_keys()
                 print(f"{Fore.CYAN}Loaded metadata cache with {len(metadata_cache)} entries{Style.RESET_ALL}")
             except (json.JSONDecodeError, OSError, IOError):
                 metadata_cache.clear()
         else:
             metadata_cache.clear()
+
+
+def _normalize_cache_keys():
+    """Migrate any relative-path cache keys to absolute paths in-place."""
+    # The backend CWD is the project root (one level above /backend)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    to_add = {}
+    to_remove = []
+    for key, value in metadata_cache.items():
+        # Keys are "<path>:<mtime>"
+        colon_idx = key.rfind(':')
+        if colon_idx == -1:
+            continue
+        path_part = key[:colon_idx]
+        mtime_part = key[colon_idx:]  # includes the ':'
+        if not os.path.isabs(path_part):
+            abs_path = os.path.normpath(os.path.join(project_root, path_part))
+            new_key = abs_path + mtime_part
+            if new_key != key:
+                to_add[new_key] = value
+                to_remove.append(key)
+    for k in to_remove:
+        del metadata_cache[k]
+    metadata_cache.update(to_add)
+    if to_remove:
+        print(f"{Fore.CYAN}Migrated {len(to_remove)} relative cache keys to absolute paths{Style.RESET_ALL}")
 
 
 def load_metadata_cache():
@@ -417,6 +452,7 @@ def load_metadata_cache():
                 loaded = json.load(f)
                 metadata_cache.clear()
                 metadata_cache.update(loaded)
+            _normalize_cache_keys()
             print(f"{Fore.CYAN}Loaded metadata cache with {len(metadata_cache)} entries{Style.RESET_ALL}")
         except (json.JSONDecodeError, OSError, IOError):
             metadata_cache.clear()
@@ -476,20 +512,32 @@ def get_file_metadata_cached(file_path):
     """Gets file metadata using cache for fast repeated access."""
     from modules.module_ffmpeg import get_file_metadata
 
+    # Normalize to absolute path for consistent cache keys
+    abs_path = os.path.abspath(file_path)
+
     # Generate hash from file path + modification time for cache key
     try:
-        mtime = os.path.getmtime(file_path)
-        cache_key = f"{file_path}:{mtime}"
+        mtime = os.path.getmtime(abs_path)
+        cache_key = f"{abs_path}:{mtime}"
     except (OSError, ValueError):
-        cache_key = file_path
+        cache_key = abs_path
 
     # Check cache first
     if cache_key in metadata_cache:
-        return metadata_cache[cache_key]
+        cached_data = metadata_cache[cache_key]
+        # If duration or resolution is N/A, try to re-fetch it.
+        # This helps recover from partial/failed metadata extraction.
+        if cached_data.get("duration") != "N/A" and cached_data.get("resolution") != "N/A":
+            return cached_data
+        
+        # Also return if it IS an audio file (meaning resolution is expected to be N/A)
+        # but only if duration is valid.
+        if not cached_data.get("is_video") and cached_data.get("duration") != "N/A":
+            return cached_data
 
-    # Not in cache, extract metadata
+    # Not in cache or needs re-fetch, extract metadata
     try:
-        metadata = get_file_metadata(file_path)
+        metadata = get_file_metadata(abs_path)
     except (OSError, IOError, RuntimeError):
         metadata = {"duration": "N/A", "resolution": "N/A", "audio_codec": "N/A", "video_codec": "N/A", "is_video": False}
 

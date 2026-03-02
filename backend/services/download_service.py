@@ -31,7 +31,8 @@ def run_yt_dlp(
         "progress": 5,
         "current_step": "Fetching video info...",
         "result_files": [],
-        "url": url
+        "url": url,
+        "type": "download"
     }
 
     active_downloads[task_id] = {"cancel_flag": False, "ydl": None}

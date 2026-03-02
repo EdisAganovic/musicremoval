@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.0.10] - 2026-03-03 🐛
+
+Critical bug fixes for library metadata scanning and UI refinements.
+
+### [Fixed]
+
+#### Library Scan & Cache
+
+- **Stuck N/A Metadata**: Fixed an issue where files processed via separation showed "N/A" for duration.
+  - Root Cause: Paths stored in `metadata_cache.json` were relative, but the library scanner queried using absolute paths.
+  - Solution: Implemented `_normalize_cache_keys()` to auto-migrate old cached entries to absolute paths upon backend startup.
+- **Skipped Files in Library**: Fixed a bug where completed separation files were invisible in the library folder.
+  - Root Cause: Scanner ignored files from _any_ task in history, including completed ones.
+  - Solution: Restrained exclusion logic to strictly ignore files from actively running tasks (`processing`, `downloading`, `pending`, `separating`).
+
+### [Changed]
+
+#### UI/UX Enhancements
+
+- **System Info Footer**: FDK_AAC installation status is now cleanly rendered inline alongside the FFmpeg version format (`5.1.2 (FDK_AAC installed)`).
+- **Separation Icon**: Swapped the `Waves` visual element across tabs and context menus back to the crisp vertical `AudioLines` icon.
+
+---
+
 ## [0.0.9] - 2026-03-02 🔧
 
 Centralized configuration and version management.

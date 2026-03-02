@@ -34,7 +34,7 @@ import NotificationBell from './components/NotificationBell';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { APP_VERSION, APP_NAME, BACKEND_URL } from './config';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Layers, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle } from 'lucide-react';
+import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 
@@ -136,7 +136,7 @@ function AppContent() {
             <div className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-primary-600 to-accent-500 rounded-full blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
               <div className="relative p-2 bg-dark-800 rounded-full ring-1 ring-white/10 shadow-2xl">
-                <Music className="w-5 h-5 text-primary-400 group-hover:text-white transition-colors" />
+                <AudioLines className="w-5 h-5 text-emerald-400 group-hover:text-white transition-colors" />
               </div>
             </div>
             <div>
@@ -211,7 +211,7 @@ function AppContent() {
                   />
                 )}
                 <span className="relative z-10 flex items-center space-x-2">
-                  {tab === 'separation' ? <Layers className="w-4 h-4" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
+                  {tab === 'separation' ? <AudioLines className="w-4 h-4" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
                   <span className="capitalize">{tab === 'downloader' ? 'YT Downloader' : tab}</span>
                 </span>
               </button>
@@ -588,20 +588,20 @@ ${Object.entries(systemInfo.packages)
                               <div key={pkg}>
                                 <span className="text-gray-500 capitalize">{pkg.replace(/-/g, ' ')}:</span>
                                 {pkg === 'ffmpeg' ? (
-                                  <div>
-                                    <p className={`font-medium ${
+                                  <p className="flex items-center space-x-2 mt-0.5">
+                                    <span className={`font-medium ${
                                       systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-white'
                                     }`}>
                                       {version}
-                                    </p>
-                                    <p className={`text-xs mt-0.5 ${
+                                    </span>
+                                    <span className={`text-xs ${
                                       systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-emerald-400'
                                     }`}>
                                       {systemInfo.packages.fdk_aac === false 
                                         ? '(FDK_AAC missing)' 
                                         : '(FDK_AAC installed)'}
-                                    </p>
-                                  </div>
+                                    </span>
+                                  </p>
                                 ) : (
                                   <p className="text-white font-medium">{version}</p>
                                 )}

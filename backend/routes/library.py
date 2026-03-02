@@ -28,7 +28,23 @@ async def get_library():
         library = get_full_library()
 
         existing_ids = {item.get("task_id") for item in library}
-        existing_files = {item.get("result_files", [""])[0] for item in library if item.get("result_files")}
+        existing_files = {os.path.abspath(os.path.normpath(item.get("result_files", [""])[0])) 
+                          for item in library if item.get("result_files")}
+        
+        # Only exclude files that are ACTIVELY being processed — never block completed/failed tasks
+        ACTIVE_STATUSES = {"processing", "downloading", "separating", "queued", "pending"}
+        active_task_files = set()
+        for t in tasks.values():
+            if t.get("status") not in ACTIVE_STATUSES:
+                continue
+            # Source file currently being worked on
+            f_path = t.get("file_path")
+            if f_path:
+                active_task_files.add(os.path.abspath(os.path.normpath(f_path)))
+            # Result files being written right now
+            for rf in t.get("result_files", []):
+                if rf:
+                    active_task_files.add(os.path.abspath(os.path.normpath(rf)))
 
         VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.wmv', '.flv', '.m4v', '.mpeg', '.mpg', '.3gp'}
         AUDIO_EXTENSIONS = {'.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.wma', '.opus'}
@@ -43,8 +59,12 @@ async def get_library():
                     if ext.lower() not in VIDEO_EXTENSIONS:
                         continue
 
-                    file_path = os.path.join(root, filename)
-                    if os.path.isfile(file_path) and file_path not in existing_files:
+                    file_path = os.path.abspath(os.path.normpath(os.path.join(root, filename)))
+                    if os.path.isfile(file_path):
+                        if file_path in existing_files or file_path in active_task_files:
+                            continue
+
+                        # Check if MD5 based ID already exists
                         task_id = hashlib.md5(file_path.encode()).hexdigest()
 
                         if task_id in existing_ids:
@@ -85,9 +105,9 @@ async def get_library():
                     if ext.lower() not in NOMUSIC_EXTENSIONS:
                         continue
                     nomusic_total += 1
-                    file_path = os.path.join(root, filename)
+                    file_path = os.path.abspath(os.path.normpath(os.path.join(root, filename)))
 
-                    if file_path in existing_files:
+                    if file_path in existing_files or file_path in active_task_files:
                         nomusic_skipped_existing += 1
                         continue
 
@@ -121,8 +141,30 @@ async def get_library():
                     })
             print(f"{Fore.CYAN}[Library Scan] Nomusic: {nomusic_total} total, {nomusic_found} new, {nomusic_skipped_existing} skipped{Style.RESET_ALL}")
 
+        # Repair existing entries with 'N/A' metadata
+        library_changed = False
+        for item in library:
+            meta = item.get("metadata", {})
+            if meta.get("duration") == "N/A":
+                res_files = item.get("result_files", [])
+                if res_files and os.path.exists(res_files[0]):
+                    new_metadata = get_file_metadata_cached(res_files[0])
+                    if new_metadata.get("duration") != "N/A":
+                        item["metadata"] = new_metadata
+                        library_changed = True
+
         # Sort by created_at timestamp (newest first)
         library.sort(key=lambda x: x.get("created_at", 0), reverse=True)
+        
+        # Save library if we added new files or repaired metadata
+        if nomusic_added > 0 or library_changed:
+            from config import LIBRARY_FILE
+            try:
+                with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
+                    json.dump(library, f, indent=4)
+            except (OSError, IOError, TypeError):
+                pass
+
         save_metadata_cache()
         return library
 
@@ -231,3 +273,93 @@ async def open_folder(payload: dict):
         return {"status": "opened", "path": path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to open folder: {str(e)}")
+
+
+@router.post("/rename-file")
+async def rename_file(payload: dict):
+    """Rename a file in the library."""
+    from config import sanitize_filename
+    import hashlib
+    
+    task_id = payload.get("task_id")
+    new_name = payload.get("new_name")
+    
+    if not task_id or not new_name:
+        raise HTTPException(status_code=400, detail="task_id and new_name required")
+
+    # Sanitize new name (remove invalid characters)
+    new_name = sanitize_filename(new_name)
+    
+    # Find the item in library
+    library = get_full_library()
+    target_item = None
+    for item in library:
+        if item.get("task_id") == task_id:
+            target_item = item
+            break
+            
+    if not target_item:
+        raise HTTPException(status_code=404, detail="File not found in library")
+        
+    old_path = target_item.get("result_files", [""])[0]
+    if not old_path or not os.path.exists(old_path):
+        raise HTTPException(status_code=404, detail="Physical file not found")
+        
+    # Construct new path
+    directory = os.path.dirname(old_path)
+    filename, extension = os.path.splitext(old_path)
+    
+    # Ensure new_name has extension if it doesn't already
+    if not new_name.lower().endswith(extension.lower()):
+        new_path = os.path.join(directory, new_name + extension)
+    else:
+        new_path = os.path.join(directory, new_name)
+        
+    if os.path.exists(new_path) and new_path.lower() != old_path.lower():
+        raise HTTPException(status_code=400, detail="File with new name already exists")
+        
+    try:
+        # Perform rename on disk
+        # On Windows, os.rename handles case-only renames if not existing, but let's be safe.
+        if new_path.lower() == old_path.lower() and new_path != old_path:
+            # Case-only rename on Windows: needs a temporary step
+            temp_path = old_path + ".tmp_rename"
+            os.rename(old_path, temp_path)
+            os.rename(temp_path, new_path)
+        else:
+            os.rename(old_path, new_path)
+        
+        # Update library entry
+        new_task_id = hashlib.md5(new_path.encode()).hexdigest()
+        
+        # We need to update library.json to reflect the change
+        # Update target_item (which is already a reference to an item in 'library' list)
+        target_item["task_id"] = new_task_id
+        target_item["result_files"] = [new_path]
+        target_item["filename"] = os.path.basename(new_path)
+        
+        # Update library.json
+        if os.path.exists(LIBRARY_FILE):
+             with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
+                json.dump(library, f, indent=4)
+            
+        # Update metadata cache
+        old_cache_key = None
+        for key in list(metadata_cache.keys()):
+            if old_path in key:
+                old_cache_key = key
+                break
+        
+        if old_cache_key:
+            metadata = metadata_cache.pop(old_cache_key)
+            # Generate new cache key
+            new_mtime = os.path.getmtime(new_path)
+            new_cache_key = f"{new_path}:{new_mtime}"
+            metadata_cache[new_cache_key] = metadata
+            save_metadata_cache()
+            
+        return {"status": "renamed", "new_path": new_path, "new_task_id": new_task_id}
+        
+    except Exception as e:
+        print(f"Rename error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to rename file: {str(e)}")

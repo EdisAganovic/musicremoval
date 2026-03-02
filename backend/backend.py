@@ -71,6 +71,10 @@ async def startup_event():
     # Initialize data directory and create missing JSON files
     init_data_directory()
 
+    # Ensure FFmpeg is present
+    from modules.module_ffmpeg import download_ffmpeg
+    download_ffmpeg()
+
     # Load persisted data
     load_queue()
     load_notifications()

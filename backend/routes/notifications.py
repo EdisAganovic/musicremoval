@@ -203,16 +203,10 @@ async def get_system_info():
             pass
 
         # Check FFmpeg
-        ffmpeg_path = shutil.which("ffmpeg")
-        if ffmpeg_path:
-            info["packages"]["ffmpeg"] = ffmpeg_path
-            try:
-                result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, encoding='utf-8', errors='replace')
-                if result.returncode == 0:
-                    version_line = result.stdout.split('\n')[0]
-                    info["packages"]["ffmpeg"] = version_line
-            except (subprocess.SubprocessError, OSError):
-                pass
+        from modules.module_ffmpeg import get_ffmpeg_version, check_fdk_aac_codec
+        ffmpeg_ver = get_ffmpeg_version()
+        info["packages"]["ffmpeg"] = ffmpeg_ver
+        info["packages"]["fdk_aac"] = check_fdk_aac_codec()
 
         # Get memory info
         try:
