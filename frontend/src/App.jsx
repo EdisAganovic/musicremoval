@@ -254,10 +254,13 @@ function AppContent() {
             style={{ display: activeTab === 'library' ? 'block' : 'none' }}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
-            <LibraryTab onSeparate={(filePath) => {
-              setLibraryFileToSeparate(filePath);
-              setActiveTab('separation');
-            }} />
+            <LibraryTab 
+              isActive={activeTab === 'library'}
+              onSeparate={(filePath) => {
+                setLibraryFileToSeparate(filePath);
+                setActiveTab('separation');
+              }} 
+            />
           </motion.div>
         </div>
 

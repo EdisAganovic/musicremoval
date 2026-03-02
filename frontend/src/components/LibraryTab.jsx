@@ -7,7 +7,7 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const LibraryTab = ({ onSeparate }) => {
+const LibraryTab = ({ onSeparate, isActive }) => {
     const [items, setItems] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
@@ -255,13 +255,14 @@ const LibraryTab = ({ onSeparate }) => {
         return 0;
     });
 
-    // Initial fetch only - manual refresh via button
+    // Re-fetch when tab becomes active
     useEffect(() => {
-        fetchLibrary();
-        fetchFolderSizes();
+        if (isActive) {
+            handleRefresh();
+        }
         
         return () => {
-            // Cleanup: abort pending requests on unmount
+            // Cleanup: abort pending requests on unmount or tab switch
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
@@ -269,7 +270,7 @@ const LibraryTab = ({ onSeparate }) => {
                 sizeAbortRef.current.abort();
             }
         };
-    }, []);
+    }, [isActive]);
 
     // Keyboard Shortcuts
     useEffect(() => {
