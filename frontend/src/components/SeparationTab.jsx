@@ -66,6 +66,7 @@ import {
   Video
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from 'react-hot-toast';
 
 const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [file, setFile] = useState(null);
@@ -126,6 +127,18 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     setMetadata(null);
   };
 
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Esc to clear inputs
+      if (e.key === 'Escape' && status !== 'processing') {
+        handleReset();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [status]);
+
   // Polling effect
   useEffect(() => {
     let interval;
@@ -161,9 +174,16 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             setStatus("error");
           }
         } catch (err) {
-          console.error("Polling error", err);
           consecutiveErrors++;
-          
+
+          // Treat 404 as task completion (task was cleaned up by backend)
+          if (err.response?.status === 404) {
+            setStatus("completed");
+            setTaskId(null);
+            clearInterval(interval);
+            return;
+          }
+
           // Show error after 3 consecutive failures
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
             setError("Connection lost to backend. Refresh page to reconnect.");
@@ -220,9 +240,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             }
           }
         } catch (err) {
-          console.error("Batch polling error", err);
           consecutiveErrors++;
-          
+
           // Show error after 3 consecutive failures
           if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
             setError("Connection lost to backend. Refresh page to reconnect.");
@@ -254,24 +273,20 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     setQueueId(null);
     setStatus(null); // Reset status
     setBatchId(null); // Reset batch ID
-    
-    console.log("Scanning folder:", folderPath);
-    
+
     // Scan folder using Python backend
     try {
       const response = await axios.post('http://localhost:5170/api/folder/scan', {
         folder_path: folderPath
       });
-      
-      console.log("Scan response:", response.data);
+
       setQueueId(response.data.queue_id);
       setBatchFiles(response.data.files || []);
-      
+
       if (response.data.files && response.data.files.length > 0) {
-        console.log(`Found ${response.data.files.length} files`);
+        // Files found
       }
     } catch (err) {
-      console.error("Folder scan error:", err);
       if (err.response?.data?.detail) {
         setError(err.response.data.detail);
       } else {
@@ -283,55 +298,50 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
   const handleRemoveFile = async (fileId) => {
     if (!queueId) return;
-    
+
     try {
       const response = await axios.post('http://localhost:5170/api/folder-queue/remove', {
         queue_id: queueId,
         file_id: fileId
       });
-      
+
       setBatchFiles(response.data.files || []);
     } catch (err) {
-      console.error("Failed to remove file", err);
+      // Silent fail
     }
   };
 
   const handleToggleFile = (fileId) => {
-    setBatchFiles(prev => prev.map(f => 
+    setBatchFiles(prev => prev.map(f =>
       f.id === fileId ? { ...f, selected: !f.selected } : f
     ));
   };
 
   const handleStartBatchProcessing = async () => {
     if (!queueId) {
-      console.error("No queue ID");
       setError("No queue ID - please scan folder first");
       return;
     }
-    
+
     const selectedCount = batchFiles.filter(f => f.selected).length;
     if (selectedCount === 0) {
       setError("No files selected for processing");
       return;
     }
 
-    console.log(`Starting batch processing for ${selectedCount} files...`);
     setStatus("processing");
     setCurrentStep(`Starting batch processing (${selectedCount} files)...`);
     setProgress(0);
 
     try {
-      console.log("Sending process request with queue_id:", queueId);
       const response = await axios.post('http://localhost:5170/api/folder-queue/process', {
         queue_id: queueId,
         model: model
       });
-      
-      console.log("Process response:", response.data);
+
       setBatchId(response.data.batch_id);
       setBatchFiles(response.data.files || []);
     } catch (err) {
-      console.error("Batch process error:", err);
       if (err.response?.data?.detail) {
         setError(err.response.data.detail);
       } else {
@@ -362,7 +372,6 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         }
         setStatus("processing");
       } catch (err) {
-        console.error(err);
         setError("Failed to contact server. Is backend running?");
         setStatus("error");
       }
@@ -405,7 +414,6 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       }
       setStatus("processing");
     } catch (err) {
-      console.error(err);
       setError("Failed to contact server. Is backend running?");
       setStatus("error");
     }
@@ -991,7 +999,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                         path: resultFiles[0],
                       });
                     } catch (err) {
-                      alert("Cannot open file.");
+                      toast.error("Cannot open file.");
                     }
                   }}
                   className="px-8 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 text-white rounded-xl text-lg font-black transition-all shadow-xl shadow-primary-500/25 active:scale-95 flex items-center space-x-3 group"
@@ -1007,7 +1015,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                         { path: resultFiles[0] },
                       );
                     } catch (err) {
-                      alert("Cannot open folder.");
+                      toast.error("Cannot open folder.");
                     }
                   }}
                   className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-xl text-sm font-bold transition-all border border-white/5 active:scale-95 flex items-center space-x-2"

@@ -35,6 +35,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle } from 'lucide-react';
 import axios from 'axios';
+import { Toaster } from 'react-hot-toast';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState('separation');
@@ -49,21 +50,24 @@ function AppContent() {
   // Parse console logs for playlist progress
   useEffect(() => {
     if (consoleLogs.length > 0) {
-      // Look for "Found X entries in playlist" message
       const lastLog = consoleLogs[consoleLogs.length - 1];
-      if (lastLog && lastLog.message.includes('Found') && lastLog.message.includes('entries')) {
+      
+      // Look for "Downloading item X of Y" from yt-dlp
+      if (lastLog && lastLog.message.includes('Downloading item') && lastLog.message.includes('of')) {
+        const match = lastLog.message.match(/Downloading item (\d+) of (\d+)/);
+        if (match) {
+          setAnalyzingProgress({ 
+            current: parseInt(match[1]), 
+            total: parseInt(match[2]) 
+          });
+        }
+      }
+      // Look for "Found X entries in playlist" message
+      else if (lastLog && lastLog.message.includes('Found') && lastLog.message.includes('entries')) {
         const match = lastLog.message.match(/Found (\d+) entries/);
         if (match) {
           setAnalyzingProgress({ current: parseInt(match[1]), total: parseInt(match[1]) });
         }
-      }
-      // Look for "Downloading item X of Y" messages
-      const downloadMatch = lastLog?.message.match(/Downloading item (\d+) of (\d+)/);
-      if (downloadMatch) {
-        setAnalyzingProgress({ 
-          current: parseInt(downloadMatch[1]), 
-          total: parseInt(downloadMatch[2]) 
-        });
       }
     }
   }, [consoleLogs]);
@@ -256,6 +260,21 @@ function AppContent() {
           </motion.div>
         </div>
 
+        <Toaster position="bottom-right" toastOptions={{
+          style: {
+            background: '#1f2937', /* dark-800 roughly */
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(10px)'
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+        }} />
+
         {/* Console Logs Modal */}
         <AnimatePresence>
           {showConsole && (
@@ -349,12 +368,66 @@ function AppContent() {
                       <p className="text-xs text-gray-500">Hardware & Software Details</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    {/* Copy Button */}
+                    <button
+                      onClick={() => {
+                        if (!systemInfo) return;
+                        const markdown = `## System Information
+
+### GPU / CUDA
+- **Status:** ${systemInfo.gpu.available ? '✓ Available' : '✗ Not Available'}
+- **GPU:** ${systemInfo.gpu.name}
+- **VRAM:** ${systemInfo.gpu.vram_total}
+- **CUDA:** ${systemInfo.gpu.cuda_version}
+
+### Memory (RAM)
+- **Total:** ${systemInfo.memory.total}
+- **Available:** ${systemInfo.memory.available}
+- **Demucs Usage:** ${systemInfo.memory.demucs_usage}
+
+### Storage
+- **Total Space:** ${systemInfo.storage.total}
+- **Free Space:** ${systemInfo.storage.free}
+- **Output Folder:** ${systemInfo.storage.output_folder} (${systemInfo.storage.output_size})
+- **Download Folder:** ${systemInfo.storage.download_folder} (${systemInfo.storage.download_size})
+
+### Processing Config
+- **Demucs Workers:** ${systemInfo.processing.demucs_workers}
+- **Segment Duration:** ${systemInfo.processing.segment_duration}
+
+### Library Stats
+- **Total Files:** ${systemInfo.library.total_files}
+- **Total Size:** ${systemInfo.library.total_size}
+
+### Package Versions
+${Object.entries(systemInfo.packages)
+  .filter(([pkg]) => pkg !== 'fdk_aac')
+  .map(([pkg, version]) => `- **${pkg}:** ${version}`)
+  .join('\n')}
+`;
+                        navigator.clipboard.writeText(markdown);
+                        // Show brief success feedback
+                        const btn = event.currentTarget;
+                        btn.classList.add('text-emerald-400');
+                        setTimeout(() => btn.classList.remove('text-emerald-400'), 1000);
+                      }}
+                      className="p-2 hover:bg-emerald-600/20 text-gray-400 hover:text-emerald-400 rounded-lg transition-all"
+                      title="Copy as Markdown"
+                      disabled={!systemInfo}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                      </svg>
+                    </button>
+                    {/* Close Button */}
+                    <button
+                      onClick={() => setShowSettings(false)}
+                      className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-all"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Content */}
@@ -505,11 +578,30 @@ function AppContent() {
                           <h4 className="text-white font-bold">Package Versions</h4>
                         </div>
                         <div className="grid grid-cols-2 gap-3 text-sm">
-                          {Object.entries(systemInfo.packages).map(([pkg, version]) => (
-                            <div key={pkg}>
-                              <span className="text-gray-500 capitalize">{pkg.replace('-', ' ')}:</span>
-                              <p className="text-white font-medium">{version}</p>
-                            </div>
+                          {Object.entries(systemInfo.packages)
+                            .filter(([pkg]) => pkg !== 'fdk_aac')
+                            .map(([pkg, version]) => (
+                              <div key={pkg}>
+                                <span className="text-gray-500 capitalize">{pkg.replace(/-/g, ' ')}:</span>
+                                {pkg === 'ffmpeg' ? (
+                                  <div>
+                                    <p className={`font-medium ${
+                                      systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-white'
+                                    }`}>
+                                      {version}
+                                    </p>
+                                    <p className={`text-xs mt-0.5 ${
+                                      systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-emerald-400'
+                                    }`}>
+                                      {systemInfo.packages.fdk_aac === false 
+                                        ? '(FDK_AAC missing)' 
+                                        : '(FDK_AAC installed)'}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-white font-medium">{version}</p>
+                                )}
+                              </div>
                           ))}
                         </div>
                       </div>

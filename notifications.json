@@ -1,14 +1,227 @@
 [
     {
-        "id": "3aacce7f-08f9-43d9-a5bc-615197429e7a",
+        "id": "1d4b8602-2e6a-4f57-868b-85bf60756403",
         "type": "success",
         "title": "Download Complete",
-        "message": "'New Apple Products Dropping Soon!.mkv' has been added to your library",
+        "message": "Open Source might change forever downloaded successfully",
         "data": {
-            "file_path": "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\New Apple Products Dropping Soon!.mkv",
-            "task_id": "5c9d3930-2ba4-4659-bee7-8f08e960cee0"
+            "task_id": "b8157585-3498-41cd-b9bf-ba953b7ee5ec",
+            "file": "download\\Open Source might change forever.webm"
         },
         "read": false,
-        "created_at": 1772373118.450566
+        "created_at": 1772412854.7673595
+    },
+    {
+        "id": "af07d9a0-85fc-46f5-857d-ea902507d7e1",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "New Apple Products Dropping Soon! downloaded successfully",
+        "data": {
+            "task_id": "84050691-439e-47e4-9171-7787c6cc9fe1",
+            "file": "download\\New Apple Products Dropping Soon!.webm"
+        },
+        "read": false,
+        "created_at": 1772412782.9683905
+    },
+    {
+        "id": "92ccce49-7ac4-4396-a3e1-10234bc4320c",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Gde je NESTALO ovo oru\u017eje? downloaded successfully",
+        "data": {
+            "task_id": "54d7a746-1858-4149-ac31-cf3a9c421db6",
+            "file": "download\\Gde je NESTALO ovo oru\u017eje\uff1f.webm"
+        },
+        "read": false,
+        "created_at": 1772412655.3131704
+    },
+    {
+        "id": "761d2a0e-0b5a-4282-8538-58fd9aedf939",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Gde je NESTALO ovo oru\u017eje? downloaded successfully",
+        "data": {
+            "task_id": "35e215a4-64f4-4e4c-87d0-8a9fffc0addf",
+            "file": "download\\Gde je NESTALO ovo oru\u017eje\uff1f.webm"
+        },
+        "read": false,
+        "created_at": 1772412455.1094494
+    },
+    {
+        "id": "8129f54c-46be-448f-bab3-f5459922a9f4",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "The Unbeatable Local AI Coding Workflow (Full 2026 Setup) downloaded successfully",
+        "data": {
+            "task_id": "e6c7710a-9877-43ed-9286-d856894b861d",
+            "file": "download\\The Unbeatable Local AI Coding Workflow (Full 2026 Setup).webm"
+        },
+        "read": false,
+        "created_at": 1772412366.2617745
+    },
+    {
+        "id": "70b58755-c700-4f14-b578-7ad0192df7a5",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "New AI Meta: Train LLMs To Explore On \"Hard\" Tokens [RLVR + Entropy] downloaded successfully",
+        "data": {
+            "task_id": "d2e985db-986e-4dab-b4d6-7e63ba0811b1",
+            "file": "download\\New AI Meta\uff1a Train LLMs To Explore On \uff02Hard\uff02 Tokens [RLVR + Entropy].webm"
+        },
+        "read": false,
+        "created_at": 1772412310.5435874
+    },
+    {
+        "id": "272d12e7-394e-4ee5-a6da-7425d0d1b7c9",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Clip-React| Responding To Professor Jiang's Lecture On The Islamic Golden Age | Muhammed Ali! downloaded successfully",
+        "data": {
+            "task_id": "0cfb0f83-3177-4604-968b-39ecadea8332",
+            "file": "download\\Clip-React\uff5c Responding To Professor Jiang's Lecture On The Islamic Golden Age \uff5c Muhammed Ali!.webm"
+        },
+        "read": false,
+        "created_at": 1772412098.6646278
+    },
+    {
+        "id": "95b69b30-4ac4-4d55-a83e-0fcb43ccc893",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "#10 When There\u2019s No One to Support You | Ramadan Series | Ustadh Muhammad Tim Humble #AMAU downloaded successfully",
+        "data": {
+            "task_id": "d770d29e-87c3-41d8-b699-c8a8372e3ef8",
+            "file": "download\\#10 When There\u2019s No One to Support You \uff5c Ramadan Series \uff5c Ustadh Muhammad Tim Humble #AMAU.mkv"
+        },
+        "read": false,
+        "created_at": 1772411900.317432
+    },
+    {
+        "id": "f91b0391-9a5a-486c-826f-04f8d14ef1fe",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "The Insane History of War Thunder downloaded successfully",
+        "data": {
+            "task_id": "4e1b373c-ae11-471b-9a78-5dffa61af8e4",
+            "file": "download\\The Insane History of War Thunder.mkv"
+        },
+        "read": false,
+        "created_at": 1772411825.6521375
+    },
+    {
+        "id": "482b0144-e482-4489-882e-e8c9d9e20977",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Ahatovi\u0107 OTKRIVA: Iran devastirao Izrael! Mogu\u0107 napad na ameri\u010dke brodove! To bi bio \u0161amar Trumpu! downloaded successfully",
+        "data": {
+            "task_id": "429611dc-9b49-4bd1-9ab0-6abc59876da3",
+            "file": "download\\Ahatovi\u0107 OTKRIVA\uff1a Iran devastirao Izrael! Mogu\u0107 napad na ameri\u010dke brodove! To bi bio \u0161amar Trumpu!.webm"
+        },
+        "read": false,
+        "created_at": 1772411767.5502064
+    },
+    {
+        "id": "fc27457b-d201-4654-9178-2a51d5d34e87",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Mid-Level Engineers Are in Trouble (Here\u2019s the Escape Plan) downloaded successfully",
+        "data": {
+            "task_id": "3e4af2bb-c60b-4a74-85af-e2b1b8a77e61",
+            "file": "download\\Mid-Level Engineers Are in Trouble (Here\u2019s the Escape Plan).webm"
+        },
+        "read": false,
+        "created_at": 1772411656.8094058
+    },
+    {
+        "id": "1a93ca4a-b856-4e31-b1d4-48356636306d",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "The Unbeatable Local AI Coding Workflow (Full 2026 Setup) downloaded successfully",
+        "data": {
+            "task_id": "c6a4979d-10d2-4acb-8a89-3342a181615b",
+            "file": "download\\The Unbeatable Local AI Coding Workflow (Full 2026 Setup).webm"
+        },
+        "read": false,
+        "created_at": 1772411634.027866
+    },
+    {
+        "id": "1aaf9d64-f523-4d3a-ae53-db5b1acda74f",
+        "type": "error",
+        "title": "Download Failed",
+        "message": "Unknown format code 'd' for object of type 'float'",
+        "data": {},
+        "read": false,
+        "created_at": 1772411573.6813512
+    },
+    {
+        "id": "5309fecb-233a-4e6f-aa2a-0484aaaac9ab",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "New AI Meta: Train LLMs To Explore On \"Hard\" Tokens [RLVR + Entropy] downloaded successfully",
+        "data": {
+            "task_id": "76a07bf8-500c-4547-8cd5-19a089916e5b",
+            "file": "download\\New AI Meta\uff1a Train LLMs To Explore On \uff02Hard\uff02 Tokens [RLVR + Entropy].webm"
+        },
+        "read": false,
+        "created_at": 1772411543.9423378
+    },
+    {
+        "id": "4695c698-166c-464c-84d6-c50f0ccc651e",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "I Spent a Year Replacing My Subscriptions. Here\u2019s How. downloaded successfully",
+        "data": {
+            "task_id": "9a40848f-7c9c-462c-af16-ebe83c2f9af4",
+            "file": "download\\I Spent a Year Replacing My Subscriptions. Here\u2019s How..webm"
+        },
+        "read": false,
+        "created_at": 1772411381.0123634
+    },
+    {
+        "id": "018e91f5-62df-41bf-85b5-b1bddad440f7",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Model Collapse Ends AI Hype downloaded successfully",
+        "data": {
+            "task_id": "3ff3fbde-b89d-4b2d-81fb-f53eec3a45b2",
+            "file": "download\\Model Collapse Ends AI Hype.mkv"
+        },
+        "read": false,
+        "created_at": 1772410990.1461625
+    },
+    {
+        "id": "7ec0f04b-e4db-49bb-9c53-7dd72cabce8c",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Norweigan Government comes out swinging on enshittification downloaded successfully",
+        "data": {
+            "task_id": "71ef3722-3021-40db-b6b0-57ede74a5871",
+            "file": "download\\Norweigan Government comes out swinging on enshittification.webm"
+        },
+        "read": false,
+        "created_at": 1772410826.3985903
+    },
+    {
+        "id": "82a1d099-3335-4003-8597-0a69e3310303",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "Kimi K2.5 & The 3 New LLM Frontier downloaded successfully",
+        "data": {
+            "task_id": "7352ba28-40b7-48fa-924e-b02165d1e1a6",
+            "file": "download\\Kimi K2.5 & The 3 New LLM Frontier.webm"
+        },
+        "read": false,
+        "created_at": 1772410696.3720732
+    },
+    {
+        "id": "8a738544-2b76-434f-8f13-a0839fa5a55a",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "'Open Source might change forever.mkv' has been added to your library",
+        "data": {
+            "file_path": "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Open Source might change forever.mkv",
+            "task_id": "dc86c648-f67c-43c4-838f-37b43d10fb39"
+        },
+        "read": false,
+        "created_at": 1772408897.2013028
     }
 ]

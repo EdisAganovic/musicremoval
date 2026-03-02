@@ -49,7 +49,7 @@
  */
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, Subtitles, List, Trash2, Play, Pause, X } from 'lucide-react';
+import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const DownloaderTab = ({ analyzingProgress }) => {
@@ -57,17 +57,17 @@ const DownloaderTab = ({ analyzingProgress }) => {
     const [taskId, setTaskId] = useState(null);
     const [status, setStatus] = useState(null);
     const [progress, setProgress] = useState(0);
-    const [currentStep, setCurrentStep] = useState('');
     const [error, setError] = useState(null);
     const [format, setFormat] = useState('video');
+    const [currentStep, setCurrentStep] = useState('Preparing download...');
+    const [downloadInfo, setDownloadInfo] = useState({ speed: '', eta: '' });
 
     // New states for format selection
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [videoInfo, setVideoInfo] = useState(null);
     const [availableFormats, setAvailableFormats] = useState([]);
     const [selectedFormatId, setSelectedFormatId] = useState('');
-    const [subtitles, setSubtitles] = useState('none');
-    
+
     // Playlist support
     const [isPlaylist, setIsPlaylist] = useState(false);
     const [playlistVideos, setPlaylistVideos] = useState([]);
@@ -93,12 +93,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
     const [showPlaylistConfirm, setShowPlaylistConfirm] = useState(false);
     const [playlistConfirmData, setPlaylistConfirmData] = useState(null);
 
-    // Dynamic languages based on video info
-    const availableSubtitleOptions = [
-        { code: 'none', label: 'No Subtitles' },
-        ...(videoInfo?.subtitles || []),
-        { code: 'all', label: 'All Available' }
-    ];
+    // Active downloads tracking
+    const [activeDownloads, setActiveDownloads] = useState([]);
 
     // Fetch queue
     const fetchQueue = async () => {
@@ -107,18 +103,40 @@ const DownloaderTab = ({ analyzingProgress }) => {
             setQueue(response.data.queue || []);
             setQueueProcessing(response.data.processing || false);
         } catch (err) {
-            console.error("Failed to fetch queue", err);
+            // Silent fail for polling
         }
     };
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && !isAnalyzing && status !== 'processing') {
+                setUrl('');
+                setVideoInfo(null);
+                setAvailableFormats([]);
+                setIsPlaylist(false);
+                setPlaylistVideos([]);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isAnalyzing, status]);
 
     // Polling effect
     useEffect(() => {
         let interval;
         let consecutiveErrors = 0;
         const MAX_CONSECUTIVE_ERRORS = 3;
-        
+        let currentPollingTaskId = taskId; // Capture taskId at effect start
+
         if (taskId && (status === 'processing')) {
             interval = setInterval(async () => {
+                // Only poll if taskId hasn't changed
+                if (currentPollingTaskId !== taskId) {
+                    clearInterval(interval);
+                    return;
+                }
+                
                 try {
                     const response = await axios.get(
                         `http://localhost:5170/api/status/${taskId}`,
@@ -130,19 +148,29 @@ const DownloaderTab = ({ analyzingProgress }) => {
                     consecutiveErrors = 0;
 
                     setProgress(data.progress || 0);
-                    setCurrentStep(data.currentStep || data.current_step);
                     setStatus(data.status);
+                    setCurrentStep(data.current_step || 'Downloading...');
+                    if (data.download_info) {
+                        setDownloadInfo({
+                            speed: data.download_info.speed || '',
+                            eta: data.download_info.eta || ''
+                        });
+                    }
 
-                    if (data.status === 'completed') {
-                        clearInterval(interval);
-                    } else if (data.status === 'failed' || data.status === 'error') {
-                        setError('Download failed.');
-                        clearInterval(interval);
+                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'error') {
+                        setTaskId(null);
                     }
                 } catch (err) {
-                    console.error("Polling error", err);
                     consecutiveErrors++;
-                    
+
+                    // Treat 404 as task completion (task was cleaned up by backend)
+                    if (err.response?.status === 404) {
+                        setStatus("completed");
+                        setTaskId(null);
+                        clearInterval(interval);
+                        return;
+                    }
+
                     // Show error after 3 consecutive failures
                     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                         setError("Connection lost to backend. Refresh page to reconnect.");
@@ -150,24 +178,25 @@ const DownloaderTab = ({ analyzingProgress }) => {
                         clearInterval(interval);
                     }
                 }
-            }, 1000);
+            }, 200); // Poll every 200ms for fast downloads
         }
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+        };
     }, [taskId, status]);
 
     // Queue polling effect
     useEffect(() => {
         let consecutiveErrors = 0;
         const MAX_CONSECUTIVE_ERRORS = 3;
-        
+
         const queueInterval = setInterval(async () => {
             try {
                 await fetchQueue();
                 consecutiveErrors = 0; // Reset on success
             } catch (err) {
-                console.error("Queue polling error", err);
                 consecutiveErrors++;
-                
+
                 // Show error after 3 consecutive failures
                 if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                     setError("Connection lost to backend. Refresh page to reconnect.");
@@ -176,6 +205,35 @@ const DownloaderTab = ({ analyzingProgress }) => {
             }
         }, 2000);
         return () => clearInterval(queueInterval);
+    }, []);
+
+    // Active downloads polling effect
+    const fetchActiveDownloads = async () => {
+        try {
+            const response = await axios.get('http://localhost:5170/api/downloads');
+            setActiveDownloads(response.data || []);
+        } catch (err) {
+            // Silent fail for polling
+        }
+    };
+
+    useEffect(() => {
+        let consecutiveErrors = 0;
+        const MAX_CONSECUTIVE_ERRORS = 3;
+
+        const downloadsInterval = setInterval(async () => {
+            try {
+                await fetchActiveDownloads();
+                consecutiveErrors = 0;
+            } catch (err) {
+                consecutiveErrors++;
+
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    clearInterval(downloadsInterval);
+                }
+            }
+        }, 1000);
+        return () => clearInterval(downloadsInterval);
     }, []);
 
     const handleAddToQueue = async () => {
@@ -204,14 +262,12 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 url,
                 format,
                 format_id: selectedFormatId,
-                subtitles,
                 auto_separate: autoSeparate
             });
 
             setUrl('');
             fetchQueue();
         } catch (err) {
-            console.error(err);
             setError('Failed to add to queue.');
         }
     };
@@ -230,7 +286,6 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 })),
                 format,
                 format_id: selectedFormatId,
-                subtitles,
                 auto_separate: autoSeparate
             });
 
@@ -242,7 +297,6 @@ const DownloaderTab = ({ analyzingProgress }) => {
             setIsPlaylist(false);
             fetchQueue();
         } catch (err) {
-            console.error(err);
             setError('Failed to add playlist to queue.');
             setShowPlaylistConfirm(false);
         }
@@ -253,7 +307,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
             await axios.post('http://localhost:5170/api/queue/remove', { queue_id: queueId });
             fetchQueue();
         } catch (err) {
-            console.error("Failed to remove from queue", err);
+            // Silent fail
         }
     };
 
@@ -262,7 +316,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
             await axios.post('http://localhost:5170/api/queue/clear');
             fetchQueue();
         } catch (err) {
-            console.error("Failed to clear queue", err);
+            // Silent fail
         }
     };
 
@@ -271,7 +325,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
             await axios.post('http://localhost:5170/api/queue/start');
             fetchQueue();
         } catch (err) {
-            console.error("Failed to start queue", err);
+            // Silent fail
         }
     };
 
@@ -280,14 +334,13 @@ const DownloaderTab = ({ analyzingProgress }) => {
             await axios.post('http://localhost:5170/api/queue/stop');
             fetchQueue();
         } catch (err) {
-            console.error("Failed to stop queue", err);
+            // Silent fail
         }
     };
 
     const handleAnalyze = async () => {
         if (!url) return;
         setIsAnalyzing(true);
-        setAnalyzingProgress({ current: 0, total: 0 });
         setError(null);
         setVideoInfo(null);
         setAvailableFormats([]);
@@ -306,7 +359,6 @@ const DownloaderTab = ({ analyzingProgress }) => {
             if (response.data.is_playlist) {
                 setIsPlaylist(true);
                 setPlaylistVideos(response.data.videos || []);
-                setAnalyzingProgress({ current: response.data.video_count, total: response.data.video_count });
                 // Pre-select all videos
                 setSelectedPlaylistVideos(response.data.videos?.map(v => v.id) || []);
             } else {
@@ -323,11 +375,10 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 }
             }
         } catch (err) {
-            console.error(err);
+            // Silent fail - error shown in UI, no console spam
             setError('Failed to analyze link. Check if URL is valid.');
         } finally {
             setIsAnalyzing(false);
-            setTimeout(() => setAnalyzingProgress({ current: 0, total: 0 }), 500);
         }
     };
 
@@ -347,15 +398,18 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     // Save selected format to localStorage when it changes (only if checkbox is checked)
     useEffect(() => {
-        if (selectedFormatId && videoInfo && !videoInfo.is_playlist && rememberFormat) {
-            const urlParams = new URLSearchParams(new URL(url).search);
-            const videoId = urlParams.get('v') || videoInfo.id;
-            if (videoId) {
-                setLastVideoId(videoId);
-                setLastSelectedFormat(selectedFormatId);
-                localStorage.setItem('lastVideoId', videoId);
-                localStorage.setItem('lastSelectedFormat', selectedFormatId);
-                console.log(`[Downloader] Saved format: ${selectedFormatId} for video: ${videoId}`);
+        if (selectedFormatId && videoInfo && !videoInfo.is_playlist && rememberFormat && url) {
+            try {
+                const urlParams = new URLSearchParams(new URL(url).search);
+                const videoId = urlParams.get('v') || videoInfo.id;
+                if (videoId) {
+                    setLastVideoId(videoId);
+                    setLastSelectedFormat(selectedFormatId);
+                    localStorage.setItem('lastVideoId', videoId);
+                    localStorage.setItem('lastSelectedFormat', selectedFormatId);
+                }
+            } catch {
+                // Invalid URL, skip
             }
         }
     }, [selectedFormatId, videoInfo, url, rememberFormat]);
@@ -364,46 +418,45 @@ const DownloaderTab = ({ analyzingProgress }) => {
         if (!url) return;
 
         setStatus('processing');
-        setCurrentStep('Starting download...');
         setProgress(0);
+        setCurrentStep('Starting download...');
+        setDownloadInfo({ speed: '', eta: '' });
         setError(null);
 
         try {
             const response = await axios.post('http://localhost:5170/api/download', {
                 url,
                 format,
-                format_id: selectedFormatId,
-                subtitles: subtitles
+                format_id: selectedFormatId
             });
             setTaskId(response.data.task_id);
             setCurrentTaskId(response.data.task_id);
         } catch (err) {
-            console.error(err);
+            console.error('[Downloader] Download failed:', err);
             setError('Failed to start download.');
             setStatus('error');
         }
     };
 
-    const handleCancelDownload = async () => {
-        if (!currentTaskId) return;
-        
+    const handleCancelDownload = async (idToCancel) => {
+        const targetId = idToCancel || currentTaskId;
+        if (!targetId) return;
+
         try {
             const response = await axios.post('http://localhost:5170/api/download/cancel', {
-                task_id: currentTaskId
+                task_id: targetId
             });
-            
+
             if (response.data.status === 'cancelled') {
                 setStatus('error');
-                setCurrentStep('Download cancelled by user');
                 setError('Download was stopped');
             }
         } catch (err) {
             if (err.response?.data?.status === 'already_finished') {
                 // Already finished, just update UI
                 setStatus('completed');
-            } else {
-                console.error("Failed to cancel download", err);
             }
+            // Silent fail for other errors
         }
     };
 
@@ -441,12 +494,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                             {isAnalyzing ? (
                                 <>
                                     <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>
-                                        {analyzingProgress && analyzingProgress.total > 0 
-                                            ? `Analyzing ${analyzingProgress.current}/${analyzingProgress.total}`
-                                            : 'Analyzing...'
-                                        }
-                                    </span>
+                                    <span>Analyzing...</span>
                                 </>
                             ) : (
                                 <>
@@ -609,27 +657,16 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                             >
                                                 Remember format for this video
                                             </label>
-                                            {rememberFormat && lastVideoId === (new URLSearchParams(new URL(url).search).get('v') || videoInfo.id) && (
+                                            {rememberFormat && (() => {
+                                                try {
+                                                    const videoId = url ? new URLSearchParams(new URL(url).search).get('v') : null;
+                                                    return lastVideoId === (videoId || videoInfo?.id);
+                                                } catch {
+                                                    return false;
+                                                }
+                                            })() && (
                                                 <CheckCircle className="w-3 h-3 text-emerald-400" />
                                             )}
-                                        </div>
-
-                                        {/* Subtitle Selection Dropdown */}
-                                        <div className="mt-3 space-y-2">
-                                            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black flex items-center gap-1">
-                                                <Subtitles className="w-3 h-3" /> Subtitles / Captions
-                                            </label>
-                                            <select
-                                                value={subtitles}
-                                                onChange={(e) => setSubtitles(e.target.value)}
-                                                className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
-                                            >
-                                                {availableSubtitleOptions.map(lang => (
-                                                    <option key={lang.code} value={lang.code}>
-                                                        {lang.label}
-                                                    </option>
-                                                ))}
-                                            </select>
                                         </div>
                                     </div>
                                 </div>
@@ -731,6 +768,163 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 )}
             </AnimatePresence>
 
+            {/* Current Download Progress Card */}
+            <AnimatePresence>
+                {taskId && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-gradient-to-r from-red-900/20 to-primary-900/20 border border-red-500/20 rounded-2xl overflow-hidden backdrop-blur-sm"
+                    >
+                        <div className="p-4 border-b border-red-500/10 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-red-600/20 rounded-lg">
+                                    <Download className="w-5 h-5 text-red-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-bold leading-tight">
+                                        {videoInfo?.title || 'Downloading...'}
+                                    </h3>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => handleCancelDownload()}
+                                className="p-2 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                title="Cancel download"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4">
+                            {/* Progress Bar */}
+                            <div className="h-3 bg-dark-800 rounded-full overflow-hidden border border-white/5 mb-3">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${progress}%` }}
+                                    className="h-full bg-gradient-to-r from-red-600 to-primary-600 rounded-full"
+                                />
+                            </div>
+
+                            {/* Progress Info */}
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-400">
+                                    {Math.round(progress)}%
+                                </span>
+                                <span className="text-sm text-gray-400 truncate max-w-[60%]">
+                                    {currentStep || 'Preparing download...'}
+                                </span>
+                            </div>
+
+                            {/* Download Stats */}
+                            {(downloadInfo.speed || downloadInfo.eta) && (
+                                <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
+                                    <div className="flex items-center space-x-4">
+                                        {downloadInfo.speed && downloadInfo.speed !== 'N/A' && (
+                                            <div className="flex items-center space-x-1">
+                                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">SPD:</span>
+                                                <span className="text-xs text-gray-300 font-mono">{downloadInfo.speed}</span>
+                                            </div>
+                                        )}
+                                        {downloadInfo.eta && downloadInfo.eta !== 'N/A' && (
+                                            <div className="flex items-center space-x-1">
+                                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">ETA:</span>
+                                                <span className="text-xs text-gray-300 font-mono">{downloadInfo.eta}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Active Downloads Panel */}
+            <AnimatePresence>
+                {activeDownloads.filter(d => d.task_id !== taskId).length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="bg-gradient-to-r from-red-900/20 to-primary-900/20 border border-red-500/20 rounded-2xl overflow-hidden backdrop-blur-sm"
+                    >
+                        <div className="p-4 border-b border-red-500/10 flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <div className="p-2 bg-red-600/20 rounded-lg">
+                                    <Download className="w-5 h-5 text-red-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-bold">Active Downloads</h3>
+                                    <p className="text-xs text-gray-500">
+                                        {activeDownloads.filter(d => d.task_id !== taskId).length} download{activeDownloads.filter(d => d.task_id !== taskId).length !== 1 ? 's' : ''} in progress
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="divide-y divide-red-500/5">
+                            {activeDownloads.filter(d => d.task_id !== taskId).map((download) => (
+                                <div key={download.task_id} className="p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center space-x-3 flex-1 min-w-0">
+                                            <Loader2 className="w-4 h-4 text-red-400 animate-spin flex-shrink-0" />
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-white text-sm font-medium truncate">
+                                                    {download.download_info?.filename || download.current_step?.replace('File:', '').split('|')[0]?.trim() || 'Process in progress...'}
+                                                </p>
+                                                <p className="text-xs text-gray-500 truncate">{download.url || 'Background Task'}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right ml-4 flex-shrink-0 flex items-center space-x-3">
+                                            <span className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-400">
+                                                {Math.round(download.progress)}%
+                                            </span>
+                                            <button 
+                                                onClick={() => {
+                                                    handleCancelDownload(download.task_id);
+                                                }}
+                                                className="p-1 hover:bg-red-500/20 text-gray-500 hover:text-red-400 rounded transition-all"
+                                                title="Cancel download"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Progress Bar */}
+                                    <div className="h-2 bg-dark-800 rounded-full overflow-hidden p-0.5 border border-white/5">
+                                        <motion.div
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${download.progress}%` }}
+                                            className="h-full bg-gradient-to-r from-red-600 to-primary-600 rounded-full"
+                                        />
+                                    </div>
+                                    
+                                    {/* Download Stats */}
+                                    <div className="flex items-center justify-between mt-2 text-[10px] text-gray-500">
+                                        <div className="flex items-center space-x-4">
+                                            {download.download_info?.speed && (
+                                                <span className="flex items-center space-x-1">
+                                                    <span className="text-gray-600 font-bold uppercase tracking-tighter">SPD:</span>
+                                                    <span className="text-gray-300 font-mono">{download.download_info.speed}</span>
+                                                </span>
+                                            )}
+                                            {download.download_info?.eta && (
+                                                <span className="flex items-center space-x-1">
+                                                    <span className="text-gray-600 font-bold uppercase tracking-tighter">ETA:</span>
+                                                    <span className="text-gray-300 font-mono">{download.download_info.eta}</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span className="text-gray-600 font-medium truncate max-w-[50%]">{download.current_step}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Playlist Confirmation Modal */}
             <AnimatePresence>
                 {showPlaylistConfirm && playlistConfirmData && (
@@ -787,64 +981,23 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 )}
             </AnimatePresence>
 
-            {/* Status Card */}
+            {/* Status Feedback (Toast style) */}
             <AnimatePresence>
-                {(status === 'processing' || status === 'completed') && (
+                {status === 'completed' && (
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="bg-dark-900/80 backdrop-blur-xl p-8 rounded-3xl border border-white/10 space-y-6 shadow-2xl relative overflow-hidden"
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="bg-emerald-500/20 text-emerald-300 p-4 rounded-xl flex items-center justify-center space-x-3 backdrop-blur-md border border-emerald-500/20 shadow-lg shadow-emerald-500/10"
                     >
-                        <div className="flex justify-between items-end relative z-10">
-                            <div className="space-y-1 flex-1">
-                                <span className="text-xs font-bold uppercase tracking-widest text-gray-500">Status</span>
-                                <div className="flex items-center space-x-3">
-                                    {status === 'processing' && <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />}
-                                    <span className={`font-bold text-lg ${status === 'completed' ? 'text-emerald-400' : 'text-white'} truncate`}>
-                                        {status === 'completed' ? 'Success' : (currentStep || 'Initializing...')}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex items-center space-x-3">
-                                {status === 'processing' && (
-                                    <button
-                                        onClick={handleCancelDownload}
-                                        className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 border border-red-500/20"
-                                    >
-                                        <X className="w-4 h-4" />
-                                        <span>STOP</span>
-                                    </button>
-                                )}
-                                <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-600">
-                                    {Math.round(progress)}%
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="h-4 bg-dark-800 rounded-full overflow-hidden p-1 border border-white/5 relative z-10 shadow-inner">
-                            <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${progress}%` }}
-                                className={`h-full rounded-full shadow-lg relative overflow-hidden ${
-                                    status === 'completed'
-                                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                                    : 'bg-gradient-to-r from-red-600 to-primary-600'
-                                    }`}
-                            />
-                        </div>
-
-                        {status === 'completed' && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className="flex justify-center pt-2"
-                            >
-                                <div className="bg-emerald-500/20 text-emerald-300 px-6 py-2 rounded-full text-sm font-bold flex items-center space-x-2 border border-emerald-500/20 shadow-lg shadow-emerald-500/10">
-                                    <CheckCircle className="w-4 h-4" />
-                                    <span>Download Finished! Check Library.</span>
-                                </div>
-                            </motion.div>
-                        )}
+                        <CheckCircle className="w-5 h-5 text-emerald-400" />
+                        <span className="font-bold">Download Completed! Check Library.</span>
+                        <button 
+                            onClick={() => setStatus(null)}
+                            className="ml-4 p-1 hover:bg-white/10 rounded"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
                     </motion.div>
                 )}
             </AnimatePresence>

@@ -306,7 +306,7 @@ This starts both:
 source .venv/bin/activate
 
 # Start backend with hot reload
-python -m uvicorn backend.main:app --reload --port 5170
+python -m uvicorn backend.backend:app --reload --port 5170
 ```
 
 **Terminal 2 - Frontend:**

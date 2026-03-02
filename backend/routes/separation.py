@@ -1,0 +1,348 @@
+"""
+Separation API Routes - handles vocal separation using Demucs/Spleeter.
+"""
+import os
+import uuid
+import asyncio
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException
+from typing import List
+
+from config import tasks, add_notification, log_console, get_full_library
+from models import SeparateRequest, FolderScanRequest, FolderQueueProcessRequest
+
+router = APIRouter(prefix="/api", tags=["separation"])
+
+
+def run_separation(task_id: str, file_path: str, duration=None):
+    """Run vocal separation on a file."""
+    from modules.module_processor import process_file
+    from modules.module_ffmpeg import download_ffmpeg
+    
+    try:
+        tasks[task_id]["status"] = "processing"
+        tasks[task_id]["current_step"] = "Starting separation..."
+
+        if not download_ffmpeg():
+            raise Exception("FFmpeg download failed")
+
+        success = process_file(file_path, temp=False, duration=duration)
+
+        if success:
+            tasks[task_id]["status"] = "completed"
+            tasks[task_id]["progress"] = 100
+            tasks[task_id]["current_step"] = "Separation complete"
+
+            # Find output files
+            output_dir = os.path.join(os.path.dirname(__file__), '..', 'nomusic')
+            filename = os.path.basename(file_path)
+            base_name = os.path.splitext(filename)[0]
+            
+            result_files = []
+            for f in os.listdir(output_dir):
+                if f.startswith(base_name) and f != filename:
+                    result_files.append(os.path.join(output_dir, f))
+
+            tasks[task_id]["result_files"] = result_files
+
+            # Save to library
+            library_entry = {
+                "task_id": task_id,
+                "url": "",
+                "title": filename,
+                "result_files": result_files,
+                "status": "completed",
+                "format": "separation",
+                "source_file": file_path
+            }
+            get_full_library()  # This will save the entry
+
+            add_notification(
+                "success",
+                "Separation Complete",
+                f"Vocals separated from {filename}",
+                {"task_id": task_id, "files": result_files}
+            )
+        else:
+            tasks[task_id]["status"] = "failed"
+            tasks[task_id]["current_step"] = "Separation failed"
+            add_notification("error", "Separation Failed", f"Failed to process {filename}")
+
+    except Exception as e:
+        tasks[task_id]["status"] = "failed"
+        tasks[task_id]["current_step"] = f"Error: {str(e)[:100]}"
+        add_notification("error", "Separation Error", f"Error processing '{file_path}': {str(e)[:100]}")
+
+
+@router.post("/separate")
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    """Upload and separate vocals from an audio file."""
+    from modules.module_ffmpeg import get_file_metadata
+    
+    task_id = str(uuid.uuid4())
+
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, f"{task_id}_{file.filename}")
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    metadata = get_file_metadata(file_path)
+
+    tasks[task_id] = {
+        "task_id": task_id,
+        "status": "pending",
+        "progress": 0,
+        "current_step": "File uploaded",
+        "result_files": [],
+        "metadata": metadata
+    }
+
+    background_tasks.add_task(run_separation, task_id, file_path)
+
+    return {"task_id": task_id, "metadata": metadata}
+
+
+@router.post("/separate-file")
+async def separate_file(background_tasks: BackgroundTasks, payload: dict):
+    """Separate vocals from an existing file on the server."""
+    from modules.module_ffmpeg import get_file_metadata
+    
+    file_path = payload.get("file_path")
+    model = payload.get("model", "both")
+
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    task_id = str(uuid.uuid4())
+    metadata = get_file_metadata(file_path)
+
+    tasks[task_id] = {
+        "task_id": task_id,
+        "status": "pending",
+        "progress": 0,
+        "current_step": "File queued for separation",
+        "result_files": [],
+        "metadata": metadata
+    }
+
+    background_tasks.add_task(run_separation, task_id, file_path)
+
+    return {"task_id": task_id, "metadata": metadata}
+
+
+@router.post("/folder/scan")
+async def scan_folder(payload: FolderScanRequest):
+    """Scan a folder and return list of media files."""
+    from colorama import Fore, Style
+    from modules.module_ffmpeg import get_file_metadata
+    
+    print(f"\n{Fore.CYAN}=== Folder Scan Request ==={Style.RESET_ALL}")
+    print(f"Folder path: {payload.folder_path}")
+
+    if not payload.folder_path or not os.path.isdir(payload.folder_path):
+        print(f"{Fore.RED}Folder not found: {payload.folder_path}{Style.RESET_ALL}")
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    video_extensions = ('.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.wmv')
+    audio_extensions = ('.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma')
+    supported_extensions = video_extensions + audio_extensions
+
+    media_files = []
+    for f in os.listdir(payload.folder_path):
+        if f.lower().endswith(supported_extensions):
+            file_path = os.path.join(payload.folder_path, f)
+            try:
+                metadata = get_file_metadata(file_path)
+                media_files.append({
+                    "id": str(uuid.uuid4()),
+                    "file_path": file_path,
+                    "filename": f,
+                    "metadata": metadata,
+                    "selected": True
+                })
+                print(f"  Found: {f} ({metadata.get('duration', 'N/A')})")
+            except Exception as e:
+                print(f"{Fore.YELLOW}Error getting metadata for {f}: {e}{Style.RESET_ALL}")
+                media_files.append({
+                    "id": str(uuid.uuid4()),
+                    "file_path": file_path,
+                    "filename": f,
+                    "metadata": {"duration": "N/A", "resolution": "N/A"},
+                    "selected": True
+                })
+
+    print(f"Total files found: {len(media_files)}")
+
+    if not media_files:
+        print(f"{Fore.RED}No media files found in folder{Style.RESET_ALL}")
+        raise HTTPException(status_code=400, detail="No media files found in folder")
+
+    queue_id = str(uuid.uuid4())
+    tasks[queue_id] = {
+        "queue": True,
+        "folder": payload.folder_path,
+        "files": media_files,
+        "created_at": asyncio.get_event_loop().time()
+    }
+
+    print(f"Queue ID: {queue_id}")
+    print(f"{Fore.GREEN}✓ Folder scan complete{Style.RESET_ALL}\n")
+
+    return {
+        "queue_id": queue_id,
+        "folder": payload.folder_path,
+        "files": media_files,
+        "total_files": len(media_files)
+    }
+
+
+@router.post("/folder-queue/remove")
+async def remove_from_folder_queue(payload: dict):
+    """Remove a specific file from the queue."""
+    queue_id = payload.get("queue_id")
+    file_id = payload.get("file_id")
+
+    if not queue_id or queue_id not in tasks:
+        raise HTTPException(status_code=404, detail="Queue not found")
+
+    queue_data = tasks[queue_id]
+    if not queue_data.get("queue"):
+        raise HTTPException(status_code=400, detail="Not a queue task")
+
+    queue_data["files"] = [f for f in queue_data["files"] if f["id"] != file_id]
+
+    return {"status": "ok", "files": queue_data["files"], "total_files": len(queue_data["files"])}
+
+
+@router.post("/folder-queue/process")
+async def process_folder_queue(background_tasks: BackgroundTasks, payload: FolderQueueProcessRequest):
+    """Start processing the selected files in the queue."""
+    from colorama import Fore, Style
+    
+    print(f"\n{Fore.CYAN}=== Batch Processing Request ==={Style.RESET_ALL}")
+    print(f"Queue ID: {payload.queue_id}")
+    print(f"Model: {payload.model}")
+
+    if not payload.queue_id or payload.queue_id not in tasks:
+        print(f"{Fore.RED}Queue not found: {payload.queue_id}{Style.RESET_ALL}")
+        raise HTTPException(status_code=404, detail="Queue not found")
+
+    queue_data = tasks[payload.queue_id]
+    if not queue_data.get("queue"):
+        print(f"{Fore.RED}Not a queue task{Style.RESET_ALL}")
+        raise HTTPException(status_code=400, detail="Not a queue task")
+
+    selected_files = [f for f in queue_data["files"] if f.get("selected", True)]
+
+    print(f"Total files in queue: {len(queue_data['files'])}")
+    print(f"Selected files: {len(selected_files)}")
+
+    if not selected_files:
+        print(f"{Fore.RED}No files selected{Style.RESET_ALL}")
+        raise HTTPException(status_code=400, detail="No files selected for processing")
+
+    batch_id = str(uuid.uuid4())
+    batch_tasks_data = {
+        "batch_id": batch_id,
+        "folder": queue_data["folder"],
+        "queue_id": payload.queue_id,
+        "total_files": len(selected_files),
+        "processed": 0,
+        "success": 0,
+        "failed": 0,
+        "files": []
+    }
+
+    print(f"Batch ID: {batch_id}")
+
+    tasks[batch_id] = {
+        "batch": True,
+        **batch_tasks_data
+    }
+
+    for file_item in selected_files:
+        task_id = str(uuid.uuid4())
+        file_path = file_item["file_path"]
+
+        print(f"  - Queuing: {file_item['filename']}")
+
+        tasks[task_id] = {
+            "task_id": task_id,
+            "batch_id": batch_id,
+            "status": "pending",
+            "progress": 0,
+            "current_step": "Queued",
+            "file_path": file_path,
+            "result_files": [],
+            "metadata": file_item.get("metadata", {})
+        }
+
+        batch_tasks_data["files"].append({
+            "task_id": task_id,
+            "file": file_path,
+            "filename": file_item["filename"],
+            "status": "pending"
+        })
+
+        background_tasks.add_task(run_separation, task_id, file_path, payload.duration if hasattr(payload, 'duration') else None)
+
+    print(f"{Fore.GREEN}✓ Batch processing started with {len(selected_files)} files{Style.RESET_ALL}\n")
+
+    del tasks[payload.queue_id]
+
+    return {"batch_id": batch_id, "total_files": len(selected_files), "files": batch_tasks_data["files"]}
+
+
+@router.get("/folder-queue/{queue_id}")
+async def get_folder_queue(queue_id: str):
+    """Get the current queue status."""
+    if queue_id not in tasks:
+        raise HTTPException(status_code=404, detail="Queue not found")
+
+    queue_data = tasks[queue_id]
+    if not queue_data.get("queue"):
+        raise HTTPException(status_code=400, detail="Not a queue task")
+
+    return {
+        "queue_id": queue_id,
+        "folder": queue_data["folder"],
+        "files": queue_data["files"],
+        "total_files": len(queue_data["files"])
+    }
+
+
+@router.get("/batch-status/{batch_id}")
+async def get_batch_status(batch_id: str):
+    """Get batch processing status."""
+    if batch_id not in tasks:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    batch_data = tasks[batch_id]
+    if not batch_data.get("batch"):
+        raise HTTPException(status_code=400, detail="Not a batch task")
+
+    # Update progress from individual tasks
+    processed = 0
+    success = 0
+    failed = 0
+    
+    for file_item in batch_data.get("files", []):
+        task_id = file_item.get("task_id")
+        if task_id in tasks:
+            task = tasks[task_id]
+            if task.get("status") == "completed":
+                success += 1
+                file_item["status"] = "completed"
+            elif task.get("status") == "failed":
+                failed += 1
+                file_item["status"] = "failed"
+            elif task.get("status") == "processing":
+                file_item["status"] = "processing"
+            processed += 1
+
+    batch_data["processed"] = processed
+    batch_data["success"] = success
+    batch_data["failed"] = failed
+
+    return batch_data

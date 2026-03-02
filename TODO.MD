@@ -1,172 +1,45 @@
-# TODO - Codebase Improvements
+# TODO - Codebase Improvements & Optimizations
 
-> Last Updated: 2026-03-01
-
----
-
-## ✅ COMPLETED
-
-- [x] Silent polling failures fixed
-- [x] yt-dlp errors now visible
-- [x] Path traversal security fixed
-- [x] Temp file leaks fixed
-- [x] FFmpeg errors now visible
-- [x] Queue polling errors handled
-- [x] Format file size preview
-- [x] Invert selection button
-- [x] Tooltips on disabled buttons
-- [x] Standardized error language (English)
-- [x] Auto-scroll batch list
-- [x] Environment configuration (.env)
-- [x] API client layer created
-- [x] Remember format for video (checkbox)
-- [x] Video ID display in downloader
-- [x] Compact UI (smaller header, smoother transitions)
-- [x] Removed YT Downloader header
-- [x] Library table layout (compact)
-- [x] Folder filter (Download / NoMusic)
-- [x] Open folder quick actions
-- [x] Hide separate button for nomusic files
-- [x] Backend port changed to 5170
-- [x] **Centralized port configuration** - No more hardcoded URLs!
-- [x] **Playlist/Channel Download Support** - With confirmation modal
+> Last Updated: 2026-03-02
 
 ---
 
-## 🎯 REMAINING IMPROVEMENTS
+## 🚀 HIGH PRIORITY (Performance & Stability)
 
-### MEDIUM Priority
+#### 1. Implement WebSockets for Progress Updates
 
-#### 1. Replace alert() with Toast Notifications
-**Files:** `LibraryTab.jsx`, `SeparationTab.jsx`
+**Files:** `backend/backend.py`, `frontend/src/components/`
+**Current:** HTTP polling every 200ms-1s.
+**Optimization:** Replace polling with FastAPI WebSockets (`/ws/status/{task_id}`).
 
-**Issue:** Using `alert()` for errors (10 instances).
+- **Benefit:** Reduces server overhead by 90%, near-zero latency progress bars.
 
-**Improvement:** Add react-hot-toast for better UX.
+#### 2. Persistent AI Model Loading
 
----
+**File:** `backend/modules/module_processor.py`, `backend/modules/module_demucs.py`
+**Current:** Models load from disk for every single file.
+**Optimization:** Implement a "Keep Model Warm" system.
 
-#### 2. Replace window.confirm() with Modal
-**File:** `LibraryTab.jsx`
+- **Benefit:** Saves 10-20 seconds of load time per file in batch processing.
 
-**Issue:** Using `window.confirm()` for delete confirmation (2 instances).
+#### 3. Optimized Library Scanning
 
-**Improvement:** Create reusable modal component.
+**File:** `backend/routes/library.py`
+**Current:** Full folder traversal (`os.walk`) on every library tab refresh.
+**Optimization:** Implement a database (SQLite) that only updates on file system events.
 
----
-
-#### 3. Loading State for Library
-**File:** `frontend/src/components/LibraryTab.jsx`
-
-**Issue:** Shows "Loading..." text only.
-
-**Improvement:** Add skeleton table rows or spinner.
+- **Benefit:** Instant library loading even with 1000+ files.
 
 ---
 
-### LOW Priority
-
-#### 4. Keyboard Shortcuts
-**Files:** All components
-
-**Missing:**
-- `Ctrl/Cmd + Enter` - Start action
-- `Escape` - Cancel/reset
-- `Ctrl/Cmd + V` - Auto-paste URL
+## 🎯 MEDIUM PRIORITY (UX & Features)
 
 ---
 
-#### 5. Search Improvements
-**File:** `frontend/src/components/LibraryTab.jsx`
+## 🛠️ LOW PRIORITY (Polish & Housekeeping)
 
-**Current:** Only searches filename.
+#### 7. Metadata Extraction Refactoring
 
-**Improvement:** Search by duration, quality, date.
-
----
-
-#### 6. Batch Operations Status
-**File:** `frontend/src/components/SeparationTab.jsx`
-
-**Issue:** No way to see overall batch progress at a glance.
-
-**Improvement:** Add summary bar (X completed, Y failed, Z remaining).
-
----
-
-#### 7. Error Recovery
-**Files:** All components
-
-**Issue:** When backend is down, user sees repeated errors.
-
-**Improvement:** Add "Reconnect" button after connection lost.
-
----
-
-## 📊 Summary
-
-| Priority | Count | Estimated Time |
-|----------|-------|----------------|
-| **MEDIUM** | 3 | ~2 hours |
-| **LOW** | 4 | ~3 hours |
-| **TOTAL** | 7 | ~5 hours |
-
----
-
-## 🎯 Recommended Next Steps
-
-1. **Toast Notifications** - Replace alerts, major UX improvement
-2. **Loading State** - Quick win, improves UX
-3. **Confirmation Modal** - Replace window.confirm() for consistency
-
----
-
-## 🔧 Configuration
-
-**Backend Port:** Defined in `frontend/.env`
-```env
-VITE_API_BASE_URL=http://localhost:5170/api
-```
-
-**To change port:**
-1. Edit `frontend/.env`
-2. Restart frontend (`npm run dev`)
-3. Done! No more manual URL changes.
-
----
-
-## 🎉 Latest Feature: Playlist/Channel Download
-
-### What Was Added:
-
-**Backend (`backend/main.py`):**
-- ✅ Updated `/api/yt-formats` to detect playlist/channel URLs
-- ✅ Returns playlist info with video list
-- ✅ Added `/api/queue/add-batch` endpoint for bulk adding
-- ✅ Added `format_duration()` helper function
-
-**Frontend (`frontend/src/components/DownloaderTab.jsx`):**
-- ✅ Detects playlist/channel URLs automatically
-- ✅ Shows all videos with thumbnails and duration
-- ✅ Select/deselect individual videos
-- ✅ Select All / None buttons
-- ✅ **Confirmation modal** before adding to queue
-- ✅ Shows exact count: "Download X videos"
-
-**API Client (`frontend/src/api/index.js`):**
-- ✅ Added `queueAPI.addBatch()` method
-
-### How It Works:
-
-1. **User pastes playlist/channel URL**
-2. **Click "Analyze"** → Fetches all videos
-3. **Select videos** (or use Select All/None)
-4. **Click "Add to Queue"** → Shows confirmation modal
-5. **Modal shows:** "Are you sure you want to download 15 videos (out of 20 total)?"
-6. **User confirms** → All selected videos added to queue
-7. **Queue processes** videos one by one automatically
-
-### Supported URLs:
-- ✅ Playlists: `youtube.com/playlist?list=PL...`
-- ✅ Channels: `youtube.com/@channel` or `youtube.com/channel/...`
-- ✅ Mixes: `youtube.com/watch?v=...&list=RD...`
+**File:** `backend/config.py`
+**Current:** Multiple ffprobe calls.
+**Optimization:** Use `tinytag` or `mutagen` for faster metadata reading where video streams aren't needed.

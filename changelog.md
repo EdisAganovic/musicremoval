@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.0.4] - 2026-03-02 ⚡
+
+Backend restructuring and improved gitignore configuration.
+
+### [Changed]
+
+#### Project Structure
+
+- **Modules Relocated**: Moved all processing modules from `modules/` to `backend/modules/`
+  - Cleaner project root directory
+  - Better logical grouping with backend code
+  - All module imports updated to reflect new paths
+
+#### Configuration
+
+- **Gitignore Updated**: Added recursive `**/__pycache__/` pattern
+  - Ignores all `__pycache__` folders in any subdirectory
+  - Prevents Python bytecode cache from being committed
+
+### [Documentation]
+
+- **ARCHITECTURE.md Updated**: Reflects new backend structure
+  - Updated Quick Reference table with `backend/modules/` paths
+  - Merged modules section into Backend Structure tree
+  - Updated Module Dependencies diagram
+  - Updated Project Structure overview
+
+---
+
 ## [0.0.3] - 2026-03-01 ⚡
 
 Major UX improvements, playlist support, and configuration centralization.

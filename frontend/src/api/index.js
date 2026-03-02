@@ -72,6 +72,7 @@ export const downloadAPI = {
   formats: (url, checkPlaylist) =>
     api.post('/yt-formats', { url, check_playlist: checkPlaylist }),
   status: (taskId) => api.get(`/status/${taskId}`),
+  getAll: () => api.get('/downloads'),
 };
 
 // Queue API endpoints
@@ -100,6 +101,13 @@ export const libraryAPI = {
     };
     const folderPath = folderPaths[folderName] || folderName;
     return api.post('/open-folder', { path: folderPath });
+  },
+  delete: (taskId, filePath) => {
+    const payload = { task_id: taskId };
+    if (filePath) {
+      payload.file_path = filePath;
+    }
+    return api.post('/delete-file', payload);
   },
 };
 

@@ -8,11 +8,16 @@
 /_temp/
 /_processing_intermediates/
 .ENV
+/backend/__pycache__/
+/backend/modules/__pycache__
+/backend/_processing_intermediates/
+/backend/services/__pycache__/
 uv.lock
 GEMINI.MD
 .venv
 /src/
 /__pycache__/
+**/__pycache__/
 /modules/__pycache__/
 library.json
 *.exe
