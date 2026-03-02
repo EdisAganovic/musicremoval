@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { libraryAPI } from '../api/index.js';
+import { BACKEND_URL } from '../config';
 import { Video, Music, FolderOpen, Trash2, Layers, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const BACKEND_URL = 'http://127.0.0.1:5170';
 
 const LibraryTab = ({ onSeparate }) => {
     const [items, setItems] = useState([]);

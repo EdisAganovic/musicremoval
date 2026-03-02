@@ -32,12 +32,11 @@ import DownloaderTab from './components/DownloaderTab';
 import LibraryTab from './components/LibraryTab';
 import NotificationBell from './components/NotificationBell';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { APP_VERSION, APP_NAME, BACKEND_URL } from './config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
-
-const BACKEND_URL = 'http://127.0.0.1:5170';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState('separation');
@@ -147,7 +146,7 @@ function AppContent() {
                 </span>{' '}
                 <span className="text-gray-500 font-light">Pro</span>
               </h1>
-              <p className="text-xs text-gray-500 font-medium">v0.0.3</p>
+              <p className="text-xs text-gray-500 font-medium">v{APP_VERSION}</p>
             </div>
           </div>
 

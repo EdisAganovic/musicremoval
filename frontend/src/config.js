@@ -4,7 +4,7 @@
  * Central place for app-wide constants.
  * Version should match pyproject.toml version.
  */
-export const APP_VERSION = '0.0.8';
+export const APP_VERSION = '0.0.9';
 
 export const APP_NAME = 'Audio Splitter Pro';
 

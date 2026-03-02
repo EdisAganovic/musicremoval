@@ -293,13 +293,6 @@
         "audio_codec": "aac",
         "is_video": true
     },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772443813.0792747": {
-        "resolution": "1920x1080",
-        "duration": "72.53s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
     "nomusic\\obrada\\0_10.\u017divota.2024.1080p.WEB.AAC.SR-ChatNoir.mp4:1764446103.7931056": {
         "resolution": "1920x1080",
         "duration": "5229.42s",
@@ -450,104 +443,6 @@
     "nomusic\\obrada\\White Tiger.mp4:1766311456.498431": {
         "resolution": "1920x1080",
         "duration": "6245.00s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772444181.6515956": {
-        "resolution": "1920x1080",
-        "duration": "72.53s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772444317.9284797": {
-        "resolution": "1920x1080",
-        "duration": "72.53s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772444782.2587044": {
-        "resolution": "1920x1080",
-        "duration": "72.53s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772444902.6770973": {
-        "resolution": "1920x1080",
-        "duration": "72.53s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "download\\Gde je NESTALO ovo oru\u017eje\uff1f.webm:1772412654.4307485": {
-        "resolution": "1920x1080",
-        "duration": "789.99s",
-        "video_codec": "av1",
-        "audio_codec": "opus",
-        "is_video": true
-    },
-    "download\\Open Source might change forever.webm:1772412853.4877925": {
-        "resolution": "3840x2160",
-        "duration": "681.35s",
-        "video_codec": "av1",
-        "audio_codec": "opus",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772445072.114793": {
-        "resolution": "1920x1080",
-        "duration": "72.53s",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772465551.417067": {
-        "resolution": "N/A",
-        "duration": "N/A",
-        "video_codec": "N/A",
-        "audio_codec": "N/A",
-        "is_video": false
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772465553.2605834": {
-        "resolution": "1920x1080",
-        "duration": "1:12",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772465600.7079973": {
-        "resolution": "1920x1080",
-        "duration": "1:12",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_25 Minuten islamische Kinderlieder von MinaNuriKids.mp4:1772465740.5313156": {
-        "resolution": "1920x1080",
-        "duration": "3:32",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_24. Oktober 2025.mp4:1772465899.006899": {
-        "resolution": "1920x1080",
-        "duration": "1:12",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_25 Minuten islamische Kinderlieder von MinaNuriKids.mp4:1772466186.1258638": {
-        "resolution": "1920x1080",
-        "duration": "25:00",
-        "video_codec": "h264",
-        "audio_codec": "aac",
-        "is_video": true
-    },
-    "nomusic\\nomusic_Allah benimle her zaman - \u0130slami \u00e7ocuk \u015fark\u0131s\u0131 #islam.mp4:1772466224.5277295": {
-        "resolution": "1920x1080",
-        "duration": "2:56",
         "video_codec": "h264",
         "audio_codec": "aac",
         "is_video": true

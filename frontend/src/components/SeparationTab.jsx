@@ -50,6 +50,7 @@
  */
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
+import { BACKEND_URL } from '../config';
 import {
   UploadCloud,
   CheckCircle,
@@ -67,8 +68,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
-
-const BACKEND_URL = 'http://127.0.0.1:5170';
 
 const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [file, setFile] = useState(null);

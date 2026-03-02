@@ -35,8 +35,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-
-const BACKEND_URL = 'http://127.0.0.1:5170';
+import { BACKEND_URL } from '../config';
 
 const NotificationContext = createContext();
 

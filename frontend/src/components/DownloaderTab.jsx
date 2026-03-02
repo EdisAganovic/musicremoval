@@ -49,10 +49,9 @@
  */
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { BACKEND_URL } from '../config';
 import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const BACKEND_URL = 'http://127.0.0.1:5170';
 
 const DownloaderTab = ({ analyzingProgress }) => {
     const [url, setUrl] = useState('');

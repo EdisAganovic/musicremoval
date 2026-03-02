@@ -44,8 +44,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Check, CheckCheck, Trash2, X, Download } from 'lucide-react';
 import axios from 'axios';
 import { useNotifications } from '../contexts/NotificationContext';
-
-const BACKEND_URL = 'http://127.0.0.1:5170';
+import { BACKEND_URL } from '../config';
 
 const NotificationBell = () => {
     const {

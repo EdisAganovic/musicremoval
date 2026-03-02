@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.0.9] - 2026-03-02 🔧
+
+Centralized configuration and version management.
+
+### [Changed]
+
+- **Centralized Config File**: Created `frontend/src/config.js` for app-wide constants
+  - `APP_VERSION` - Single source of truth for version number
+  - `APP_NAME` - Application name
+  - `BACKEND_URL` - Backend API URL (was duplicated in 6 files)
+
+- **Version Display**: Header now reads version from `config.js` instead of hardcoded value
+
+### [Removed]
+
+- Removed 6 duplicate `BACKEND_URL` declarations across components
+- Removed hardcoded `v0.0.3` from header
+
+---
+
 ## [0.0.8] - 2026-03-02 🐛
 
 Bug fix for library delete confirmation modal.
