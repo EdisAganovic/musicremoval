@@ -9,9 +9,10 @@ from fastapi import APIRouter, HTTPException
 from typing import List
 
 from config import (
-    tasks, get_full_library, save_to_library, 
+    tasks, get_full_library, save_to_library,
     get_file_metadata_cached, save_metadata_cache,
-    METADATA_CACHE_FILE, LIBRARY_FILE, metadata_cache
+    METADATA_CACHE_FILE, LIBRARY_FILE, metadata_cache,
+    safe_remove
 )
 
 router = APIRouter(prefix="/api", tags=["library"])
@@ -21,7 +22,8 @@ router = APIRouter(prefix="/api", tags=["library"])
 async def get_library():
     """Returns a list of all completed tasks and scans for existing files."""
     from colorama import Fore, Style
-    
+    import time
+
     def scan_library():
         library = get_full_library()
 
@@ -49,6 +51,12 @@ async def get_library():
                             continue
 
                         metadata = get_file_metadata_cached(file_path)
+                        
+                        # Use file modification time as created_at for existing files
+                        try:
+                            file_mtime = os.path.getmtime(file_path)
+                        except OSError:
+                            file_mtime = time.time()
 
                         library.insert(0, {
                             "task_id": task_id,
@@ -58,7 +66,8 @@ async def get_library():
                             "result_files": [file_path],
                             "metadata": metadata,
                             "url": "",
-                            "filename": filename
+                            "filename": filename,
+                            "created_at": file_mtime
                         })
 
         # Scan nomusic folder
@@ -92,6 +101,12 @@ async def get_library():
                     nomusic_added += 1
 
                     metadata = get_file_metadata_cached(file_path)
+                    
+                    # Use file modification time as created_at for existing files
+                    try:
+                        file_mtime = os.path.getmtime(file_path)
+                    except OSError:
+                        file_mtime = time.time()
 
                     library.insert(0, {
                         "task_id": task_id,
@@ -101,11 +116,13 @@ async def get_library():
                         "result_files": [file_path],
                         "metadata": metadata,
                         "url": "",
-                        "filename": filename
+                        "filename": filename,
+                        "created_at": file_mtime
                     })
             print(f"{Fore.CYAN}[Library Scan] Nomusic: {nomusic_total} total, {nomusic_found} new, {nomusic_skipped_existing} skipped{Style.RESET_ALL}")
 
-        library.sort(key=lambda x: x.get("task_id", ""), reverse=True)
+        # Sort by created_at timestamp (newest first)
+        library.sort(key=lambda x: x.get("created_at", 0), reverse=True)
         save_metadata_cache()
         return library
 
@@ -139,24 +156,20 @@ async def delete_file(payload: dict):
     # Delete files
     deleted = []
     for f in files_to_delete:
-        if f and os.path.exists(f):
-            try:
-                os.remove(f)
-                deleted.append(f)
-            except Exception as e:
-                print(f"Error deleting {f}: {e}")
+        if f and safe_remove(f):
+            deleted.append(f)
 
     # Remove from library.json
     if os.path.exists(LIBRARY_FILE):
         try:
             with open(LIBRARY_FILE, "r", encoding="utf-8") as f:
                 library = json.load(f)
-            
+
             library = [item for item in library if item.get("task_id") != task_id]
-            
+
             with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
                 json.dump(library, f, indent=4)
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, IOError) as e:
             print(f"Error updating library: {e}")
 
     # Remove from tasks
@@ -170,7 +183,7 @@ async def delete_file(payload: dict):
     try:
         with open(METADATA_CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(metadata_cache, f, indent=4)
-    except:
+    except (OSError, IOError, TypeError):
         pass
 
     return {"status": "deleted", "files": deleted}
@@ -233,7 +246,7 @@ async def get_presets():
                     "presets": data.get("presets", {}),
                     "current_preset": data.get("current_preset", "balanced")
                 }
-        except:
+        except (json.JSONDecodeError, OSError, IOError):
             pass
 
     return {
@@ -258,7 +271,7 @@ async def set_preset(payload: dict):
         try:
             with open(presets_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except:
+        except (json.JSONDecodeError, OSError, IOError):
             pass
 
     data["current_preset"] = preset_name

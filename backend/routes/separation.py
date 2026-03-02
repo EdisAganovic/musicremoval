@@ -17,10 +17,16 @@ def run_separation(task_id: str, file_path: str, duration=None):
     """Run vocal separation on a file."""
     from modules.module_processor import process_file
     from modules.module_ffmpeg import download_ffmpeg
-    
+
     try:
         tasks[task_id]["status"] = "processing"
         tasks[task_id]["current_step"] = "Starting separation..."
+
+        # Update batch parent if exists
+        batch_id = tasks[task_id].get("batch_id")
+        if batch_id and batch_id in tasks:
+            tasks[batch_id]["status"] = "processing"
+            tasks[batch_id]["current_step"] = "Processing file 1/1..."
 
         if not download_ffmpeg():
             raise Exception("FFmpeg download failed")
@@ -29,6 +35,18 @@ def run_separation(task_id: str, file_path: str, duration=None):
             if task_id in tasks:
                 tasks[task_id]["current_step"] = step
                 tasks[task_id]["progress"] = progress
+            
+            # Update batch parent progress
+            batch_id = tasks.get(task_id, {}).get("batch_id")
+            if batch_id and batch_id in tasks:
+                tasks[batch_id]["current_step"] = f"{step} ({progress}%)"
+                tasks[batch_id]["progress"] = progress
+                # Update file status in batch
+                for file_item in tasks[batch_id].get("files", []):
+                    if file_item.get("task_id") == task_id:
+                        file_item["status"] = "processing"
+                        file_item["progress"] = progress
+                        file_item["current_step"] = step
 
         filename = os.path.basename(file_path)
         success = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress)
@@ -37,12 +55,20 @@ def run_separation(task_id: str, file_path: str, duration=None):
             tasks[task_id]["status"] = "completed"
             tasks[task_id]["progress"] = 100
             tasks[task_id]["current_step"] = "Separation complete"
-            
+
             # Update parent batch counters
             batch_id = tasks[task_id].get("batch_id")
             if batch_id and batch_id in tasks:
                 tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
                 tasks[batch_id]["success"] = tasks[batch_id].get("success", 0) + 1
+                tasks[batch_id]["status"] = "completed"
+                tasks[batch_id]["current_step"] = "All files processed"
+                tasks[batch_id]["progress"] = 100
+                # Update file status in batch
+                for file_item in tasks[batch_id].get("files", []):
+                    if file_item.get("task_id") == task_id:
+                        file_item["status"] = "completed"
+                        file_item["progress"] = 100
 
             # Find output files - fix path to be relative to project root
             output_dir = os.path.abspath('nomusic')
@@ -78,6 +104,9 @@ def run_separation(task_id: str, file_path: str, duration=None):
             }
             save_to_library(library_entry)
 
+            # Refresh library to ensure UI gets updated data
+            get_full_library()
+
             add_notification(
                 "success",
                 "Separation Complete",
@@ -87,27 +116,49 @@ def run_separation(task_id: str, file_path: str, duration=None):
         else:
             tasks[task_id]["status"] = "failed"
             tasks[task_id]["current_step"] = "Separation failed"
-            
+
             # Update parent batch counters
             batch_id = tasks[task_id].get("batch_id")
             if batch_id and batch_id in tasks:
                 tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
                 tasks[batch_id]["failed"] = tasks[batch_id].get("failed", 0) + 1
-                
+                tasks[batch_id]["status"] = "failed"
+                tasks[batch_id]["current_step"] = "File processing failed"
+                # Update file status in batch
+                for file_item in tasks[batch_id].get("files", []):
+                    if file_item.get("task_id") == task_id:
+                        file_item["status"] = "failed"
+
             add_notification("error", "Separation Failed", f"Failed to process {filename}")
 
     except Exception as e:
+        error_msg = str(e)
         tasks[task_id]["status"] = "failed"
-        tasks[task_id]["current_step"] = f"Error: {str(e)[:100]}"
-        add_notification("error", "Separation Error", f"Error processing '{file_path}': {str(e)[:100]}")
+        tasks[task_id]["current_step"] = f"Error: {error_msg[:100]}"
+        
+        # Update parent batch counters
+        batch_id = tasks[task_id].get("batch_id")
+        if batch_id and batch_id in tasks:
+            tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
+            tasks[batch_id]["failed"] = tasks[batch_id].get("failed", 0) + 1
+            tasks[batch_id]["status"] = "failed"
+            tasks[batch_id]["current_step"] = f"Error: {error_msg[:50]}"
+            # Update file status in batch
+            for file_item in tasks[batch_id].get("files", []):
+                if file_item.get("task_id") == task_id:
+                    file_item["status"] = "failed"
+        
+        add_notification("error", "Separation Error", f"Error processing '{file_path}': {error_msg[:100]}")
 
 
 @router.post("/separate")
 async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Upload and separate vocals from an audio file."""
     from modules.module_ffmpeg import get_file_metadata
-    
+    from colorama import Fore, Style
+
     task_id = str(uuid.uuid4())
+    batch_id = str(uuid.uuid4())
 
     upload_dir = "uploads"
     os.makedirs(upload_dir, exist_ok=True)
@@ -118,46 +169,106 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
 
     metadata = get_file_metadata(file_path)
 
+    print(f"\n{Fore.CYAN}=== File Upload Separation ==={Style.RESET_ALL}")
+    print(f"File: {file_path}")
+
+    # Create batch parent task for consistent UI polling
+    tasks[batch_id] = {
+        "batch": True,
+        "batch_id": batch_id,
+        "total_files": 1,
+        "processed": 0,
+        "success": 0,
+        "failed": 0,
+        "files": []
+    }
+
+    # Create child task
     tasks[task_id] = {
         "task_id": task_id,
+        "batch_id": batch_id,
         "status": "pending",
         "progress": 0,
         "current_step": "File uploaded",
         "result_files": [],
-        "metadata": metadata
+        "metadata": metadata,
+        "file_path": file_path
     }
+
+    batch_tasks_data = {
+        "task_id": task_id,
+        "file": file_path,
+        "filename": file.filename,
+        "status": "pending"
+    }
+    tasks[batch_id]["files"] = [batch_tasks_data]
+
+    print(f"Task ID: {task_id}")
+    print(f"Batch ID: {batch_id}")
+    print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
     background_tasks.add_task(run_separation, task_id, file_path)
 
-    return {"task_id": task_id, "metadata": metadata}
+    return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
 
 @router.post("/separate-file")
 async def separate_file(background_tasks: BackgroundTasks, payload: dict):
     """Separate vocals from an existing file on the server."""
     from modules.module_ffmpeg import get_file_metadata
-    
+    from colorama import Fore, Style
+
     file_path = payload.get("file_path")
     model = payload.get("model", "both")
 
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
+    print(f"\n{Fore.CYAN}=== Single File Separation ==={Style.RESET_ALL}")
+    print(f"File: {file_path}")
+
     task_id = str(uuid.uuid4())
+    batch_id = str(uuid.uuid4())
     metadata = get_file_metadata(file_path)
 
+    # Create batch parent task for consistent UI polling
+    tasks[batch_id] = {
+        "batch": True,
+        "batch_id": batch_id,
+        "total_files": 1,
+        "processed": 0,
+        "success": 0,
+        "failed": 0,
+        "files": []
+    }
+
+    # Create child task
     tasks[task_id] = {
         "task_id": task_id,
+        "batch_id": batch_id,
         "status": "pending",
         "progress": 0,
         "current_step": "File queued for separation",
         "result_files": [],
-        "metadata": metadata
+        "metadata": metadata,
+        "file_path": file_path
     }
+
+    batch_tasks_data = {
+        "task_id": task_id,
+        "file": file_path,
+        "filename": os.path.basename(file_path),
+        "status": "pending"
+    }
+    tasks[batch_id]["files"] = [batch_tasks_data]
+
+    print(f"Task ID: {task_id}")
+    print(f"Batch ID: {batch_id}")
+    print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
     background_tasks.add_task(run_separation, task_id, file_path)
 
-    return {"task_id": task_id, "metadata": metadata}
+    return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
 
 @router.post("/folder/scan")

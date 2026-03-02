@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.0.6] - 2026-03-02 🔧
+
+Metadata extraction fixes and timeout improvements for long-running operations.
+
+### [Fixed]
+
+#### Metadata Extraction
+
+- **MKV Duration Extraction**: Fixed duration not showing for MKV files downloaded via yt-dlp
+  - `get_file_metadata()` now falls back to video stream duration when not in format section
+  - Handles `duration_ts` with `time_base` calculation for complex containers
+  - Duration formatted as `MM:SS` or `HH:MM:SS` for better readability (was `5865.15s`)
+
+- **Post-Download Metadata**: yt-dlp downloads now extract actual file metadata via ffprobe
+  - Resolution, duration, and codecs properly stored in library
+  - Previously only stored yt-dlp's internal info which lacked display metadata
+
+#### Library Sorting
+
+- **Date Sorting Fixed**: Library now correctly sorts by creation time
+  - Added `created_at` timestamp when saving to library
+  - Scanned files use file modification time as `created_at`
+  - Frontend sorts by `created_at` instead of random UUID (`task_id`)
+  - Newest downloads/separations now appear at top of list
+
+### [Changed]
+
+#### Timeout Configuration
+
+- **Extended API Timeouts**: Increased from 10-30 seconds to **5 minutes**
+  - Handles long FFmpeg operations (creating final video can take 10-20 minutes)
+  - Updated in `api/index.js`, `SeparationTab.jsx`, `DownloaderTab.jsx`
+  - Prevents timeout errors during vocal separation finalization
+
+#### Duration Display
+
+- **Human-Readable Format**: Duration now shows as `97:45` instead of `5865.15s`
+  - Hours shown when applicable: `1:37:45`
+  - Frontend duration sorting updated to handle new format
+
+---
+
 ## [0.0.5] - 2026-03-02 🚀
 
 Production-grade batch processing stability and UI responsiveness.

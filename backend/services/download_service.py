@@ -8,7 +8,7 @@ from colorama import Fore, Style
 
 from config import (
     tasks, active_downloads, save_to_library, add_notification,
-    log_console, download_queue, save_queue
+    log_console, download_queue, save_queue, get_full_library
 )
 
 
@@ -160,29 +160,38 @@ def run_yt_dlp(
 
             if os.path.exists(filename):
                 tasks[task_id]["progress"] = 95
-                tasks[task_id]["current_step"] = "Saving to library..."
-                
+                tasks[task_id]["current_step"] = "Extracting metadata..."
+
+                # Extract actual file metadata using ffprobe
+                from modules.module_ffmpeg import get_file_metadata
+                file_metadata = get_file_metadata(filename)
+
                 tasks[task_id]["result_files"] = [filename]
                 tasks[task_id]["status"] = "completed"
                 tasks[task_id]["progress"] = 100
                 tasks[task_id]["current_step"] = "Download complete"
+                tasks[task_id]["metadata"] = file_metadata
                 tasks[task_id]["download_info"] = {
                     "title": info.get('title', 'Unknown'),
                     "duration": info.get('duration', 0),
                     "thumbnail": info.get('thumbnail', '')
                 }
 
-                # Save to library
+                # Save to library with actual file metadata
                 library_entry = {
                     "task_id": task_id,
                     "url": url,
                     "title": info.get('title', 'Unknown'),
                     "result_files": [filename],
                     "download_info": tasks[task_id]["download_info"],
+                    "metadata": file_metadata,
                     "status": "completed",
                     "format": format_type
                 }
                 save_to_library(library_entry)
+
+                # Refresh library to ensure UI gets updated data
+                get_full_library()
 
                 add_notification(
                     "success",

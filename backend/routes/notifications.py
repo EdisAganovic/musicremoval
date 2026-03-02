@@ -147,7 +147,7 @@ async def get_system_info():
             try:
                 total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
                 info["gpu"]["vram_total"] = f"{total_vram:.1f} GB"
-            except:
+            except (AttributeError, TypeError, OverflowError):
                 pass
 
         # Get package versions
@@ -158,7 +158,7 @@ async def get_system_info():
                 for line in result.stdout.split('\n'):
                     if line.startswith('Version:'):
                         info["packages"]["yt-dlp"] = line.split(':')[1].strip()
-        except:
+        except (subprocess.SubprocessError, OSError):
             pass
 
         try:
@@ -168,7 +168,7 @@ async def get_system_info():
                 for line in result.stdout.split('\n'):
                     if line.startswith('Version:'):
                         info["packages"]["demucs"] = line.split(':')[1].strip()
-        except:
+        except (subprocess.SubprocessError, OSError):
             pass
 
         try:
@@ -178,7 +178,7 @@ async def get_system_info():
                 for line in result.stdout.split('\n'):
                     if line.startswith('Version:'):
                         info["packages"]["spleeter"] = line.split(':')[1].strip()
-        except:
+        except (subprocess.SubprocessError, OSError):
             pass
 
         try:
@@ -188,7 +188,7 @@ async def get_system_info():
                 for line in result.stdout.split('\n'):
                     if line.startswith('Version:'):
                         info["packages"]["torchaudio"] = line.split(':')[1].strip()
-        except:
+        except (subprocess.SubprocessError, OSError):
             pass
 
         # Check FFmpeg
@@ -200,7 +200,7 @@ async def get_system_info():
                 if result.returncode == 0:
                     version_line = result.stdout.split('\n')[0]
                     info["packages"]["ffmpeg"] = version_line
-            except:
+            except (subprocess.SubprocessError, OSError):
                 pass
 
         # Get memory info
@@ -209,7 +209,7 @@ async def get_system_info():
             mem = psutil.virtual_memory()
             info["memory"]["total"] = f"{mem.total / (1024**3):.1f} GB"
             info["memory"]["available"] = f"{mem.available / (1024**3):.1f} GB"
-        except:
+        except (ImportError, AttributeError, TypeError):
             pass
 
         # Get storage info
@@ -218,7 +218,7 @@ async def get_system_info():
             disk = psutil.disk_usage(os.path.abspath("."))
             info["storage"]["total"] = f"{disk.total / (1024**3):.1f} GB"
             info["storage"]["free"] = f"{disk.free / (1024**3):.1f} GB"
-        except:
+        except (ImportError, AttributeError, TypeError, OSError):
             pass
 
         # Calculate folder sizes
@@ -229,7 +229,7 @@ async def get_system_info():
                     for f in files:
                         try:
                             total += os.path.getsize(os.path.join(root, f))
-                        except:
+                        except (OSError, IOError):
                             pass
             return total
 
@@ -256,13 +256,13 @@ async def get_system_info():
 async def get_deno_info():
     """Get Deno version and status."""
     import asyncio
-    
+
     def check_deno():
         try:
             result = subprocess.run(["deno", "--version"], capture_output=True, text=True, encoding='utf-8', errors='replace')
             if result.returncode == 0:
                 return {"available": True, "version": result.stdout.split('\n')[0]}
-        except:
+        except (subprocess.SubprocessError, OSError):
             pass
         return {"available": False, "version": "Not installed"}
 

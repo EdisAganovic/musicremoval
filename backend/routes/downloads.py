@@ -237,13 +237,13 @@ async def cancel_download(payload: DownloadCancelRequest):
         raise HTTPException(status_code=404, detail="Task not found")
 
     active_downloads[payload.task_id]["cancel_flag"] = True
-    
+
     # Try to cancel yt-dlp
     ydl = active_downloads[payload.task_id].get("ydl")
     if ydl and hasattr(ydl, '_downloader'):
         try:
             ydl._downloader._num_downloads = float('inf')
-        except:
+        except (AttributeError, TypeError):
             pass
 
     return {"status": "cancelled"}

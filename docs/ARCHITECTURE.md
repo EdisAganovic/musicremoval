@@ -29,12 +29,13 @@
 | `modules/module_cuda.py` | GPU detection and validation | `check_gpu_cuda_support()` |
 | `modules/module_deno.py` | Deno runtime bridge | Execute TS/JS from Python |
 | `modules/module_file.py` | File utilities | File operations and helpers |
+| `modules/module_tools.py` | CLI utility for audio track inspection | `list_tracks` command |
 
 ### Frontend (React)
 
 | Component | Purpose | Key Features |
 |-----------|---------|--------------|
-| `App.jsx` | Root component with tab navigation | Tab switching, layout, status footer |
+| `App.jsx` | Root component with tab navigation | Tab switching, layout, status footer, console panel, settings modal |
 | `SeparationTab.jsx` | File upload & vocal separation UI | Drag-drop, batch processing, progress polling |
 | `DownloaderTab.jsx` | YouTube downloader | Format selection, queue system, subtitles, playlist support |
 | `LibraryTab.jsx` | Processed files browser | Search, sort, bulk delete, re-separate, folder filter |
@@ -46,20 +47,20 @@
 
 ```
 backend/
-├── backend.py            # FastAPI app, mounts routers (104 lines)
+├── backend.py            # FastAPI app, mounts routers (~145 lines)
 ├── __main__.py           # Entry point for python -m backend
 ├── models.py             # Pydantic schemas
-├── config.py             # Shared state & utilities
+├── config.py             # Shared state, utilities, cleanup scheduler (~950 lines)
 ├── routes/
 │   ├── __init__.py
-│   ├── downloads.py        # /api/download, /api/queue/*, /api/yt-formats
-│   ├── separation.py       # /api/separate*, /api/folder/*, /api/batch-status/*
-│   ├── library.py          # /api/library, /api/delete-file, /api/open-*
-│   └── notifications.py    # /api/notifications, /api/system-info
+│   ├── downloads.py        # /api/download, /api/queue/*, /api/yt-formats (~355 lines)
+│   ├── separation.py       # /api/separate*, /api/folder/*, /api/batch-status/* (~496 lines)
+│   ├── library.py          # /api/library, /api/delete-file, /api/open-* (~283 lines)
+│   └── notifications.py    # /api/notifications, /api/system-info (~270 lines)
 ├── services/
 │   ├── __init__.py
-│   ├── download_service.py # yt-dlp integration
-│   └── queue_service.py    # Download queue processor
+│   ├── download_service.py # yt-dlp integration (~236 lines)
+│   └── queue_service.py    # Download queue processor (~61 lines)
 └── modules/
     ├── __init__.py
     ├── module_processor.py   # Main orchestrator (calls all other modules)
@@ -70,7 +71,8 @@ backend/
     ├── module_audio.py       # Audio alignment, mixing, sync correction
     ├── module_cuda.py        # GPU/CUDA detection
     ├── module_deno.py        # Deno runtime bridge
-    └── module_file.py        # File utilities
+    ├── module_file.py        # File utilities
+    └── module_tools.py       # CLI utility for inspecting audio tracks
 ```
 
 ## Data Flow
@@ -286,6 +288,7 @@ main.py (CLI)
 | `download_queue.json` | YouTube download queue state | Backend (save_queue) |
 | `notifications.json` | User notification history | Backend (save_notifications) |
 | `metadata_cache.json` | File metadata cache | Backend (save_metadata_cache) |
+| `tasks.json` | Active task persistence | Backend (save_tasks_async) |
 | `video.json` | Quality presets + configuration | Frontend/Backend |
 
 ## Configuration (video.json)
@@ -442,12 +445,13 @@ export const notificationsAPI = { /* ... */ };
 
 ### Design System
 
-- **Framework**: React 18 + Vite
+- **Framework**: React 19 + Vite 7
 - **Animations**: framer-motion (layout transitions, hover effects)
 - **Icons**: lucide-react
 - **Styling**: Tailwind CSS with custom glassmorphism
 - **Colors**: Dark theme with primary (blue/purple) and accent (emerald) gradients
 - **Effects**: Backdrop blur, gradient borders, shadow layers
+- **Notifications**: react-hot-toast for toast messages
 
 ### Key UI Features
 
@@ -508,6 +512,34 @@ const handleUpload = async () => {
 
 ## Recent Changes (2026-03-02)
 
+### Version 0.0.6 - Task Persistence & Background Cleanup
+
+#### Task State Persistence
+- **Tasks saved to disk**: Active tasks persisted to `tasks.json` for recovery after restart
+- **Async task management**: Thread-safe task operations with locks (`tasks_lock`)
+- **Auto-cleanup**: Completed/failed tasks older than 24 hours removed automatically
+
+#### Background Cleanup Scheduler
+- **Periodic cleanup**: Runs every hour to clean temp files and stale data
+- **Configurable interval**: `start_cleanup_scheduler(interval_seconds)`
+- **Graceful shutdown**: Cleanup task cancelled properly on backend shutdown
+
+#### Safety Improvements
+- **Safe file operations**: `safe_remove()`, `safe_makedirs()`, `safe_file_copy()`, `safe_file_move()`
+- **Path validation**: `safe_path()` prevents path traversal attacks
+- **URL validation**: `validate_url()`, `validate_youtube_url()` for input sanitization
+- **Filename sanitization**: `sanitize_filename()` removes invalid characters
+- **Transaction context**: `TransactionContext` for rollback support
+
+#### New CLI Tool
+- **module_tools.py**: Standalone CLI for inspecting audio tracks in video files
+  - Usage: `python -m backend.modules.module_tools list_tracks <file>`
+
+#### Frontend Enhancements
+- **Console Panel**: Real-time log viewer in UI (toggle with button)
+- **Settings Modal**: System info display with GPU, CUDA, package versions
+- **React Hot Toast**: Toast notifications for user feedback
+
 ### Version 0.0.3 - Playlist Support & Configuration Centralization
 
 #### YouTube Downloader Enhancements
@@ -560,8 +592,12 @@ const handleUpload = async () => {
 ## Environment & Dependencies
 
 - **Python**: 3.10+ (UV managed)
+- **Backend Version**: 0.0.6 (pyproject.toml)
+- **Frontend Version**: 0.0.5 (package.json)
 - **Node.js**: Vite/React frontend
 - **Deno**: 2.5+ for runtime bridge
+- **React**: 19.2.0
+- **Vite**: 7.3.1
 - **AI Models**: Demucs (htdemucs), Spleeter (2stems)
 - **FFmpeg**: Auto-downloaded if missing
 - **yt-dlp**: YouTube download with remote components
@@ -571,25 +607,61 @@ const handleUpload = async () => {
 ```
 demucspleeter/
 ├── main.py                 # CLI entry point
+├── run_app.bat             # Windows startup script
+├── pyproject.toml          # Python project config (version 0.0.6)
+├── requirements.txt        # Python dependencies
+├── deno.json               # Deno configuration
 ├── backend/                # FastAPI backend
-│   ├── backend.py
-│   ├── __main__.py
-│   ├── models.py
-│   ├── config.py
-│   ├── routes/
-│   ├── services/
-│   └── modules/           # Core processing modules
-├── frontend/               # React frontend
+│   ├── backend.py          # FastAPI app with startup/shutdown events
+│   ├── __main__.py         # Entry point for python -m backend
+│   ├── models.py           # Pydantic request/response schemas
+│   ├── config.py           # Shared state, utilities, cleanup scheduler
+│   ├── routes/             # API endpoint handlers
+│   │   ├── downloads.py    # YouTube download & queue endpoints
+│   │   ├── separation.py   # Vocal separation endpoints
+│   │   ├── library.py      # Library management endpoints
+│   │   └── notifications.py # Notifications & system info
+│   ├── services/           # Business logic layer
+│   │   ├── download_service.py  # yt-dlp download logic
+│   │   └── queue_service.py     # Queue processing logic
+│   └── modules/            # Core processing modules
+│       ├── module_processor.py  # Main orchestrator
+│       ├── module_ffmpeg.py     # FFmpeg wrapper
+│       ├── module_ytdlp.py      # YouTube downloader
+│       ├── module_spleeter.py   # Spleeter AI separation
+│       ├── module_demucs.py     # Demucs AI separation
+│       ├── module_audio.py      # Audio alignment/mixing
+│       ├── module_cuda.py       # GPU detection
+│       ├── module_deno.py       # Deno runtime bridge
+│       ├── module_file.py       # File utilities
+│       └── module_tools.py      # CLI utility for audio track inspection
+├── frontend/               # React frontend (Vite)
 │   ├── src/
-│   │   ├── App.jsx
-│   │   ├── components/
-│   │   └── api/
-│   └── dist/
-├── download/               # YouTube downloads
-├── nomusic/                # Separated output
-├── library.json            # Processed files metadata
-├── download_queue.json     # Queue state
-├── notifications.json      # Notification history
-├── video.json              # Configuration + presets
-└── metadata_cache.json     # File metadata cache
+│   │   ├── App.jsx         # Root component with tabs, console, settings
+│   │   ├── main.jsx        # Entry point
+│   │   ├── components/     # Tab components
+│   │   │   ├── SeparationTab.jsx
+│   │   │   ├── DownloaderTab.jsx
+│   │   │   ├── LibraryTab.jsx
+│   │   │   └── NotificationBell.jsx
+│   │   ├── contexts/       # React contexts
+│   │   │   └── NotificationContext.jsx
+│   │   └── api/            # API client
+│   │       └── index.js
+│   ├── package.json        # NPM dependencies (v0.0.5)
+│   └── vite.config.js      # Vite configuration
+├── data/                   # Persistent data files
+│   ├── library.json        # Processed files metadata
+│   ├── download_queue.json # Queue state
+│   ├── notifications.json  # Notification history
+│   ├── tasks.json          # Active task persistence
+│   ├── metadata_cache.json # File metadata cache
+│   └── video.json          # Quality presets + config
+├── download/               # YouTube downloads (user data)
+├── nomusic/                # Separated output (user data)
+├── uploads/                # Temporary upload folder
+├── _temp/                  # General temp files
+├── _processing_intermediates/  # Batch processing temp
+└── docs/                   # Documentation
+    └── ARCHITECTURE.md     # This file
 ```

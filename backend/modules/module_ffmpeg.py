@@ -173,28 +173,23 @@ def get_file_metadata(file_path):
         "audio_codec": "N/A",
         "is_video": False
     }
-    
+
     try:
         cmd = [
-            FFPROBE_EXE, 
-            "-v", "quiet", 
-            "-print_format", "json", 
-            "-show_streams", 
-            "-show_format", 
+            FFPROBE_EXE,
+            "-v", "quiet",
+            "-print_format", "json",
+            "-show_streams",
+            "-show_format",
             file_path
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         data = json.loads(result.stdout)
-        
-        # Get duration
+
+        # Get duration - try format first, then fall back to video stream
         format_info = data.get('format', {})
         duration = format_info.get('duration')
-        if duration:
-            try:
-                metadata["duration"] = f"{float(duration):.2f}s"
-            except:
-                pass
-        
+
         streams = data.get('streams', [])
         for stream in streams:
             if stream.get('codec_type') == 'video':
@@ -204,9 +199,34 @@ def get_file_metadata(file_path):
                 height = stream.get('height')
                 if width and height:
                     metadata["resolution"] = f"{width}x{height}"
+
+                # Fall back to video stream duration if not in format
+                if not duration:
+                    duration = stream.get('duration')
+                    # Also try duration_ts with time_base
+                    if not duration and stream.get('duration_ts') and stream.get('time_base'):
+                        try:
+                            duration = float(stream['duration_ts']) * float(stream['time_base'])
+                        except (ValueError, TypeError):
+                            pass
+
             elif stream.get('codec_type') == 'audio':
                 metadata["audio_codec"] = stream.get('codec_name', 'N/A')
-                
+
+        if duration:
+            try:
+                duration_seconds = float(duration)
+                # Format as HH:MM:SS for better readability
+                hours = int(duration_seconds // 3600)
+                minutes = int((duration_seconds % 3600) // 60)
+                seconds = int(duration_seconds % 60)
+                if hours > 0:
+                    metadata["duration"] = f"{hours}:{minutes:02d}:{seconds:02d}"
+                else:
+                    metadata["duration"] = f"{minutes}:{seconds:02d}"
+            except (ValueError, TypeError):
+                pass
+
         return metadata
     except Exception as e:
         print(f"Error getting metadata for {file_path}: {e}")

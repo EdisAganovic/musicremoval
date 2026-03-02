@@ -142,7 +142,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 try {
                     const response = await axios.get(
                         `${BACKEND_URL}/api/status/${taskId}`,
-                        { timeout: 10000 } // 10 second timeout
+                        { timeout: 300000 } // 5 minute timeout for long operations
                     );
                     const data = response.data;
 

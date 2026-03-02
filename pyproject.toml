@@ -1,6 +1,6 @@
 [project]
 name = "demucspleeter"
-version = "0.0.5"
+version = "0.0.6"
 description = "AI-powered vocal separation using Demucs and Spleeter with YouTube downloader"
 readme = "README.md"
 requires-python = ">=3.10.0"

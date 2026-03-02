@@ -1,5 +1,119 @@
 [
     {
+        "id": "bfe6d30e-b3f6-44b3-a626-37fb23dd21df",
+        "type": "success",
+        "title": "Separation Complete",
+        "message": "Vocals separated from Allah benimle her zaman - \u0130slami \u00e7ocuk \u015fark\u0131s\u0131 #islam.mp4",
+        "data": {
+            "task_id": "acd5bee7-20f5-4d91-81a8-68e63afea796",
+            "files": [
+                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Allah benimle her zaman - \u0130slami \u00e7ocuk \u015fark\u0131s\u0131 #islam.mp4"
+            ]
+        },
+        "read": false,
+        "created_at": 1772466224.7842247
+    },
+    {
+        "id": "63ef815d-f6fe-4b93-86ef-a8ad8d6b91cd",
+        "type": "success",
+        "title": "Separation Complete",
+        "message": "Vocals separated from 25 Minuten islamische Kinderlieder von MinaNuriKids.mp4",
+        "data": {
+            "task_id": "465574cf-8666-4dc7-b79a-1cc01316fba3",
+            "files": [
+                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_25 Minuten islamische Kinderlieder von MinaNuriKids.mp4"
+            ]
+        },
+        "read": false,
+        "created_at": 1772466186.5908139
+    },
+    {
+        "id": "921da5bc-fe39-44aa-b6d2-8ae7489e63c5",
+        "type": "success",
+        "title": "Separation Complete",
+        "message": "Vocals separated from 24. Oktober 2025.mp4",
+        "data": {
+            "task_id": "8a86805c-58fd-44ef-a4ad-19874f8688d0",
+            "files": [
+                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_24. Oktober 2025.mp4"
+            ]
+        },
+        "read": false,
+        "created_at": 1772465899.2320988
+    },
+    {
+        "id": "057fadf6-5a0c-4faa-b41b-125d41b01928",
+        "type": "error",
+        "title": "Separation Failed",
+        "message": "Failed to process 25 Minuten islamische Kinderlieder von MinaNuriKids.mp4",
+        "data": {},
+        "read": false,
+        "created_at": 1772465740.9316113
+    },
+    {
+        "id": "2ac0c44c-acd3-456d-95ec-2f8558ff77cc",
+        "type": "success",
+        "title": "Separation Complete",
+        "message": "Vocals separated from 24. Oktober 2025.mp4",
+        "data": {
+            "task_id": "186ce1ac-2cd1-4090-ae77-39b608b0fbe2",
+            "files": [
+                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_24. Oktober 2025.mp4"
+            ]
+        },
+        "read": false,
+        "created_at": 1772465600.9591384
+    },
+    {
+        "id": "97e15d3d-c862-4fce-b296-12536ce610e9",
+        "type": "error",
+        "title": "Separation Failed",
+        "message": "Failed to process 25 Minuten islamische Kinderlieder von MinaNuriKids.mp4",
+        "data": {},
+        "read": false,
+        "created_at": 1772465554.4319983
+    },
+    {
+        "id": "b05caf86-caef-400a-91c3-296a65dcf6c1",
+        "type": "success",
+        "title": "Separation Complete",
+        "message": "Vocals separated from 24. Oktober 2025.mp4",
+        "data": {
+            "task_id": "2c76e4ea-7685-4427-8a72-f942b7a57876",
+            "files": [
+                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_24. Oktober 2025.mp4"
+            ]
+        },
+        "read": false,
+        "created_at": 1772465553.5064838
+    },
+    {
+        "id": "dcfb1c71-8896-44f3-a63a-75cf1e13c1d7",
+        "type": "success",
+        "title": "Separation Complete",
+        "message": "Vocals separated from \u0628\u0631\u0646\u0627\u0645\u062c \u0642\u0644\u0628\u064a \u0627\u0637\u0645\u0623\u0646 \uff5c \u0627\u0644\u0645\u0648\u0633\u0645 \u0627\u0644\u062a\u0627\u0633\u0639\uff5c \u0627\u0644\u062d\u0644\u0642\u0629 12 \uff5c Sole Hope.mkv",
+        "data": {
+            "task_id": "3a61630f-d870-48f7-a8dd-57258e9e163d",
+            "files": [
+                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_\u0628\u0631\u0646\u0627\u0645\u062c \u0642\u0644\u0628\u064a \u0627\u0637\u0645\u0623\u0646 \uff5c \u0627\u0644\u0645\u0648\u0633\u0645 \u0627\u0644\u062a\u0627\u0633\u0639\uff5c \u0627\u0644\u062d\u0644\u0642\u0629 12 \uff5c Sole Hope.mp4"
+            ]
+        },
+        "read": false,
+        "created_at": 1772464749.9571996
+    },
+    {
+        "id": "68669b37-46fc-417f-ad1d-01ec8b75bab4",
+        "type": "success",
+        "title": "Download Complete",
+        "message": "\u0628\u0631\u0646\u0627\u0645\u062c \u0642\u0644\u0628\u064a \u0627\u0637\u0645\u0623\u0646 | \u0627\u0644\u0645\u0648\u0633\u0645 \u0627\u0644\u062a\u0627\u0633\u0639| \u0627\u0644\u062d\u0644\u0642\u0629 12 | Sole Hope downloaded successfully",
+        "data": {
+            "task_id": "37485e26-06ba-41b2-ba50-b6d23dd8a788",
+            "file": "download\\\u0628\u0631\u0646\u0627\u0645\u062c \u0642\u0644\u0628\u064a \u0627\u0637\u0645\u0623\u0646 \uff5c \u0627\u0644\u0645\u0648\u0633\u0645 \u0627\u0644\u062a\u0627\u0633\u0639\uff5c \u0627\u0644\u062d\u0644\u0642\u0629 12 \uff5c Sole Hope.mkv"
+        },
+        "read": false,
+        "created_at": 1772463750.36307
+    },
+    {
         "id": "727183bf-43c0-4f12-9484-7cdd7f1686c4",
         "type": "success",
         "title": "Separation Complete",
@@ -573,126 +687,5 @@
         },
         "read": false,
         "created_at": 1772446356.17211
-    },
-    {
-        "id": "32c6dfa5-77db-4955-91b7-9de2c03566f6",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Ich sag Bismillah - Islamisches Kinderlied #muslimkids #nasheedf\u00fcrkinder #islamlernen.mp4",
-        "data": {
-            "task_id": "3c699d3e-8679-4d1e-b9a1-f2639a6aa2c1",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Ich sag Bismillah - Islamisches Kinderlied #muslimkids #nasheedf\u00fcrkinder #islamlernen.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772446288.1360645
-    },
-    {
-        "id": "bce80c05-43db-4485-92ee-1a449b7f2d63",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Ich bin ein kleiner Muslim\u2728\u2728\u2728\ud83c\udf19\ud83c\udf19.mp4",
-        "data": {
-            "task_id": "b3a5ce0f-2565-4292-81a7-dedb0416ce4a",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Ich bin ein kleiner Muslim\u2728\u2728\u2728\ud83c\udf19\ud83c\udf19.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772446245.7937343
-    },
-    {
-        "id": "7901916b-0eca-4f67-b9be-8a5142c38955",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Ich bin ein kleiner Muslim - Islamisches Kinderlied #islamf\u00fcrkinder #islamlernen #islamkids.mp4",
-        "data": {
-            "task_id": "ac4f631d-6064-4908-a701-d5fbef0642a4",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Ich bin ein kleiner Muslim - Islamisches Kinderlied #islamf\u00fcrkinder #islamlernen #islamkids.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772446227.880518
-    },
-    {
-        "id": "9ffa0ca0-fa93-438c-9ed9-ad98b371ff4e",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Eid Mubarak - Islamisches Kinderlied #ramadanf\u00fcrkinder #islamlernen  #nasheedf\u00fcrkinder.mp4",
-        "data": {
-            "task_id": "4e65fdfb-85c0-49d0-a556-9875e4cff34f",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Eid Mubarak - Islamisches Kinderlied #ramadanf\u00fcrkinder #islamlernen  #nasheedf\u00fcrkinder.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772446191.619047
-    },
-    {
-        "id": "fe6c28ed-9565-4303-9c08-ac4335fc5efd",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Dua \u2013 In jedem Moment \uff5c Islamisches Kinderlied mit Mina & Nuri.mp4",
-        "data": {
-            "task_id": "3d311f89-faf7-4339-857d-892526995547",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Dua \u2013 In jedem Moment \uff5c Islamisches Kinderlied mit Mina & Nuri.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772446131.2486691
-    },
-    {
-        "id": "ae3c4764-001e-4921-9f68-4f649ca4b884",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Dua \u00f6\u011fretici \u015fark\u0131 \uff1a Mina & Nuri #\u00e7ocukilahi.mp4",
-        "data": {
-            "task_id": "e70c7933-802b-4649-9104-30b8a3847398",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Dua \u00f6\u011fretici \u015fark\u0131 \uff1a Mina & Nuri #\u00e7ocukilahi.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772446095.773358
-    },
-    {
-        "id": "f84342c0-6357-4892-8be6-9d7a89ad5b52",
-        "type": "error",
-        "title": "Separation Error",
-        "message": "Error processing 'C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\njemacki\\Die Geschichte von Prophet Yusuf (a.s.) Kinderlied & Erz\u00e4hlung \uff5c MinaNuriKids.mp4': local variable 'filename' referenced before assignment",
-        "data": {},
-        "read": false,
-        "created_at": 1772446057.6858428
-    },
-    {
-        "id": "d11a686f-16d6-49e2-8e23-a5af97e4ffd4",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Die Geschichte von Prophet Yunus (a.s) - Islamisches Kinderlied.mp4",
-        "data": {
-            "task_id": "324bdfe8-9fe5-47b1-b523-c43fd68dff7f",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Die Geschichte von Prophet Yunus (a.s) - Islamisches Kinderlied.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772445983.9838514
-    },
-    {
-        "id": "c37b92e8-664e-4d27-b8eb-5a66d83eaca1",
-        "type": "success",
-        "title": "Separation Complete",
-        "message": "Vocals separated from Die Geschichte von Prophet Musa (a.s) - Islamisches Kinderlied & Erz\u00e4hlung.mp4",
-        "data": {
-            "task_id": "befdf889-9a8d-4b24-8c1c-14f18210508d",
-            "files": [
-                "C:\\Users\\Ensarija\\Desktop\\PYTHON_PROJEKTI_2025\\demucspleeter\\nomusic\\nomusic_Die Geschichte von Prophet Musa (a.s) - Islamisches Kinderlied & Erz\u00e4hlung.mp4"
-            ]
-        },
-        "read": false,
-        "created_at": 1772445851.011241
     }
 ]

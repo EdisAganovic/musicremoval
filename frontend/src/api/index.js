@@ -10,7 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5170/api
 // Create axios instance with default config
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 30000, // 30 second timeout
+  timeout: 300000, // 5 minute timeout for long FFmpeg operations
   headers: {
     'Content-Type': 'application/json',
   },

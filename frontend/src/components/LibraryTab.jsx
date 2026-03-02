@@ -235,11 +235,23 @@ const LibraryTab = ({ onSeparate }) => {
         return normalizedPath.includes(query);
     }).sort((a, b) => {
         if (sortBy === 'date') {
-            return b.task_id.localeCompare(a.task_id);
+            // Sort by created_at timestamp (newest first)
+            const timeA = a.created_at || 0;
+            const timeB = b.created_at || 0;
+            return timeB - timeA;
         } else if (sortBy === 'duration') {
-            const durA = parseFloat(a.metadata?.duration) || 0;
-            const durB = parseFloat(b.metadata?.duration) || 0;
-            return durB - durA;
+            // Parse duration in "MM:SS" or "HH:MM:SS" format
+            const parseDuration = (dur) => {
+                if (!dur || dur === 'N/A') return 0;
+                const parts = dur.split(':').map(Number);
+                if (parts.length === 3) {
+                    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+                } else if (parts.length === 2) {
+                    return parts[0] * 60 + parts[1];
+                }
+                return parseFloat(dur) || 0;
+            };
+            return parseDuration(b.metadata?.duration) - parseDuration(a.metadata?.duration);
         }
         return 0;
     });

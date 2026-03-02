@@ -58,26 +58,34 @@ app.include_router(notifications_router)
 async def startup_event():
     """Initialize on startup."""
     from config import (
-        load_queue, load_notifications, load_metadata_cache,
-        cleanup_metadata_cache, cleanup_temp_files, log_console
+        init_data_directory, load_queue, load_notifications, load_metadata_cache,
+        load_tasks_async, cleanup_metadata_cache, cleanup_temp_files, log_console,
+        save_queue, save_notifications, save_metadata_cache, start_cleanup_scheduler
     )
     from colorama import Fore, Style
-    
+
     print(f"\n{Fore.GREEN}{'='*60}{Style.RESET_ALL}")
     print(f"{Fore.GREEN}  DemucsPleeter Backend Starting...{Style.RESET_ALL}")
     print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}\n")
-    
+
+    # Initialize data directory and create missing JSON files
+    init_data_directory()
+
     # Load persisted data
     load_queue()
     load_notifications()
     load_metadata_cache()
-    
-    # Cleanup
+    await load_tasks_async()
+
+    # Cleanup old data
     cleanup_metadata_cache()
     cleanup_temp_files()
-    
+
+    # Start background cleanup scheduler (runs every hour)
+    await start_cleanup_scheduler(interval_seconds=3600)
+
     log_console("Backend started successfully", "success")
-    
+
     print(f"\n{Fore.CYAN}API available at: http://localhost:5170{Style.RESET_ALL}")
     print(f"{Fore.CYAN}Docs available at: http://localhost:5170/docs{Style.RESET_ALL}\n")
 
@@ -85,12 +93,23 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
-    from config import save_metadata_cache, log_console
+    from config import (
+        save_tasks_async, save_metadata_cache, save_queue, save_notifications,
+        log_console, stop_cleanup_scheduler
+    )
     from colorama import Fore, Style
-    
+
     log_console("Backend shutting down...", "info")
-    save_metadata_cache()
     
+    # Stop background cleanup scheduler
+    await stop_cleanup_scheduler()
+    
+    # Save all state
+    await save_tasks_async()
+    save_metadata_cache()
+    save_queue()
+    save_notifications()
+
     print(f"\n{Fore.YELLOW}{'='*60}{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}  DemucsPleeter Backend Stopped{Style.RESET_ALL}")
     print(f"{Fore.YELLOW}{'='*60}{Style.RESET_ALL}\n")

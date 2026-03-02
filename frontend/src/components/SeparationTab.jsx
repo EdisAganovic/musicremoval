@@ -160,7 +160,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         try {
           const response = await axios.get(
             `${BACKEND_URL}/api/status/${taskId}`,
-            { timeout: 10000 } // 10 second timeout
+            { timeout: 300000 } // 5 minute timeout for long FFmpeg operations
           );
           const data = response.data;
 
@@ -217,7 +217,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         try {
           const response = await axios.get(
             `${BACKEND_URL}/api/batch-status/${batchId}`,
-            { timeout: 10000 } // 10 second timeout
+            { timeout: 300000 } // 5 minute timeout for long FFmpeg operations
           );
           const batch = response.data;
 
@@ -1018,7 +1018,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   className="px-8 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 text-white rounded-xl text-lg font-black transition-all shadow-xl shadow-primary-500/25 active:scale-95 flex items-center space-x-3 group"
                 >
                   <PlayCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                  <span>POKRENI FAJL</span>
+                  <span>Play video</span>
                 </button>
                 <button
                   onClick={async () => {
@@ -1034,7 +1034,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-xl text-sm font-bold transition-all border border-white/5 active:scale-95 flex items-center space-x-2"
                 >
                   <FolderOpen className="w-4 h-4" />
-                  <span>OTVORI FOLDER</span>
+                  <span>Open folder</span>
                 </button>
               </div>
             </div>

@@ -122,7 +122,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                     silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", segment_vocal_path]
                     try:
                         subprocess.run(silence_cmd, check=True)
-                    except:
+                    except (subprocess.CalledProcessError, OSError):
                         return i, None
                 
                 if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
