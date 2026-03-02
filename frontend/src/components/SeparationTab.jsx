@@ -471,7 +471,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       <div className="flex justify-center space-x-4 mb-6">
         {["spleeter", "demucs", "both"].map((m) => (
           <button
-            key={m}
+            key={`model-${m}`}
             onClick={() => setModel(m)}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent ${
               model === m
@@ -600,7 +600,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   <div className="max-h-80 overflow-y-auto space-y-2 pr-2" ref={batchListRef}>
                     {batchFiles.map((fileInfo, idx) => (
                       <div
-                        key={fileInfo.task_id || fileInfo.id}
+                        key={`batch-file-${fileInfo.task_id || fileInfo.id || idx}-${idx}`}
                         className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
                           status === "processing"
                             ? (fileInfo.status === "completed" ? "bg-emerald-600/10 border-emerald-500/30" :

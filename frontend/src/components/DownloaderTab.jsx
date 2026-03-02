@@ -566,7 +566,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                     <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
                                         {playlistVideos.map((video, idx) => (
                                             <div
-                                                key={`${video.id}-${idx}`}
+                                                key={`playlist-video-${video.id || idx}-${idx}`}
                                                 className={`flex items-center space-x-3 p-2 rounded-lg border ${
                                                     selectedPlaylistVideos.includes(video.id)
                                                         ? 'bg-primary-600/10 border-primary-500/30'
@@ -634,8 +634,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                 onChange={(e) => setSelectedFormatId(e.target.value)}
                                                 className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
                                             >
-                                                {availableFormats.map(f => (
-                                                    <option key={f.format_id} value={f.format_id}>
+                                                {availableFormats.map((f, idx) => (
+                                                    <option key={`format-${f.format_id || idx}-${idx}`} value={f.format_id}>
                                                         {f.label} {f.filesize ? `(${(f.filesize / 1024 / 1024).toFixed(1)} MB)` : ''}
                                                     </option>
                                                 ))}
@@ -864,8 +864,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
                             </div>
                         </div>
                         <div className="divide-y divide-red-500/5">
-                            {activeDownloads.filter(d => d.task_id !== taskId).map((download) => (
-                                <div key={download.task_id} className="p-4">
+                            {activeDownloads.filter(d => d.task_id !== taskId).map((download, idx) => (
+                                <div key={`active-dl-${download.task_id || idx}-${idx}`} className="p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center space-x-3 flex-1 min-w-0">
                                             <Loader2 className="w-4 h-4 text-red-400 animate-spin flex-shrink-0" />
@@ -1090,7 +1090,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                         <div className="divide-y divide-white/5">
                                             {queue.map((item, idx) => (
                                                 <div
-                                                    key={item.queue_id}
+                                                    key={`queue-item-${item.queue_id || idx}-${idx}`}
                                                     className="p-3 flex items-center justify-between hover:bg-white/5 transition-colors"
                                                 >
                                                     <div className="flex items-center space-x-3 flex-1 min-w-0">
