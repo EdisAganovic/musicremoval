@@ -261,8 +261,11 @@ async def open_folder(payload: dict):
     if not os.path.isabs(path):
         path = os.path.join(os.path.dirname(__file__), '..', path)
 
-    if not os.path.isdir(path):
-        # Try to create it
+    # If the path points to a file, we want to open its parent directory
+    if os.path.exists(path) and os.path.isfile(path):
+        path = os.path.dirname(path)
+    
+    if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
 
     try:

@@ -161,46 +161,14 @@ async def get_system_info():
             except (AttributeError, TypeError, OverflowError):
                 pass
 
-        # Get package versions
-        try:
-            result = subprocess.run([sys.executable, "-m", "pip", "show", "yt-dlp"],
-                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
-            if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if line.startswith('Version:'):
-                        info["packages"]["yt-dlp"] = line.split(':')[1].strip()
-        except (subprocess.SubprocessError, OSError):
-            pass
-
-        try:
-            result = subprocess.run([sys.executable, "-m", "pip", "show", "demucs"],
-                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
-            if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if line.startswith('Version:'):
-                        info["packages"]["demucs"] = line.split(':')[1].strip()
-        except (subprocess.SubprocessError, OSError):
-            pass
-
-        try:
-            result = subprocess.run([sys.executable, "-m", "pip", "show", "spleeter"],
-                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
-            if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if line.startswith('Version:'):
-                        info["packages"]["spleeter"] = line.split(':')[1].strip()
-        except (subprocess.SubprocessError, OSError):
-            pass
-
-        try:
-            result = subprocess.run([sys.executable, "-m", "pip", "show", "torchaudio"],
-                                  capture_output=True, text=True, encoding='utf-8', errors='replace')
-            if result.returncode == 0:
-                for line in result.stdout.split('\n'):
-                    if line.startswith('Version:'):
-                        info["packages"]["torchaudio"] = line.split(':')[1].strip()
-        except (subprocess.SubprocessError, OSError):
-            pass
+        # Get package versions using importlib.metadata
+        import importlib.metadata
+        
+        for pkg in ["yt-dlp", "demucs", "spleeter", "torchaudio"]:
+            try:
+                info["packages"][pkg] = importlib.metadata.version(pkg)
+            except Exception:
+                pass
 
         # Check FFmpeg
         from modules.module_ffmpeg import get_ffmpeg_version, check_fdk_aac_codec

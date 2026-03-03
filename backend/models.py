@@ -34,6 +34,7 @@ class DownloadRequest(BaseModel):
     format_id: Optional[str] = None
     subtitles: Optional[str] = None
     auto_separate: bool = False
+    subfolder: Optional[str] = None
 
 
 class DownloadCancelRequest(BaseModel):
@@ -46,6 +47,7 @@ class QueueAddRequest(BaseModel):
     format_id: Optional[str] = None
     subtitles: Optional[str] = None
     auto_separate: bool = False
+    subfolder: Optional[str] = None
 
 
 class QueueBatchRequest(BaseModel):
@@ -54,6 +56,7 @@ class QueueBatchRequest(BaseModel):
     format_id: Optional[str] = None
     subtitles: Optional[str] = None
     auto_separate: bool = False
+    subfolder: Optional[str] = None
 
 
 class QueueActionRequest(BaseModel):

@@ -629,116 +629,39 @@ const handleUpload = async () => {
 
 ## Recent Changes
 
-### Version 0.0.7 - Backend Architecture Refactoring
+For detailed changelogs, see:
+- **[Backend Changelog](backend_changelog.md)** - Full backend version history
+- **[Frontend Changelog](frontend_changelog.md)** - Full frontend version history
 
-#### New Directory Structure
-- **`backend/core/`** - Core state and constants layer
-  - `state.py` - Global state variables with asyncio locks (thread-safe)
-  - `constants.py` - Centralized file paths and threshold settings
-- **`backend/utils/`** - Utility functions layer
-  - `file_ops.py` - Safe file operations with error handling
-  - `validation.py` - Input validation and sanitization
-  - `helpers.py` - General helper functions
-  - `async_tools.py` - Async utility functions
-- **`backend/services/`** - Expanded business logic layer
-  - `persistence.py` - JSON data persistence layer (moved from config.py)
-  - `cleanup.py` - Background cleanup scheduler (moved from config.py)
-  - `separation_service.py` - Vocal separation orchestration
+### Version Highlights
 
-#### Separation of Concerns
-- **Core Layer**: Stateless constants and global state with locks
-- **Utils Layer**: Pure functions with no side effects
-- **Services Layer**: Business logic with dependency injection
-- **Routes Layer**: API endpoints only, no business logic
-- **Modules Layer**: AI/FFmpeg processing (unchanged)
+#### Backend
+| Version | Key Changes |
+|---------|-------------|
+| **0.0.11** | Video extension bug fix, 3-stage file detection, rate limiting improvements, queue control API |
+| **0.0.10** | Metadata cache path fix, library scan exclusion logic |
+| **0.0.9** | Folder batch processing, library filters, batch status API |
+| **0.0.8** | Queue management enhancements, console log panel |
+| **0.0.7** | Backend architecture refactoring (core/, utils/, services/ layers) |
+| **0.0.6** | Task persistence, background cleanup scheduler, safe file operations |
 
-#### Benefits
-- **Testability**: Each layer can be tested in isolation
-- **Maintainability**: Clear boundaries between responsibilities
-- **Thread Safety**: All state access protected by locks
-- **Type Safety**: Better type hints with explicit dependencies
-
-### Version 0.0.6 - Task Persistence & Background Cleanup
-
-#### Task State Persistence
-- **Tasks saved to disk**: Active tasks persisted to `tasks.json` for recovery after restart
-- **Async task management**: Thread-safe task operations with locks (`tasks_lock`)
-- **Auto-cleanup**: Completed/failed tasks older than 24 hours removed automatically
-
-#### Background Cleanup Scheduler
-- **Periodic cleanup**: Runs every hour to clean temp files and stale data
-- **Configurable interval**: `start_cleanup_scheduler(interval_seconds)`
-- **Graceful shutdown**: Cleanup task cancelled properly on backend shutdown
-
-#### Safety Improvements
-- **Safe file operations**: `safe_remove()`, `safe_makedirs()`, `safe_file_copy()`, `safe_file_move()`
-- **Path validation**: `safe_path()` prevents path traversal attacks
-- **URL validation**: `validate_url()`, `validate_youtube_url()` for input sanitization
-- **Filename sanitization**: `sanitize_filename()` removes invalid characters
-- **Transaction context**: `TransactionContext` for rollback support
-
-#### New CLI Tool
-- **module_tools.py**: Standalone CLI for inspecting audio tracks in video files
-  - Usage: `python -m backend.modules.module_tools list_tracks <file>`
-
-#### Frontend Enhancements
-- **Console Panel**: Real-time log viewer in UI (toggle with button)
-- **Settings Modal**: System info display with GPU, CUDA, package versions
-- **React Hot Toast**: Toast notifications for user feedback
-
-### Version 0.0.3 - Playlist Support & Configuration Centralization
-
-#### YouTube Downloader Enhancements
-- **Playlist/Channel Download**: Full support for playlists, channels, and mixes
-- **Video ID Display**: Shows YouTube video ID for easy identification
-- **Remember Format Preference**: Saves selected format per video in localStorage
-- **File Size Preview**: Shows estimated file size in format dropdown
-
-#### Library Improvements
-- **Folder Filter System**: Filter by source folder (All/Download/NoMusic)
-- **Open Folder Quick Actions**: One-click access to download and nomusic folders
-- **Smart Separate Button**: Hides for already-separated files
-
-#### Configuration
-- **Centralized Port Configuration**: Single `.env` file for API base URL
-- **API Client Layer**: Centralized API communication in `frontend/src/api/index.js`
-
-#### UI/UX
-- **Compact Header**: Reduced size by ~50%
-- **Smoother Tab Transitions**: 2x faster animations (0.15s)
-- **Library Table Layout**: Replaced card layout with compact table
-
-### Version 0.0.2 - Queue System & Batch Processing
-
-#### Major Features
-- **Download Queue System**: Full queue management with persistent storage
-- **Folder Batch Processing**: Process entire folders with interactive UI
-- **In-App Notification System**: Real-time notifications with bell component
-- **Download Retry Logic**: Exponential backoff (3 attempts)
-- **Auto Disk Cleanup**: Cleans temp files >24h on startup
-- **Duplicate Detection**: Prevents downloading same content twice
-- **Library Search & Bulk Operations**: Advanced library management
-
-#### UI Additions
-- Queue UI in Downloader with progress bars
-- Folder Processing UI with file preview
-- Notification Bell with unread counter
-- Library table with multi-select
-
-### Version 0.0.1 - Initial Release
-
-- Core vocal separation with Demucs + Spleeter
-- YouTube downloader with format selection
-- Deno bridge implementation
-- Library management with direct playback
+#### Frontend
+| Version | Key Changes |
+|---------|-------------|
+| **0.0.11** | Cancel All button, force cancellation UI, subfolder support fix |
+| **0.0.10** | System info footer, separation icon update |
+| **0.0.9** | Playlist support, format preference memory, compact header |
+| **0.0.8** | Queue UI, folder processing UI, notification bell |
+| **0.0.7** | Notification system, download retry logic, library search |
+| **0.0.6** | React Hot Toast integration, settings modal, console panel |
 
 ---
 
 ## Environment & Dependencies
 
 - **Python**: 3.10+ (UV managed)
-- **Backend Version**: 0.0.6 (pyproject.toml)
-- **Frontend Version**: 0.0.5 (package.json)
+- **Backend Version**: 0.0.11 (pyproject.toml)
+- **Frontend Version**: 0.0.11 (package.json)
 - **Node.js**: Vite/React frontend
 - **Deno**: 2.5+ for runtime bridge
 - **React**: 19.2.0
@@ -753,23 +676,39 @@ const handleUpload = async () => {
 demucspleeter/
 ├── main.py                 # CLI entry point
 ├── run_app.bat             # Windows startup script
-├── pyproject.toml          # Python project config (version 0.0.6)
+├── pyproject.toml          # Python project config (version 0.0.11)
 ├── requirements.txt        # Python dependencies
 ├── deno.json               # Deno configuration
 ├── backend/                # FastAPI backend
 │   ├── backend.py          # FastAPI app with startup/shutdown events
 │   ├── __main__.py         # Entry point for python -m backend
 │   ├── models.py           # Pydantic request/response schemas
-│   ├── config.py           # Shared state, utilities, cleanup scheduler
+│   ├── config.py           # Compatibility layer (re-exports from core/)
+│   ├── core/               # Core state and constants
+│   │   ├── __init__.py
+│   │   ├── state.py        # Global state variables with asyncio locks
+│   │   └── constants.py    # File paths and threshold settings
 │   ├── routes/             # API endpoint handlers
+│   │   ├── __init__.py
 │   │   ├── downloads.py    # YouTube download & queue endpoints
 │   │   ├── separation.py   # Vocal separation endpoints
 │   │   ├── library.py      # Library management endpoints
 │   │   └── notifications.py # Notifications & system info
 │   ├── services/           # Business logic layer
+│   │   ├── __init__.py
 │   │   ├── download_service.py  # yt-dlp download logic
-│   │   └── queue_service.py     # Queue processing logic
+│   │   ├── queue_service.py     # Queue processing logic
+│   │   ├── separation_service.py # Vocal separation orchestration
+│   │   ├── persistence.py       # JSON data persistence layer
+│   │   └── cleanup.py           # Background cleanup scheduler
+│   ├── utils/              # Utility functions
+│   │   ├── __init__.py
+│   │   ├── file_ops.py     # Safe file operations
+│   │   ├── validation.py   # Input validation
+│   │   ├── helpers.py      # General helper functions
+│   │   └── async_tools.py  # Async utilities
 │   └── modules/            # Core processing modules
+│       ├── __init__.py
 │       ├── module_processor.py  # Main orchestrator
 │       ├── module_ffmpeg.py     # FFmpeg wrapper
 │       ├── module_ytdlp.py      # YouTube downloader
@@ -793,7 +732,7 @@ demucspleeter/
 │   │   │   └── NotificationContext.jsx
 │   │   └── api/            # API client
 │   │       └── index.js
-│   ├── package.json        # NPM dependencies (v0.0.5)
+│   ├── package.json        # NPM dependencies (v0.0.11)
 │   └── vite.config.js      # Vite configuration
 ├── data/                   # Persistent data files
 │   ├── library.json        # Processed files metadata

@@ -19,7 +19,8 @@ def run_yt_dlp(
     format_type: str = 'audio',
     format_id: str = None,
     subtitles: str = None,
-    auto_separate: bool = False
+    auto_separate: bool = False,
+    subfolder: str = None
 ):
     """Download video/audio from YouTube using yt-dlp."""
     import yt_dlp
@@ -37,8 +38,16 @@ def run_yt_dlp(
 
     active_downloads[task_id] = {"cancel_flag": False, "ydl": None}
 
-    output_dir = "download"
+    # Build output directory (optionally inside a subfolder)
+    if subfolder:
+        # Sanitize subfolder name to prevent path traversal and strip channel @ prefix
+        import re
+        safe_subfolder = re.sub(r'[\\/:*?"<>|]', '_', subfolder).lstrip('@').strip('. ')
+        output_dir = os.path.join("download", safe_subfolder)
+    else:
+        output_dir = "download"
     os.makedirs(output_dir, exist_ok=True)
+    log_console(f"Output directory: {os.path.abspath(output_dir)}", "info")
 
     progress_state = {"progress": 5, "current_step": "Fetching video info..."}
 
@@ -75,6 +84,15 @@ def run_yt_dlp(
                     eta_sec = int(eta) % 60
                     eta_str = f"{eta_min}:{eta_sec:02d}"
                 
+                info_dict = d.get('info_dict', {})
+                playlist_index = info_dict.get('playlist_index')
+                playlist_count = info_dict.get('playlist_count') or info_dict.get('n_entries')
+                raw_filename = d.get('filename', '') or ''
+                # Strip .part extension shown during partial downloads
+                clean_filename = os.path.basename(raw_filename)
+                if clean_filename.endswith('.part'):
+                    clean_filename = clean_filename[:-5]
+                
                 progress_state["current_step"] = f"Downloading... {progress:.1f}%"
                 tasks[task_id]["progress"] = scaled_progress
                 tasks[task_id]["current_step"] = progress_state["current_step"]
@@ -83,7 +101,10 @@ def run_yt_dlp(
                     "eta": eta_str,
                     "downloaded_bytes": downloaded_bytes,
                     "total_bytes": total_bytes,
-                    "progress": progress
+                    "progress": progress,
+                    "playlist_index": playlist_index,
+                    "playlist_count": playlist_count,
+                    "filename": clean_filename
                 }
                 # Periodically save (every 20%)
                 if int(progress) % 20 == 0:
@@ -101,6 +122,7 @@ def run_yt_dlp(
         'progress_hooks': [progress_hook],
         'quiet': False,  # Changed to False to ensure progress hooks work
         'no_warnings': True,
+        'ignoreerrors': True,
         'remote_components': ['ejs:github'],
         'impersonate': ImpersonateTarget(client='chrome'),
     }
@@ -152,7 +174,31 @@ def run_yt_dlp(
                 filename = f"{base}.mp3"
                 tasks[task_id]["current_step"] = "Converting to MP3..."
 
-            if os.path.exists(filename):
+            # Determine actual output file - yt-dlp may merge to a different ext
+            # e.g. prepare_filename gives .webm but merged output is .mp4
+            actual_filename = filename
+            if not os.path.exists(actual_filename):
+                base_no_ext = os.path.splitext(filename)[0]
+                # Try common merged extensions
+                for try_ext in ['.mp4', '.mkv', '.webm', '.mp3', '.m4a']:
+                    candidate = base_no_ext + try_ext
+                    if os.path.exists(candidate):
+                        actual_filename = candidate
+                        break
+                else:
+                    # Last resort: find the most recently modified media file in output_dir
+                    media_exts = {'.mp4', '.mkv', '.webm', '.mp3', '.m4a', '.wav', '.flac'}
+                    candidates = []
+                    for f in os.listdir(output_dir):
+                        fpath = os.path.join(output_dir, f)
+                        if os.path.isfile(fpath) and os.path.splitext(f)[1].lower() in media_exts:
+                            candidates.append((os.path.getmtime(fpath), fpath))
+                    if candidates:
+                        candidates.sort(reverse=True)
+                        actual_filename = candidates[0][1]
+                    
+            if os.path.exists(actual_filename):
+                filename = actual_filename
                 tasks[task_id]["progress"] = 95
                 tasks[task_id]["current_step"] = "Extracting metadata..."
 

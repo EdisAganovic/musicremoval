@@ -79,10 +79,10 @@ async def get_yt_formats(payload: dict):
             log_console(f"Fetching playlist/channel info: {url}", "info")
             
             ydl_opts = {
-                'quiet': False,
+                'quiet': True,
+                'ignoreerrors': True,
                 'noplaylist': False,
-                'extract_flat': False,
-                'playlistend': 100,
+                'extract_flat': 'in_playlist',
                 'remote_components': ['ejs:github'],
             }
 
@@ -92,14 +92,22 @@ async def get_yt_formats(payload: dict):
 
             info = await asyncio.to_thread(get_playlist_info)
             videos = []
-            entries = info.get('entries', []) if info.get('_type') == 'playlist' else [info]
+            entries = info.get('entries', []) if info.get('_type') in ['playlist', 'multi_video'] else [info]
+
+            # Convert generator/iterator to list if necessary
+            entries = list(entries)
 
             for entry in entries:
                 if entry:
+                    title = entry.get('title', 'Unknown')
+                    # Skip missing or explicitly private/deleted videos
+                    if not title or title.lower() in ['[private video]', '[deleted video]', 'private video', 'deleted video']:
+                        continue
+
                     videos.append({
                         "id": entry.get('id', ''),
-                        "title": entry.get('title', 'Unknown'),
-                        "thumbnail": entry.get('thumbnail', ''),
+                        "title": title,
+                        "thumbnail": entry.get('thumbnail', '') or next(iter(t['url'] for t in entry.get('thumbnails', []) if 'url' in t), ''),
                         "duration": format_duration(entry.get('duration', 0)),
                         "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
                     })
@@ -216,7 +224,7 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
     from services.persistence import save_tasks_sync
     save_tasks_sync()
     
-    background_tasks.add_task(run_yt_dlp, task_id, url, format_type, format_id, None, auto_separate)
+    background_tasks.add_task(run_yt_dlp, task_id, url, format_type, format_id, None, auto_separate, payload.get("subfolder"))
     return {"task_id": task_id}
 
 
@@ -224,11 +232,18 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
 async def cancel_download(payload: DownloadCancelRequest):
     """Cancel an active download."""
     if payload.task_id not in active_downloads:
-        # Check if already finished
+        # Check if already finished or stuck
         if payload.task_id in tasks:
             task = tasks[payload.task_id]
             if task.get("status") in ["completed", "failed", "cancelled"]:
                 return {"status": "already_finished"}
+            else:
+                # Force cancel a stuck task (e.g. after server restart)
+                task["status"] = "cancelled"
+                task["current_step"] = "Cancelled (stuck task)"
+                from services.persistence import save_tasks_sync
+                save_tasks_sync()
+                return {"status": "cancelled"}
         raise HTTPException(status_code=404, detail="Task not found")
 
     active_downloads[payload.task_id]["cancel_flag"] = True
@@ -245,6 +260,20 @@ async def cancel_download(payload: DownloadCancelRequest):
 
 
 # ============== Queue Routes ==============
+
+@router.post("/queue/stop")
+async def stop_queue():
+    """Stop the downloaded queue by removing unstarted items."""
+    removed = 0
+    # Create a copy since we modify while iterating
+    for item in list(download_queue):
+        if item.get("status") == "pending":
+            download_queue.remove(item)
+            removed += 1
+    if removed > 0:
+        save_queue()
+    return {"status": "stopped", "removed_items": removed}
+
 
 @router.post("/queue/add")
 async def add_to_queue(background_tasks: BackgroundTasks, payload: QueueAddRequest):
@@ -264,6 +293,7 @@ async def add_to_queue(background_tasks: BackgroundTasks, payload: QueueAddReque
         "format_type": payload.format,
         "format_id": payload.format_id,
         "auto_separate": payload.auto_separate,
+        "subfolder": payload.subfolder,
         "status": "pending",
         "task_id": None,
         "added_at": asyncio.get_event_loop().time()
@@ -293,6 +323,7 @@ async def add_to_queue_batch(background_tasks: BackgroundTasks, payload: QueueBa
                 "format_type": payload.format,
                 "format_id": payload.format_id,
                 "auto_separate": payload.auto_separate,
+                "subfolder": payload.subfolder,
                 "status": "pending",
                 "task_id": None,
                 "added_at": asyncio.get_event_loop().time(),

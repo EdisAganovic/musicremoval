@@ -181,7 +181,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 subprocess.run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
             except subprocess.CalledProcessError as e:
-                print(f"{Fore.RED}Demucs failed for short audio. Creating silence fallback.{Style.RESET_ALL}")
+                print(f"{Fore.RED}Demucs failed for short audio or no music inside. Creating silence fallback.{Style.RESET_ALL}")
                 demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
                 os.makedirs(os.path.dirname(demucs_vocal_wav_path), exist_ok=True)
                 silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", temp_audio_wav_path, "-af", "volume=0", demucs_vocal_wav_path]

@@ -42,7 +42,8 @@ async def process_queue():
             pending_item.get("format_type", "audio"),
             pending_item.get("format_id"),
             None,
-            pending_item.get("auto_separate", False)
+            pending_item.get("auto_separate", False),
+            pending_item.get("subfolder")
         )
 
         task_status = tasks.get(task_id, {})
@@ -53,8 +54,8 @@ async def process_queue():
 
         save_queue()
 
-        delay = random.randint(29, 49)
-        print(f"{Fore.YELLOW}Waiting {delay} seconds before next download (rate limiting)...{Style.RESET_ALL}")
+        delay = random.randint(3, 7)
+        print(f"{Fore.YELLOW}Waiting {delay} seconds before next download...{Style.RESET_ALL}")
         await asyncio.sleep(delay)
 
     queue_processing = False
