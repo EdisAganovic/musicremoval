@@ -271,7 +271,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 url,
                 format,
                 format_id: selectedFormatId,
-                auto_separate: autoSeparate
+                auto_separate: autoSeparate,
+                title: videoInfo?.title || ''
             });
 
             setUrl('');
@@ -1207,7 +1208,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-white text-sm font-medium truncate max-w-[200px] sm:max-w-md" title={item.url}>{item.url}</p>
+                                                            <p className="text-white text-sm font-medium truncate max-w-[200px] sm:max-w-md" title={item.title || item.url}>{item.title || item.url}</p>
                                                             <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
                                                                 <span className="capitalize">{item.format_type}</span>
                                                                 {item.auto_separate && (

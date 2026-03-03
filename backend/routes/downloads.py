@@ -290,6 +290,7 @@ async def add_to_queue(background_tasks: BackgroundTasks, payload: QueueAddReque
     queue_item = {
         "queue_id": str(uuid.uuid4()),
         "url": payload.url,
+        "title": payload.title or "",
         "format_type": payload.format,
         "format_id": payload.format_id,
         "auto_separate": payload.auto_separate,

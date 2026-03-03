@@ -48,6 +48,7 @@ class QueueAddRequest(BaseModel):
     subtitles: Optional[str] = None
     auto_separate: bool = False
     subfolder: Optional[str] = None
+    title: Optional[str] = None
 
 
 class QueueBatchRequest(BaseModel):
