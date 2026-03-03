@@ -1207,7 +1207,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                             )}
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-white text-sm font-medium truncate">{item.url}</p>
+                                                            <p className="text-white text-sm font-medium truncate max-w-[200px] sm:max-w-md" title={item.url}>{item.url}</p>
                                                             <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
                                                                 <span className="capitalize">{item.format_type}</span>
                                                                 {item.auto_separate && (

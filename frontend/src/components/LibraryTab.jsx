@@ -16,10 +16,10 @@ const LibraryTab = ({ onSeparate, isActive }) => {
     const [folderSizes, setFolderSizes] = useState({ download: '0 MB', nomusic: '0 MB' });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    
+
     // Modal state for delete confirmations
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'single' | 'bulk', id?: string, path?: string, count?: number }
-    
+
     // Context menu state
     const [contextMenu, setContextMenu] = useState(null); // { x, y, item }
 
@@ -97,25 +97,25 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         e.preventDefault();
         const menuWidth = 200;
         const menuHeight = 280;
-        
+
         // Use clientX/clientY for viewport-relative position
         let x = e.clientX;
         let y = e.clientY;
-        
+
         // If menu would go off right edge, position it to the left of cursor
         if (x + menuWidth > window.innerWidth) {
             x = x - menuWidth;
         }
-        
+
         // If menu would go off bottom edge, position it above cursor
         if (y + menuHeight > window.innerHeight) {
             y = y - menuHeight;
         }
-        
+
         // Ensure minimum margins
         x = Math.max(10, x);
         y = Math.max(10, y);
-        
+
         setContextMenu({ x, y, item });
     };
 
@@ -128,7 +128,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         try {
             // Find the item being deleted
             const itemToDelete = items.find(item => item.task_id === taskId);
-            
+
             // Optimistically remove from UI immediately
             setItems(prev => prev.filter(item => item.task_id !== taskId && item.result_files?.[0] !== filePath));
 
@@ -153,7 +153,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         try {
             // Store deleted items for potential undo
             const deletedItems = items.filter(item => selectedItems.includes(item.task_id));
-            
+
             // Optimistically remove from UI immediately
             setItems(prev => prev.filter(item => !selectedItems.includes(item.task_id)));
             setSelectedItems([]);
@@ -197,7 +197,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
 
     const executeRename = async () => {
         if (!renameConfirm || !renameConfirm.newName) return;
-        
+
         const loadingToast = toast.loading("Renaming file...");
         try {
             const { item, newName } = renameConfirm;
@@ -245,14 +245,14 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         // Folder filter - check if path contains the folder name (supports both absolute and relative paths)
         if (folderFilter === 'download') {
             const hasDownload = normalizedPath.includes('download/') ||
-                               normalizedPath.endsWith('/download') ||
-                               normalizedPath.endsWith('download');
+                normalizedPath.endsWith('/download') ||
+                normalizedPath.endsWith('download');
             if (!hasDownload) return false;
         }
         if (folderFilter === 'nomusic') {
             const hasNomusic = normalizedPath.includes('nomusic/') ||
-                              normalizedPath.endsWith('/nomusic') ||
-                              normalizedPath.endsWith('nomusic');
+                normalizedPath.endsWith('/nomusic') ||
+                normalizedPath.endsWith('nomusic');
             if (!hasNomusic) return false;
         }
 
@@ -285,7 +285,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         if (isActive) {
             handleRefresh();
         }
-        
+
         return () => {
             // Cleanup: abort pending requests on unmount or tab switch
             if (abortControllerRef.current) {
@@ -302,7 +302,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         const handleKeyDown = (e) => {
             // Context menu or modal open? Let them handle Esc
             if (deleteConfirm) return;
-            
+
             if (e.key === 'Escape') {
                 if (selectedItems.length > 0) {
                     setSelectedItems([]);
@@ -311,7 +311,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                     setContextMenu(null);
                 }
             }
-            
+
             if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
                 e.preventDefault();
                 searchInputRef.current?.focus();
@@ -330,21 +330,19 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                 <div className="flex gap-2">
                     <button
                         onClick={() => setFolderFilter('all')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${
-                            folderFilter === 'all'
-                                ? 'bg-primary-600/20 text-primary-400 border-primary-500/50'
-                                : 'bg-dark-800 text-gray-400 hover:text-white border-transparent'
-                        }`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${folderFilter === 'all'
+                            ? 'bg-primary-600/20 text-primary-400 border-primary-500/50'
+                            : 'bg-dark-800 text-gray-400 hover:text-white border-transparent'
+                            }`}
                     >
                         All Files
                     </button>
                     <button
                         onClick={() => setFolderFilter('download')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border flex items-center gap-2 ${
-                            folderFilter === 'download'
-                                ? 'bg-red-600/20 text-red-400 border-red-500/50'
-                                : 'bg-dark-800 text-gray-400 hover:text-white border-transparent'
-                        }`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border flex items-center gap-2 ${folderFilter === 'download'
+                            ? 'bg-red-600/20 text-red-400 border-red-500/50'
+                            : 'bg-dark-800 text-gray-400 hover:text-white border-transparent'
+                            }`}
                     >
                         <Download className="w-3.5 h-3.5" />
                         Download
@@ -352,11 +350,10 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                     </button>
                     <button
                         onClick={() => setFolderFilter('nomusic')}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border flex items-center gap-2 ${
-                            folderFilter === 'nomusic'
-                                ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50'
-                                : 'bg-dark-800 text-gray-400 hover:text-white border-transparent'
-                        }`}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border flex items-center gap-2 ${folderFilter === 'nomusic'
+                            ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/50'
+                            : 'bg-dark-800 text-gray-400 hover:text-white border-transparent'
+                            }`}
                     >
                         <FolderOpen className="w-3.5 h-3.5" />
                         NoMusic
@@ -370,14 +367,13 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                     <button
                         onClick={handleRefresh}
                         disabled={isRefreshing}
-                        className={`p-2 rounded-lg transition-all border ${
-                            isRefreshing
-                                ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 cursor-not-allowed'
-                                : 'bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 border-blue-500/30'
-                        }`}
+                        className={`p-2 rounded-lg transition-all border ${isRefreshing
+                            ? 'bg-blue-600/20 text-blue-400 border-blue-500/50 cursor-not-allowed'
+                            : 'bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 border-blue-500/30'
+                            }`}
                         title="Refresh library"
                     >
-                        <RefreshCw 
+                        <RefreshCw
                             className="w-4 h-4"
                             style={isRefreshing ? { animation: 'spin 1s linear infinite' } : {}}
                         />
@@ -494,10 +490,10 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-lg border border-white/10 shadow-xl">
-                    <table className="w-full">
+                    <table className="w-full table-fixed">
                         <thead className="bg-dark-900/80 border-b border-white/10">
                             <tr className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                                <th className="px-4 py-2.5 text-left w-10">
+                                <th className="px-4 py-2.5 text-left w-12">
                                     <input
                                         type="checkbox"
                                         checked={selectedItems.length === filteredItems.length && filteredItems.length > 0}
@@ -506,20 +502,19 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                     />
                                 </th>
                                 <th className="px-4 py-2.5 text-left">File</th>
-                                <th className="px-4 py-2.5 text-left w-24">Duration</th>
-                                <th className="px-4 py-2.5 text-left w-28">Quality</th>
-                                <th className="px-4 py-2.5 text-right w-40">Actions</th>
+                                <th className="px-4 py-2.5 text-left w-20 sm:w-24">Dur.</th>
+                                <th className="px-4 py-2.5 text-left w-24 hidden md:table-cell">Quality</th>
+                                <th className="px-4 py-2.5 text-right w-[140px] sm:w-44">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {filteredItems.map((item) => (
                                 <tr
                                     key={item.task_id}
-                                    className={`transition-all ${
-                                        selectedItems.includes(item.task_id)
-                                            ? 'bg-primary-500/5'
-                                            : 'bg-dark-800/40 hover:bg-dark-800/60'
-                                    }`}
+                                    className={`transition-all ${selectedItems.includes(item.task_id)
+                                        ? 'bg-primary-500/5'
+                                        : 'bg-dark-800/40 hover:bg-dark-800/60'
+                                        }`}
                                     onContextMenu={(e) => handleContextMenu(e, item)}
                                 >
                                     <td className="px-4 py-2">
@@ -542,7 +537,10 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                                     <Music className="w-4 h-4 text-white" />
                                                 )}
                                             </div>
-                                            <span className="text-sm font-medium text-white truncate max-w-md">
+                                            <span
+                                                className="text-sm font-medium text-white truncate max-w-full"
+                                                title={item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
+                                            >
                                                 {item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
                                             </span>
                                         </div>
@@ -550,12 +548,12 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                     <td className="px-4 py-2">
                                         <span className="text-xs text-gray-400">{item.metadata?.duration || 'N/A'}</span>
                                     </td>
-                                    <td className="px-4 py-2">
-                                        <div className="flex items-center space-x-1">
+                                    <td className="px-4 py-2 hidden md:table-cell">
+                                        <div className="flex items-center space-x-1 truncate">
                                             {item.metadata?.resolution && item.metadata.resolution !== 'N/A' && (
-                                                <span className="bg-dark-700 px-1.5 py-0.5 rounded text-xs text-gray-400">{item.metadata.resolution}</span>
+                                                <span className="bg-dark-700 px-1.5 py-0.5 rounded text-[10px] text-gray-400">{item.metadata.resolution}</span>
                                             )}
-                                            <span className="bg-dark-700 px-1.5 py-0.5 rounded text-xs text-gray-400">{item.metadata?.audio_codec || 'N/A'}</span>
+                                            <span className="bg-dark-700 px-1.5 py-0.5 rounded text-[10px] text-gray-400">{item.metadata?.audio_codec || 'N/A'}</span>
                                         </div>
                                     </td>
                                     <td className="px-4 py-2">
@@ -623,15 +621,15 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                 </div>
                                 <h3 className="text-xl font-bold text-white">Confirm Deletion</h3>
                             </div>
-                            
+
                             <p className="text-gray-300 mb-6">
-                                {deleteConfirm.type === 'bulk' 
+                                {deleteConfirm.type === 'bulk'
                                     ? `Are you sure you want to delete ${deleteConfirm.count} files from your library and disk?`
                                     : `Are you sure you want to delete this file from your library and disk?`}
-                                <br/><br/>
+                                <br /><br />
                                 <span className="text-red-400 font-medium text-sm">This action cannot be undone.</span>
                             </p>
-                            
+
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setDeleteConfirm(null)}
@@ -682,7 +680,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                 </div>
                                 <h3 className="text-xl font-bold text-white">Rename File</h3>
                             </div>
-                            
+
                             <div className="space-y-4 mb-6">
                                 <p className="text-xs text-gray-400">
                                     Enter a new name for the file. The extension will be preserved.
@@ -700,7 +698,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                     placeholder="Enter new filename"
                                 />
                             </div>
-                            
+
                             <div className="flex gap-3">
                                 <button
                                     onClick={() => setRenameConfirm(null)}
@@ -740,7 +738,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                     </div>
                     <button
                         onClick={() => {
-                            libraryAPI.openFile(contextMenu.item?.result_files?.[0]).catch(() => {});
+                            libraryAPI.openFile(contextMenu.item?.result_files?.[0]).catch(() => { });
                             setContextMenu(null);
                         }}
                         className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
@@ -760,7 +758,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                     </button>
                     <button
                         onClick={() => {
-                            libraryAPI.openFolder(contextMenu.item?.result_files?.[0]).catch(() => {});
+                            libraryAPI.openFolder(contextMenu.item?.result_files?.[0]).catch(() => { });
                             setContextMenu(null);
                         }}
                         className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2"

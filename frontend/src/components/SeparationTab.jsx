@@ -154,7 +154,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     let interval;
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 10;
-    
+
     if (taskId && (status === "processing" || status === "pending" || status === "uploading")) {
       interval = setInterval(async () => {
         try {
@@ -190,9 +190,9 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           // (prevents race conditions during server reloads)
           if (err.response?.status === 404) {
             if (consecutiveErrors > 15) {
-                setStatus("completed");
-                setTaskId(null);
-                clearInterval(interval);
+              setStatus("completed");
+              setTaskId(null);
+              clearInterval(interval);
             }
             return;
           }
@@ -214,7 +214,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     let interval;
     let consecutiveErrors = 0;
     const MAX_CONSECUTIVE_ERRORS = 10;
-    
+
     if (batchId && processingMode === "folder") {
       interval = setInterval(async () => {
         try {
@@ -355,7 +355,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       setStatus("processing");
       setProgress(0);
       setCurrentStep("Starting batch process...");
-      
+
       const response = await axios.post(`${BACKEND_URL}/api/folder-queue/process`, {
         queue_id: queueId,
         selected_files: selectedFiles,
@@ -416,7 +416,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         });
         setTaskId(response.data.task_id);
       }
-      
+
       setStatus("processing");
     } catch (err) {
       console.error("Separation failed:", err);
@@ -449,22 +449,20 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
       <div className="flex justify-center space-x-4 mb-6">
         <button
           onClick={() => { setProcessingMode("single"); setBatchFiles([]); setBatchId(null); }}
-          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center space-x-2 ${
-            processingMode === "single"
+          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center space-x-2 ${processingMode === "single"
               ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
               : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
-          }`}
+            }`}
         >
           <UploadCloud className="w-4 h-4" />
           <span>Single File</span>
         </button>
         <button
           onClick={() => { setProcessingMode("folder"); setFile(null); }}
-          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center space-x-2 ${
-            processingMode === "folder"
+          className={`px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center space-x-2 ${processingMode === "folder"
               ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
               : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
-          }`}
+            }`}
         >
           <FolderInput className="w-4 h-4" />
           <span>Process Folder</span>
@@ -477,11 +475,10 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           <button
             key={`model-${m}`}
             onClick={() => setModel(m)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent ${
-              model === m
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent ${model === m
                 ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
                 : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700"
-            }`}
+              }`}
           >
             <span className="capitalize">{m}</span>{" "}
             {m === "both" && "(Recommended)"}
@@ -510,7 +507,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   </div>
                 </div>
               </div>
-              
+
               <div className="space-y-3">
                 {/* Folder Path Input */}
                 <div className="flex items-center space-x-2">
@@ -542,7 +539,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                     )}
                   </button>
                 </div>
-                
+
                 <div className="flex items-start space-x-2 p-3 bg-dark-800/50 rounded-lg border border-white/5">
                   <span className="text-lg">💡</span>
                   <div className="text-xs text-gray-400 space-y-1">
@@ -605,24 +602,22 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                     {batchFiles.map((fileInfo, idx) => (
                       <div
                         key={`batch-file-${fileInfo.task_id || fileInfo.id || idx}-${idx}`}
-                        className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
-                          status === "processing"
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all ${status === "processing"
                             ? (fileInfo.status === "completed" ? "bg-emerald-600/10 border-emerald-500/30" :
-                               fileInfo.status === "failed" ? "bg-red-600/10 border-red-500/30" :
-                               fileInfo.status === "processing" ? "bg-primary-600/10 border-primary-500/30" :
-                               "bg-dark-800/80 border-white/10")
+                              fileInfo.status === "failed" ? "bg-red-600/10 border-red-500/30" :
+                                fileInfo.status === "processing" ? "bg-primary-600/10 border-primary-500/30" :
+                                  "bg-dark-800/80 border-white/10")
                             : (fileInfo.selected ? "bg-dark-800/80 border-white/10" : "bg-dark-900/50 border-white/5 opacity-60")
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center space-x-3 flex-1 min-w-0">
                           {status === "processing" ? (
                             /* Show status icon during processing */
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                              fileInfo.status === "completed" ? "bg-emerald-600/20" :
-                              fileInfo.status === "failed" ? "bg-red-600/20" :
-                              fileInfo.status === "processing" ? "bg-primary-600/20" :
-                              "bg-dark-700"
-                            }`}>
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${fileInfo.status === "completed" ? "bg-emerald-600/20" :
+                                fileInfo.status === "failed" ? "bg-red-600/20" :
+                                  fileInfo.status === "processing" ? "bg-primary-600/20" :
+                                    "bg-dark-700"
+                              }`}>
                               {fileInfo.status === "completed" ? (
                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
                               ) : fileInfo.status === "failed" ? (
@@ -643,7 +638,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm font-medium truncate" title={fileInfo.file_path || fileInfo.file}>
+                            <p className="text-white text-sm font-medium truncate max-w-[150px] sm:max-w-xs" title={fileInfo.file_path || fileInfo.file}>
                               {fileInfo.filename || (fileInfo.file || '').split(/[\\/]/).pop()}
                             </p>
                             {status !== "processing" && fileInfo.metadata?.duration && (
@@ -660,9 +655,9 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                             {status === "processing" && (
                               <p className="text-xs capitalize font-bold" style={{
                                 color: fileInfo.status === "completed" ? "#34d399" :
-                                       fileInfo.status === "failed" ? "#f87171" :
-                                       fileInfo.status === "processing" ? "#60a5fa" :
-                                       "#9ca3af"
+                                  fileInfo.status === "failed" ? "#f87171" :
+                                    fileInfo.status === "processing" ? "#60a5fa" :
+                                      "#9ca3af"
                               }}>
                                 {fileInfo.status || "queued"}
                               </p>
@@ -704,95 +699,94 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
       {/* Single File Drop Zone - Only show in single mode */}
       {processingMode === "single" && (
-      <motion.div
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        className={`relative group rounded-2xl border-2 border-dashed p-6 transition-all duration-300 cursor-pointer overflow-hidden
-                    ${
-                      dragging
-                        ? "border-primary-500 bg-primary-500/10"
-                        : "border-white/10 hover:border-primary-400/50 hover:bg-white/5"
-                    } ${file ? "bg-gradient-to-br from-dark-800 to-dark-900 border-primary-500/30" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => !status && fileInputRef.current.click()}
-      >
-        <input
-          type="file"
-          ref={fileInputRef}
-          className="hidden"
-          onChange={handleFileChange}
-          accept="audio/*,video/*"
-        />
+        <motion.div
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          className={`relative group rounded-2xl border-2 border-dashed p-6 transition-all duration-300 cursor-pointer overflow-hidden
+                    ${dragging
+              ? "border-primary-500 bg-primary-500/10"
+              : "border-white/10 hover:border-primary-400/50 hover:bg-white/5"
+            } ${file ? "bg-gradient-to-br from-dark-800 to-dark-900 border-primary-500/30" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => !status && fileInputRef.current.click()}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            onChange={handleFileChange}
+            accept="audio/*,video/*"
+          />
 
-        <div className="flex flex-col items-center justify-center text-center relative z-10">
-          <AnimatePresence mode="wait">
-            {file ? (
-              <motion.div
-                key="file-selected"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-4"
-              >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/30 mx-auto transform group-hover:rotate-3 transition-transform duration-300">
-                  <PlayCircle className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white tracking-tight">
-                    {file.name}
-                  </h3>
-                  {libraryFilePath ? (
-                    <p className="text-sm text-emerald-400 font-mono mt-1 flex items-center justify-center gap-2">
-                      <CheckCircle className="w-3 h-3" />
-                      From Library - Ready for Separation
-                    </p>
-                  ) : (
-                    <p className="text-sm text-primary-400 font-mono mt-1">
-                      {(file.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
+          <div className="flex flex-col items-center justify-center text-center relative z-10">
+            <AnimatePresence mode="wait">
+              {file ? (
+                <motion.div
+                  key="file-selected"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/30 mx-auto transform group-hover:rotate-3 transition-transform duration-300">
+                    <PlayCircle className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white tracking-tight truncate max-w-[250px] sm:max-w-md mx-auto" title={file.name}>
+                      {file.name}
+                    </h3>
+                    {libraryFilePath ? (
+                      <p className="text-sm text-emerald-400 font-mono mt-1 flex items-center justify-center gap-2">
+                        <CheckCircle className="w-3 h-3" />
+                        From Library - Ready for Separation
+                      </p>
+                    ) : (
+                      <p className="text-sm text-primary-400 font-mono mt-1">
+                        {(file.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    )}
+                  </div>
+                  {status !== "uploading" && status !== "processing" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReset();
+                      }}
+                      className="flex items-center justify-center mx-auto space-x-2 px-4 py-2 mt-4 text-xs font-bold text-white bg-dark-700 hover:bg-dark-600 border border-white/10 hover:border-white/20 rounded-xl transition-all shadow-lg group"
+                    >
+                      <RefreshCw className="w-4 h-4 text-primary-400 group-hover:rotate-180 transition-transform duration-500" />
+                      <span className="tracking-wide">Select new file</span>
+                    </button>
                   )}
-                </div>
-                {status !== "uploading" && status !== "processing" && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleReset();
-                    }}
-                    className="flex items-center justify-center mx-auto space-x-2 px-4 py-2 mt-4 text-xs font-bold text-white bg-dark-700 hover:bg-dark-600 border border-white/10 hover:border-white/20 rounded-xl transition-all shadow-lg group"
-                  >
-                    <RefreshCw className="w-4 h-4 text-primary-400 group-hover:rotate-180 transition-transform duration-500" />
-                    <span className="tracking-wide">Select new file</span>
-                  </button>
-                )}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="upload-prompt"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3 mx-auto group-hover:bg-primary-500/20 group-hover:border-primary-500/50 transition-colors duration-300">
-                  <UploadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary-400 transition-colors" />
-                </div>
-                <h3 className="text-base font-semibold text-gray-200 group-hover:text-white transition-colors">
-                  Click or Drag File Here
-                </h3>
-                <p className="text-gray-500 text-sm mt-2 max-w-xs mx-auto">
-                  Supports MP3, WAV, FLAC, MP4, MKV...
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="upload-prompt"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-3 mx-auto group-hover:bg-primary-500/20 group-hover:border-primary-500/50 transition-colors duration-300">
+                    <UploadCloud className="w-6 h-6 text-gray-400 group-hover:text-primary-400 transition-colors" />
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-200 group-hover:text-white transition-colors">
+                    Click or Drag File Here
+                  </h3>
+                  <p className="text-gray-500 text-sm mt-2 max-w-xs mx-auto">
+                    Supports MP3, WAV, FLAC, MP4, MKV...
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-        {/* Background Glow Effect */}
-        <div
-          className={`absolute inset-0 bg-primary-500/5 rounded-2xl transition-opacity duration-500 pointer-events-none ${dragging ? "opacity-100" : "opacity-0"}`}
-        />
-      </motion.div>
+          {/* Background Glow Effect */}
+          <div
+            className={`absolute inset-0 bg-primary-500/5 rounded-2xl transition-opacity duration-500 pointer-events-none ${dragging ? "opacity-100" : "opacity-0"}`}
+          />
+        </motion.div>
       )}
 
       {/* File Info / Metadata Card */}
@@ -864,15 +858,14 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             disabled={status === "processing" || !batchFiles.some(f => f.selected)}
             title={
               status === "processing" ? "Processing in progress..." :
-              !batchFiles.some(f => f.selected) ? "Select at least one file" :
-              "Start batch processing"
+                !batchFiles.some(f => f.selected) ? "Select at least one file" :
+                  "Start batch processing"
             }
             className={`
               relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-300 group
-              ${
-                status === "processing" || !batchFiles.some(f => f.selected)
-                  ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
-                  : "bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-primary-500/25 hover:shadow-primary-500/40"
+              ${status === "processing" || !batchFiles.some(f => f.selected)
+                ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
+                : "bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-primary-500/25 hover:shadow-primary-500/40"
               }
             `}
           >
@@ -900,18 +893,17 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             disabled={!file || status === "uploading" || status === "processing" || status === "pending"}
             title={
               !file ? "Please select a file first" :
-              status === "uploading" ? "Upload in progress..." :
-              status === "processing" || status === "pending" ? "Processing in progress..." :
-              "Start separation"
+                status === "uploading" ? "Upload in progress..." :
+                  status === "processing" || status === "pending" ? "Processing in progress..." :
+                    "Start separation"
             }
             className={`
               relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-300 group
-              ${
-                !file ||
+              ${!file ||
                 status === "uploading" ||
                 status === "processing"
-                  ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
-                  : "bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-primary-500/25 hover:shadow-primary-500/40"
+                ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
+                : "bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-primary-500/25 hover:shadow-primary-500/40"
               }
             `}
           >
@@ -935,57 +927,56 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           status === "processing" ||
           status === "pending" ||
           status === "completed") && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            className="bg-dark-900/50 backdrop-blur rounded-2xl p-6 border border-white/5 space-y-4 shadow-xl"
-          >
-            <div className="flex justify-between items-end">
-              <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-1">
-                  Status
-                </span>
-                <span className="text-gray-200 font-medium flex items-center space-x-2">
-                  {status === "completed" ? (
-                    <span className="text-emerald-400 flex items-center">
-                      <CheckCircle className="w-4 h-4 mr-1" /> Finished
-                    </span>
-                  ) : (
-                    <span className="animate-pulse text-primary-400">
-                      {currentStep || "Initializing..."}
-                    </span>
-                  )}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="bg-dark-900/50 backdrop-blur rounded-2xl p-6 border border-white/5 space-y-4 shadow-xl"
+            >
+              <div className="flex justify-between items-end">
+                <div className="flex flex-col">
+                  <span className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-1">
+                    Status
+                  </span>
+                  <span className="text-gray-200 font-medium flex items-center space-x-2">
+                    {status === "completed" ? (
+                      <span className="text-emerald-400 flex items-center">
+                        <CheckCircle className="w-4 h-4 mr-1" /> Finished
+                      </span>
+                    ) : (
+                      <span className="animate-pulse text-primary-400">
+                        {currentStep || "Initializing..."}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-500">
+                  {Math.round(progress)}%
                 </span>
               </div>
-              <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-gray-500">
-                {Math.round(progress)}%
-              </span>
-            </div>
 
-            {/* Custom Progress Bar */}
-            <div className="h-4 bg-dark-700/50 rounded-full overflow-hidden p-1 border border-white/5 backdrop-blur-sm">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ type: "spring", stiffness: 50, damping: 20 }}
-                className={`h-full rounded-full relative overflow-hidden transition-colors duration-500 ${
-                  status === "completed"
-                    ? "bg-emerald-500"
-                    : "bg-gradient-to-r from-primary-500 to-accent-500"
-                }`}
-              >
-                <div
-                  className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
-                  }}
-                ></div>
-              </motion.div>
-            </div>
-          </motion.div>
-        )}
+              {/* Custom Progress Bar */}
+              <div className="h-4 bg-dark-700/50 rounded-full overflow-hidden p-1 border border-white/5 backdrop-blur-sm">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ type: "spring", stiffness: 50, damping: 20 }}
+                  className={`h-full rounded-full relative overflow-hidden transition-colors duration-500 ${status === "completed"
+                      ? "bg-emerald-500"
+                      : "bg-gradient-to-r from-primary-500 to-accent-500"
+                    }`}
+                >
+                  <div
+                    className="absolute inset-0 bg-white/20 animate-[shimmer_2s_infinite]"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)",
+                    }}
+                  ></div>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
       </AnimatePresence>
 
       {/* Success Message */}
