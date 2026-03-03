@@ -31,10 +31,11 @@ import SeparationTab from './components/SeparationTab';
 import DownloaderTab from './components/DownloaderTab';
 import LibraryTab from './components/LibraryTab';
 import NotificationBell from './components/NotificationBell';
+import DiagnosticsPanel from './components/DiagnosticsPanel';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { APP_VERSION, APP_NAME, BACKEND_URL } from './config';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle } from 'lucide-react';
+import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle, Activity } from 'lucide-react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 
@@ -46,20 +47,21 @@ function AppContent() {
   const [consoleLogs, setConsoleLogs] = useState([]);
   const [systemInfo, setSystemInfo] = useState(null);
   const [analyzingProgress, setAnalyzingProgress] = useState({ current: 0, total: 0 });
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const consoleEndRef = useRef(null);
 
   // Parse console logs for playlist progress
   useEffect(() => {
     if (consoleLogs.length > 0) {
       const lastLog = consoleLogs[consoleLogs.length - 1];
-      
+
       // Look for "Downloading item X of Y" from yt-dlp
       if (lastLog && lastLog.message.includes('Downloading item') && lastLog.message.includes('of')) {
         const match = lastLog.message.match(/Downloading item (\d+) of (\d+)/);
         if (match) {
-          setAnalyzingProgress({ 
-            current: parseInt(match[1]), 
-            total: parseInt(match[2]) 
+          setAnalyzingProgress({
+            current: parseInt(match[1]),
+            total: parseInt(match[2])
           });
         }
       }
@@ -177,9 +179,8 @@ function AppContent() {
               className="relative p-2 bg-dark-800/80 hover:bg-dark-700 rounded-lg border border-white/10 transition-all group"
               title="View backend console logs"
             >
-              <Terminal className={`w-5 h-5 transition-colors ${
-                showConsole ? 'text-emerald-400' : 'text-gray-400 group-hover:text-white'
-              }`} />
+              <Terminal className={`w-5 h-5 transition-colors ${showConsole ? 'text-emerald-400' : 'text-gray-400 group-hover:text-white'
+                }`} />
               {consoleLogs.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full text-[9px] font-bold text-white flex items-center justify-center">
                   {consoleLogs.length > 99 ? '99+' : consoleLogs.length}
@@ -199,9 +200,8 @@ function AppContent() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`relative px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 z-10 flex items-center space-x-2 outline-none focus:outline-none ${
-                  activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-white'
-                }`}
+                className={`relative px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 z-10 flex items-center space-x-2 outline-none focus:outline-none ${activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-white'
+                  }`}
               >
                 {activeTab === tab && (
                   <motion.div
@@ -254,12 +254,12 @@ function AppContent() {
             style={{ display: activeTab === 'library' ? 'block' : 'none' }}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
-            <LibraryTab 
+            <LibraryTab
               isActive={activeTab === 'library'}
               onSeparate={(filePath) => {
                 setLibraryFileToSeparate(filePath);
                 setActiveTab('separation');
-              }} 
+              }}
             />
           </motion.div>
         </div>
@@ -325,12 +325,11 @@ function AppContent() {
                     {consoleLogs.map((log, idx) => (
                       <div
                         key={idx}
-                        className={`whitespace-pre-wrap break-words ${
-                          log.level === 'error' ? 'text-red-400 bg-red-900/20' :
+                        className={`whitespace-pre-wrap break-words ${log.level === 'error' ? 'text-red-400 bg-red-900/20' :
                           log.level === 'warning' ? 'text-yellow-400 bg-yellow-900/20' :
-                          log.level === 'success' ? 'text-emerald-400 bg-emerald-900/20' :
-                          'text-gray-300'
-                        } px-2 py-1 rounded`}
+                            log.level === 'success' ? 'text-emerald-400 bg-emerald-900/20' :
+                              'text-gray-300'
+                          } px-2 py-1 rounded`}
                       >
                         {log.message}
                       </div>
@@ -373,6 +372,18 @@ function AppContent() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
+                    {/* Run Diagnostics Button */}
+                    <button
+                      onClick={() => {
+                        setShowSettings(false);
+                        setShowDiagnostics(true);
+                      }}
+                      className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 border border-amber-500/30"
+                      title="Run system diagnostics for debugging"
+                    >
+                      <Activity className="w-3.5 h-3.5" />
+                      <span>Diagnostics</span>
+                    </button>
                     {/* Copy Button */}
                     <button
                       onClick={() => {
@@ -406,9 +417,9 @@ function AppContent() {
 
 ### Package Versions
 ${Object.entries(systemInfo.packages)
-  .filter(([pkg]) => pkg !== 'fdk_aac')
-  .map(([pkg, version]) => `- **${pkg}:** ${version}`)
-  .join('\n')}
+                            .filter(([pkg]) => pkg !== 'fdk_aac')
+                            .map(([pkg, version]) => `- **${pkg}:** ${version}`)
+                            .join('\n')}
 `;
                         navigator.clipboard.writeText(markdown);
                         // Show brief success feedback
@@ -518,9 +529,8 @@ ${Object.entries(systemInfo.packages)
                           </div>
                           <div>
                             <span className="text-gray-500">Free Space:</span>
-                            <p className={`font-medium ${
-                              parseFloat(systemInfo.storage.free) < 10 ? 'text-red-400' : 'text-white'
-                            }`}>{systemInfo.storage.free}</p>
+                            <p className={`font-medium ${parseFloat(systemInfo.storage.free) < 10 ? 'text-red-400' : 'text-white'
+                              }`}>{systemInfo.storage.free}</p>
                           </div>
                           <div className="col-span-2">
                             <span className="text-gray-500">Output Folder:</span>
@@ -589,16 +599,14 @@ ${Object.entries(systemInfo.packages)
                                 <span className="text-gray-500 capitalize">{pkg.replace(/-/g, ' ')}:</span>
                                 {pkg === 'ffmpeg' ? (
                                   <p className="flex items-center space-x-2 mt-0.5">
-                                    <span className={`font-medium ${
-                                      systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-white'
-                                    }`}>
+                                    <span className={`font-medium ${systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-white'
+                                      }`}>
                                       {version}
                                     </span>
-                                    <span className={`text-xs ${
-                                      systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-emerald-400'
-                                    }`}>
-                                      {systemInfo.packages.fdk_aac === false 
-                                        ? '(FDK_AAC missing)' 
+                                    <span className={`text-xs ${systemInfo.packages.fdk_aac === false ? 'text-red-400' : 'text-emerald-400'
+                                      }`}>
+                                      {systemInfo.packages.fdk_aac === false
+                                        ? '(FDK_AAC missing)'
                                         : '(FDK_AAC installed)'}
                                     </span>
                                   </p>
@@ -606,7 +614,7 @@ ${Object.entries(systemInfo.packages)
                                   <p className="text-white font-medium">{version}</p>
                                 )}
                               </div>
-                          ))}
+                            ))}
                         </div>
                       </div>
                     </div>
@@ -614,6 +622,13 @@ ${Object.entries(systemInfo.packages)
                 </div>
               </motion.div>
             </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Diagnostics Panel */}
+        <AnimatePresence>
+          {showDiagnostics && (
+            <DiagnosticsPanel onClose={() => setShowDiagnostics(false)} />
           )}
         </AnimatePresence>
       </div>

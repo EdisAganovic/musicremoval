@@ -45,11 +45,13 @@ from routes.downloads import router as downloads_router
 from routes.separation import router as separation_router
 from routes.library import router as library_router
 from routes.notifications import router as notifications_router
+from routes.diagnostics import router as diagnostics_router
 
 app.include_router(downloads_router)
 app.include_router(separation_router)
 app.include_router(library_router)
 app.include_router(notifications_router)
+app.include_router(diagnostics_router)
 
 
 # ============== Startup/Shutdown Events ==============
