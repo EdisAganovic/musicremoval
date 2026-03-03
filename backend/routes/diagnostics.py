@@ -9,6 +9,9 @@ Provides comprehensive diagnostics:
   - Model file presence check (pretrained_models/)
   - Test separation on a short audio snippet
   - System info (OS, CPU, RAM)
+
+NOTE: All heavy operations (torch import, demucs import, nvidia-smi) run in
+      a thread pool with individual timeouts so the endpoint never hangs.
 """
 import os
 import sys
@@ -19,10 +22,27 @@ import subprocess
 import traceback
 import tempfile
 import uuid
+import asyncio
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from fastapi import APIRouter, BackgroundTasks
 from typing import Optional
 
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
+
+# Shared thread pool for diagnostics (avoids blocking the async loop)
+_diag_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="diag")
+
+
+def _run_with_timeout(fn, timeout=15):
+    """Run a function in a thread with a timeout. Returns result or error dict."""
+    import concurrent.futures
+    future = _diag_pool.submit(fn)
+    try:
+        return future.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        return {"error": f"Timed out after {timeout}s", "timed_out": True}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 def _get_package_version(package_name: str) -> str:
@@ -49,16 +69,9 @@ def _get_disk_space(path: str) -> dict:
         return {"path": path, "error": str(e)}
 
 
-@router.get("/health")
-async def full_health_check():
-    """
-    Comprehensive system health check.
-    Returns all diagnostic info needed to debug Demucs/separation issues.
-    """
-    results = {}
-
-    # 1. System Info
-    results["system"] = {
+def _check_system():
+    """Gather basic system info (fast, no heavy imports)."""
+    info = {
         "os": platform.system(),
         "os_version": platform.version(),
         "os_release": platform.release(),
@@ -68,35 +81,42 @@ async def full_health_check():
         "cpu_count": os.cpu_count(),
         "cwd": os.getcwd(),
     }
-
-    # RAM info
     try:
         import psutil
         mem = psutil.virtual_memory()
-        results["system"]["ram_total_gb"] = round(mem.total / (1024**3), 2)
-        results["system"]["ram_available_gb"] = round(mem.available / (1024**3), 2)
-        results["system"]["ram_percent_used"] = mem.percent
+        info["ram_total_gb"] = round(mem.total / (1024**3), 2)
+        info["ram_available_gb"] = round(mem.available / (1024**3), 2)
+        info["ram_percent_used"] = mem.percent
     except ImportError:
-        results["system"]["ram_info"] = "psutil not installed (install for RAM details)"
+        info["ram_info"] = "psutil not installed (install for RAM details)"
+    return info
 
-    # 2. Package Versions
+
+def _check_packages():
+    """Get versions of key packages (fast, uses importlib.metadata)."""
     packages = [
         "torch", "torchaudio", "torchvision",
         "demucs", "spleeter",
         "numpy", "scipy", "soundfile",
         "yt-dlp", "fastapi", "uvicorn",
     ]
-    results["packages"] = {pkg: _get_package_version(pkg) for pkg in packages}
+    return {pkg: _get_package_version(pkg) for pkg in packages}
 
-    # 3. CUDA / GPU
+
+def _check_cuda():
+    """Check CUDA/GPU availability. This is the SLOW one (imports torch)."""
     cuda_info = {"available": False}
     try:
         import torch
         cuda_info["available"] = torch.cuda.is_available()
         cuda_info["torch_version"] = torch.__version__
         cuda_info["torch_cuda_version"] = getattr(torch.version, "cuda", None)
-        cuda_info["cudnn_version"] = str(torch.backends.cudnn.version()) if torch.backends.cudnn.is_available() else None
-        cuda_info["cudnn_enabled"] = torch.backends.cudnn.enabled
+        try:
+            cuda_info["cudnn_version"] = str(torch.backends.cudnn.version()) if torch.backends.cudnn.is_available() else None
+            cuda_info["cudnn_enabled"] = torch.backends.cudnn.enabled
+        except Exception:
+            cuda_info["cudnn_version"] = None
+            cuda_info["cudnn_enabled"] = False
 
         if torch.cuda.is_available():
             cuda_info["device_count"] = torch.cuda.device_count()
@@ -111,16 +131,15 @@ async def full_health_check():
                     "minor": props.minor,
                     "multi_processor_count": props.multi_processor_count,
                 })
-            # Current memory usage
             cuda_info["memory_allocated_gb"] = round(torch.cuda.memory_allocated() / (1024**3), 3)
             cuda_info["memory_reserved_gb"] = round(torch.cuda.memory_reserved() / (1024**3), 3)
         else:
             cuda_info["reason"] = "torch.cuda.is_available() returned False"
-            # Check if CUDA toolkit is visible
+            # Quick nvidia-smi check (5s timeout)
             try:
                 nvidia_smi = subprocess.run(
                     ["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
-                    capture_output=True, text=True, timeout=10
+                    capture_output=True, text=True, timeout=5
                 )
                 if nvidia_smi.returncode == 0:
                     cuda_info["nvidia_smi_output"] = nvidia_smi.stdout.strip()
@@ -129,6 +148,8 @@ async def full_health_check():
                     cuda_info["nvidia_smi_error"] = nvidia_smi.stderr.strip()
             except FileNotFoundError:
                 cuda_info["nvidia_smi"] = "nvidia-smi not found (no NVIDIA drivers?)"
+            except subprocess.TimeoutExpired:
+                cuda_info["nvidia_smi"] = "nvidia-smi timed out"
             except Exception as e:
                 cuda_info["nvidia_smi_error"] = str(e)
 
@@ -137,34 +158,88 @@ async def full_health_check():
     except Exception as e:
         cuda_info["error"] = str(e)
 
-    results["cuda"] = cuda_info
+    return cuda_info
 
-    # 4. FFmpeg
+
+def _check_ffmpeg():
+    """Check FFmpeg binary."""
     ffmpeg_info = {}
     try:
         from modules.module_ffmpeg import FFMPEG_EXE
         ffmpeg_info["path"] = FFMPEG_EXE
         ffmpeg_info["exists"] = os.path.exists(FFMPEG_EXE)
         if os.path.exists(FFMPEG_EXE):
-            result = subprocess.run([FFMPEG_EXE, "-version"], capture_output=True, text=True, timeout=10)
+            result = subprocess.run([FFMPEG_EXE, "-version"], capture_output=True, text=True, timeout=5)
             first_line = result.stdout.split("\n")[0] if result.stdout else "unknown"
             ffmpeg_info["version"] = first_line
         else:
             ffmpeg_info["error"] = "FFmpeg binary not found at expected path"
     except Exception as e:
         ffmpeg_info["error"] = str(e)
+    return ffmpeg_info
 
-    results["ffmpeg"] = ffmpeg_info
 
-    # 5. Disk Space
-    results["disk"] = {
+def _check_demucs_import():
+    """Try importing demucs (can be slow)."""
+    demucs_import = {}
+    try:
+        import demucs
+        demucs_import["importable"] = True
+        demucs_import["location"] = os.path.dirname(demucs.__file__)
+    except ImportError as e:
+        demucs_import["importable"] = False
+        demucs_import["error"] = str(e)
+    except Exception as e:
+        demucs_import["importable"] = False
+        demucs_import["error"] = str(e)
+
+    try:
+        import demucs.separate
+        demucs_import["separate_importable"] = True
+    except Exception as e:
+        demucs_import["separate_importable"] = False
+        demucs_import["separate_error"] = str(e)
+
+    return demucs_import
+
+
+def _check_disk_and_dirs():
+    """Check disk space and key directories (fast)."""
+    disk = {
         "project_root": _get_disk_space(os.getcwd()),
         "download_dir": _get_disk_space(os.path.join(os.getcwd(), "download")),
         "nomusic_dir": _get_disk_space(os.path.join(os.getcwd(), "nomusic")),
         "temp_dir": _get_disk_space(tempfile.gettempdir()),
     }
 
-    # 6. Model Files
+    key_dirs = {
+        "download": os.path.join(os.getcwd(), "download"),
+        "nomusic": os.path.join(os.getcwd(), "nomusic"),
+        "uploads": os.path.join(os.getcwd(), "uploads"),
+        "_temp": os.path.join(os.getcwd(), "_temp"),
+        "_processing_intermediates": os.path.join(os.getcwd(), "_processing_intermediates"),
+        "data": os.path.join(os.getcwd(), "data"),
+    }
+    directories = {}
+    for name, path in key_dirs.items():
+        exists = os.path.isdir(path)
+        file_count = 0
+        if exists:
+            try:
+                file_count = len(os.listdir(path))
+            except Exception:
+                pass
+        directories[name] = {
+            "path": path,
+            "exists": exists,
+            "file_count": file_count,
+        }
+
+    return {"disk": disk, "directories": directories}
+
+
+def _check_models():
+    """Check model files."""
     models_info = {}
     pretrained_dir = os.path.join(os.getcwd(), "pretrained_models")
     models_info["pretrained_dir_exists"] = os.path.isdir(pretrained_dir)
@@ -183,7 +258,6 @@ async def full_health_check():
         models_info["files"] = []
         models_info["total_files"] = 0
 
-    # Check torch hub cache for demucs models
     torch_hub_dir = os.path.join(os.path.expanduser("~"), ".cache", "torch", "hub", "checkpoints")
     models_info["torch_hub_cache"] = torch_hub_dir
     models_info["torch_hub_exists"] = os.path.isdir(torch_hub_dir)
@@ -200,54 +274,62 @@ async def full_health_check():
     else:
         models_info["hub_files"] = []
 
-    results["models"] = models_info
+    return models_info
 
-    # 7. Key Directories
-    key_dirs = {
-        "download": os.path.join(os.getcwd(), "download"),
-        "nomusic": os.path.join(os.getcwd(), "nomusic"),
-        "uploads": os.path.join(os.getcwd(), "uploads"),
-        "_temp": os.path.join(os.getcwd(), "_temp"),
-        "_processing_intermediates": os.path.join(os.getcwd(), "_processing_intermediates"),
-        "data": os.path.join(os.getcwd(), "data"),
-    }
-    results["directories"] = {}
-    for name, path in key_dirs.items():
-        exists = os.path.isdir(path)
-        file_count = 0
-        if exists:
-            try:
-                file_count = len(os.listdir(path))
-            except Exception:
-                pass
-        results["directories"][name] = {
-            "path": path,
-            "exists": exists,
-            "file_count": file_count,
+
+@router.get("/health")
+async def full_health_check():
+    """
+    Comprehensive system health check.
+    Each section runs in a thread pool with individual timeouts
+    so a slow import (torch/demucs) doesn't block everything.
+    """
+    loop = asyncio.get_event_loop()
+    results = {}
+
+    # Fast checks - run directly (no heavy imports)
+    results["system"] = _check_system()
+    results["packages"] = _check_packages()
+
+    disk_dirs = _check_disk_and_dirs()
+    results["disk"] = disk_dirs["disk"]
+    results["directories"] = disk_dirs["directories"]
+
+    # Heavy checks - run in thread pool with timeouts
+    # These run concurrently for speed
+    cuda_future = loop.run_in_executor(_diag_pool, _check_cuda)
+    ffmpeg_future = loop.run_in_executor(_diag_pool, _check_ffmpeg)
+
+    # CUDA check with 20s timeout (importing torch can be slow)
+    try:
+        results["cuda"] = await asyncio.wait_for(cuda_future, timeout=20)
+    except asyncio.TimeoutError:
+        results["cuda"] = {
+            "available": False,
+            "error": "CUDA check timed out after 20s (torch import is very slow on this machine)",
+            "timed_out": True,
         }
 
-    # 8. Demucs Quick Import Test
-    demucs_import = {}
+    # FFmpeg check with 10s timeout
     try:
-        import demucs
-        demucs_import["importable"] = True
-        demucs_import["location"] = os.path.dirname(demucs.__file__)
-    except ImportError as e:
-        demucs_import["importable"] = False
-        demucs_import["error"] = str(e)
-    except Exception as e:
-        demucs_import["importable"] = False
-        demucs_import["error"] = str(e)
+        results["ffmpeg"] = await asyncio.wait_for(ffmpeg_future, timeout=10)
+    except asyncio.TimeoutError:
+        results["ffmpeg"] = {"error": "FFmpeg check timed out after 10s", "timed_out": True}
 
-    # Try importing demucs.separate  
+    # Model files (fast, filesystem only)
+    results["models"] = _check_models()
+
+    # Demucs import test with 20s timeout
+    demucs_future = loop.run_in_executor(_diag_pool, _check_demucs_import)
     try:
-        import demucs.separate
-        demucs_import["separate_importable"] = True
-    except Exception as e:
-        demucs_import["separate_importable"] = False
-        demucs_import["separate_error"] = str(e)
-
-    results["demucs_import"] = demucs_import
+        results["demucs_import"] = await asyncio.wait_for(demucs_future, timeout=20)
+    except asyncio.TimeoutError:
+        results["demucs_import"] = {
+            "importable": False,
+            "error": "Demucs import timed out after 20s",
+            "timed_out": True,
+            "separate_importable": False,
+        }
 
     return results
 

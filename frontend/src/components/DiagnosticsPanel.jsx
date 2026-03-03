@@ -26,6 +26,9 @@ const StatusBadge = ({ status }) => {
     if (status === 'running') {
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400"><Loader2 className="w-3 h-3 mr-1 animate-spin" />RUNNING</span>;
     }
+    if (status === 'timeout') {
+        return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/20 text-orange-400"><AlertTriangle className="w-3 h-3 mr-1" />TIMEOUT</span>;
+    }
     return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400">N/A</span>;
 };
 
@@ -88,7 +91,7 @@ const DiagnosticsPanel = ({ onClose }) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get(`${BACKEND_URL}/api/diagnostics/health`, { timeout: 30000 });
+            const response = await axios.get(`${BACKEND_URL}/api/diagnostics/health`, { timeout: 60000 });
             setHealthData(response.data);
         } catch (err) {
             setError(err.response?.data?.detail || err.message || 'Failed to fetch diagnostics');
@@ -246,8 +249,8 @@ const DiagnosticsPanel = ({ onClose }) => {
                             onClick={copyReport}
                             disabled={!healthData}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${copied
-                                    ? 'bg-emerald-600/20 text-emerald-400'
-                                    : 'bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white border border-white/10'
+                                ? 'bg-emerald-600/20 text-emerald-400'
+                                : 'bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white border border-white/10'
                                 }`}
                             title="Copy full report to clipboard"
                         >
@@ -274,9 +277,12 @@ const DiagnosticsPanel = ({ onClose }) => {
                 {/* Content */}
                 <div className="p-5 overflow-y-auto space-y-3" style={{ maxHeight: '70vh' }}>
                     {loading && !healthData && (
-                        <div className="flex items-center justify-center py-16">
-                            <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-                            <span className="ml-3 text-gray-400">Running diagnostics...</span>
+                        <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                            <div className="flex items-center">
+                                <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+                                <span className="ml-3 text-gray-400">Running diagnostics...</span>
+                            </div>
+                            <p className="text-[10px] text-gray-600">CUDA and Demucs checks may take up to 20 seconds on slower machines</p>
                         </div>
                     )}
 
@@ -296,12 +302,17 @@ const DiagnosticsPanel = ({ onClose }) => {
                             <CollapsibleSection
                                 title="CUDA / GPU"
                                 icon={Zap}
-                                iconColor={healthData.cuda?.available ? 'text-emerald-400' : 'text-red-400'}
-                                status={healthData.cuda?.available}
+                                iconColor={healthData.cuda?.timed_out ? 'text-orange-400' : healthData.cuda?.available ? 'text-emerald-400' : 'text-red-400'}
+                                status={healthData.cuda?.timed_out ? 'timeout' : healthData.cuda?.available}
                                 defaultOpen={true}
                             >
                                 <div className="space-y-0">
-                                    <InfoRow label="CUDA Available" value={healthData.cuda?.available ? 'Yes ✓' : 'No ✗'} status={healthData.cuda?.available} />
+                                    {healthData.cuda?.timed_out && (
+                                        <div className="mb-2 p-2 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                            <p className="text-xs text-orange-400"><AlertTriangle className="w-3 h-3 inline mr-1" />CUDA check timed out. PyTorch import is very slow on this machine. Try restarting the backend and running diagnostics again.</p>
+                                        </div>
+                                    )}
+                                    <InfoRow label="CUDA Available" value={healthData.cuda?.timed_out ? 'Check timed out' : healthData.cuda?.available ? 'Yes ✓' : 'No ✗'} status={healthData.cuda?.timed_out ? 'timeout' : healthData.cuda?.available} />
                                     <InfoRow label="PyTorch Version" value={healthData.cuda?.torch_version} mono />
                                     <InfoRow label="CUDA Version" value={healthData.cuda?.torch_cuda_version || 'N/A'} mono />
                                     <InfoRow label="cuDNN Version" value={healthData.cuda?.cudnn_version || 'N/A'} mono />
@@ -345,8 +356,8 @@ const DiagnosticsPanel = ({ onClose }) => {
                             <CollapsibleSection
                                 title="Demucs Module"
                                 icon={Activity}
-                                iconColor={healthData.demucs_import?.importable ? 'text-emerald-400' : 'text-red-400'}
-                                status={healthData.demucs_import?.importable}
+                                iconColor={healthData.demucs_import?.timed_out ? 'text-orange-400' : healthData.demucs_import?.importable ? 'text-emerald-400' : 'text-red-400'}
+                                status={healthData.demucs_import?.timed_out ? 'timeout' : healthData.demucs_import?.importable}
                             >
                                 <InfoRow label="Importable" value={healthData.demucs_import?.importable ? 'Yes ✓' : 'No ✗'} status={healthData.demucs_import?.importable} />
                                 <InfoRow label="demucs.separate" value={healthData.demucs_import?.separate_importable ? 'Yes ✓' : 'No ✗'} status={healthData.demucs_import?.separate_importable} />
@@ -445,7 +456,7 @@ const DiagnosticsPanel = ({ onClose }) => {
                                                 <div className="flex-1 h-2 bg-dark-900 rounded-full overflow-hidden">
                                                     <div
                                                         className={`h-full rounded-full ${info.percent_used > 90 ? 'bg-red-500' :
-                                                                info.percent_used > 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                                                            info.percent_used > 75 ? 'bg-amber-500' : 'bg-emerald-500'
                                                             }`}
                                                         style={{ width: `${info.percent_used}%` }}
                                                     />
@@ -500,8 +511,8 @@ const DiagnosticsPanel = ({ onClose }) => {
                                         onClick={runDemucsTest}
                                         disabled={testRunning}
                                         className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center space-x-2 ${testRunning
-                                                ? 'bg-amber-900/30 text-amber-400/50 cursor-not-allowed'
-                                                : 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 hover:border-amber-500/50'
+                                            ? 'bg-amber-900/30 text-amber-400/50 cursor-not-allowed'
+                                            : 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-400 border border-amber-500/30 hover:border-amber-500/50'
                                             }`}
                                     >
                                         {testRunning ? (
@@ -523,8 +534,8 @@ const DiagnosticsPanel = ({ onClose }) => {
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className={`mt-3 p-3 rounded-lg border ${testResult.success
-                                                ? 'bg-emerald-500/10 border-emerald-500/20'
-                                                : 'bg-red-500/10 border-red-500/20'
+                                            ? 'bg-emerald-500/10 border-emerald-500/20'
+                                            : 'bg-red-500/10 border-red-500/20'
                                             }`}
                                     >
                                         <div className="flex items-center space-x-2 mb-2">
@@ -545,8 +556,8 @@ const DiagnosticsPanel = ({ onClose }) => {
                                             <div className="mt-2 grid grid-cols-4 gap-2">
                                                 {Object.entries(testResult.stems_found).map(([stem, info]) => (
                                                     <div key={stem} className={`text-[10px] p-1.5 rounded text-center ${info.exists
-                                                            ? 'bg-emerald-500/10 text-emerald-400'
-                                                            : 'bg-red-500/10 text-red-400'
+                                                        ? 'bg-emerald-500/10 text-emerald-400'
+                                                        : 'bg-red-500/10 text-red-400'
                                                         }`}>
                                                         {info.exists ? '✓' : '✗'} {stem}
                                                         {info.size_kb && <span className="block text-gray-500">{info.size_kb} KB</span>}
