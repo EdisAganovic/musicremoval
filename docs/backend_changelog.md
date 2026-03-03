@@ -1,5 +1,26 @@
 # Backend Changelog
 
+## [0.0.11] - 2026-03-04 🔧
+
+### [Added]
+- **Diagnostics API**: New `/api/diagnostics/health` endpoint with comprehensive system checks (CUDA, FFmpeg, packages, disk, models, Demucs import).
+- **Live Demucs Test**: `POST /api/diagnostics/test-demucs` runs a 5-second separation test with status polling.
+- **Process Manager**: New `services/process_manager.py` — tracks all child subprocesses (Demucs, FFmpeg, Spleeter) and kills them on app shutdown or crash. Prevents zombie `python.exe`/`ffmpeg.exe` processes.
+- **Startup Orphan Cleanup**: On launch, automatically kills stale processes left over from previous crashes.
+- **Signal Handlers**: SIGINT/SIGTERM now trigger graceful child process cleanup before exit.
+- **Process API**: `GET /api/diagnostics/processes`, `POST /api/diagnostics/kill-processes`, `POST /api/diagnostics/kill-stale` for manual process management.
+- **FFmpeg Shared DLLs**: New `module_ffmpeg_shared.py` auto-downloads BtbN's FFmpeg shared build (~90MB) on first startup when `torchcodec` is installed. Required for Demucs/torchaudio on Windows. Cached in `ffmpeg_shared/` folder.
+- **Troubleshooting Guide**: New `docs/SETUP_TROUBLESHOOTING.md` documenting FFmpeg builds, CUDA mismatches, Defender issues, and zombie processes.
+
+### [Fixed]
+- **Diagnostics Timeout**: All heavy checks (torch import, Demucs import, nvidia-smi) now run in a thread pool with individual async timeouts (20s). Prevents the health endpoint from hanging forever on slow machines.
+- **Playlist Single Download**: Added `noplaylist: True` to `yt-dlp` options in `download_service.py`. Selecting 1 video from a 50-video playlist no longer downloads all 50.
+
+### [Changed]
+- `module_demucs.py`: All `subprocess.run()` calls replaced with `tracked_run()` from process manager.
+- `module_spleeter.py`: All `subprocess.run()` calls replaced with `tracked_run()` from process manager.
+
+---
 ## [0.0.11] - 2026-03-03 ⚙️
 
 ### [Fixed]

@@ -176,6 +176,14 @@ def _check_ffmpeg():
             ffmpeg_info["error"] = "FFmpeg binary not found at expected path"
     except Exception as e:
         ffmpeg_info["error"] = str(e)
+
+    # Check shared FFmpeg DLLs (for torchcodec/torchaudio)
+    try:
+        from modules.module_ffmpeg_shared import get_shared_ffmpeg_info
+        ffmpeg_info["shared"] = get_shared_ffmpeg_info()
+    except Exception as e:
+        ffmpeg_info["shared"] = {"error": str(e)}
+
     return ffmpeg_info
 
 
@@ -521,3 +529,26 @@ async def get_test_status(task_id: str):
     if task_id not in tasks:
         return {"error": "Test not found", "task_id": task_id}
     return tasks[task_id]
+
+
+@router.get("/processes")
+async def get_active_processes():
+    """Get all currently tracked child processes."""
+    from services.process_manager import get_active_processes
+    return {"processes": get_active_processes()}
+
+
+@router.post("/kill-processes")
+async def kill_all_processes():
+    """Kill all tracked child processes (emergency cleanup)."""
+    from services.process_manager import cleanup_all_children
+    cleanup_all_children(reason="manual API call")
+    return {"status": "ok", "message": "All child processes terminated"}
+
+
+@router.post("/kill-stale")
+async def kill_stale():
+    """Kill orphaned demucs/ffmpeg/spleeter processes from previous runs."""
+    from services.process_manager import kill_stale_processes
+    kill_stale_processes()
+    return {"status": "ok", "message": "Stale process cleanup complete"}

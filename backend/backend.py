@@ -6,6 +6,7 @@ The actual business logic is in the services/ and routes/ modules.
 """
 import os
 import sys
+import signal
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -70,12 +71,20 @@ async def startup_event():
     print(f"{Fore.GREEN}  DemucsPleeter Backend Starting...{Style.RESET_ALL}")
     print(f"{Fore.GREEN}{'='*60}{Style.RESET_ALL}\n")
 
+    # Kill any stale processes from previous crashes
+    from services.process_manager import kill_stale_processes, cleanup_all_children
+    kill_stale_processes()
+
     # Initialize data directory and create missing JSON files
     init_data_directory()
 
-    # Ensure FFmpeg is present
+    # Ensure FFmpeg is present (custom static build for FDK-AAC)
     from modules.module_ffmpeg import download_ffmpeg
     download_ffmpeg()
+
+    # Ensure FFmpeg shared DLLs are available for torchcodec/torchaudio (used by Demucs)
+    from modules.module_ffmpeg_shared import ensure_ffmpeg_shared
+    ensure_ffmpeg_shared()
 
     # Load persisted data
     load_queue()
@@ -89,6 +98,19 @@ async def startup_event():
 
     # Start background cleanup scheduler (runs every hour)
     await start_cleanup_scheduler(interval_seconds=3600)
+
+    # Register signal handlers for graceful cleanup
+    def _signal_handler(signum, frame):
+        print(f"\n{Fore.YELLOW}Signal {signum} received, cleaning up...{Style.RESET_ALL}")
+        cleanup_all_children(reason=f"signal {signum}")
+        sys.exit(0)
+
+    try:
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+    except (ValueError, OSError):
+        # signal handlers can only be set in the main thread
+        pass
 
     log_console("Backend started successfully", "success")
 
@@ -106,6 +128,10 @@ async def shutdown_event():
     from colorama import Fore, Style
 
     log_console("Backend shutting down...", "info")
+    
+    # Kill all tracked child processes first
+    from services.process_manager import cleanup_all_children
+    cleanup_all_children(reason="app shutdown")
     
     # Stop background cleanup scheduler
     await stop_cleanup_scheduler()

@@ -37,6 +37,12 @@ from colorama import Fore, Style
 from tqdm import tqdm
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE
 
+# Use tracked subprocess to prevent zombie processes on app exit
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    tracked_run = subprocess.run
+
 def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext):
     """
     Separates vocals using Spleeter (2stems model) via subprocess.
@@ -83,7 +89,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                     segment_output_path
                 ]
                 print(f"- Splitting audio: {segment_filename} from {current_start_time:.2f}s for {segment_duration:.2f}s...")
-                subprocess.run(ffmpeg_split_cmd, check=True)
+                tracked_run(ffmpeg_split_cmd, check=True)
                 split_audio_paths.append(segment_output_path)
 
                 current_start_time += segment_duration
@@ -96,7 +102,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 
                 spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
                 tqdm.write(f"{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Spleeter{Style.RESET_ALL}")
-                subprocess.run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+                tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
                 segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
                 if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
@@ -115,13 +121,13 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
 
                 final_spleeter_vocals_temp_path = os.path.join(temp_spleeter_segments_dir, "concatenated_spleeter_vocals.wav")
                 ffmpeg_concat_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", concat_list_path, "-c", "copy", final_spleeter_vocals_temp_path]
-                subprocess.run(ffmpeg_concat_cmd, check=True)
+                tracked_run(ffmpeg_concat_cmd, check=True)
                 spleeter_vocal_wav_path = final_spleeter_vocals_temp_path
                 print(f"\n{Fore.GREEN}\N{check mark} All Spleeter vocal segments joined successfully.{Style.RESET_ALL}")
         else:
             spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
             print(f"{Fore.MAGENTA}Executing: {' '.join(spleeter_cmd)}{Style.RESET_ALL}\n")
-            subprocess.run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
             print(f"{Fore.GREEN}Spleeter separation complete.{Style.RESET_ALL}")
         

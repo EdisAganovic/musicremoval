@@ -7,6 +7,7 @@
 /demucs_out/
 /_temp/
 /_processing_intermediates/
+/ffmpeg_shared/
 .ENV
 /backend/__pycache__/
 /backend/modules/__pycache__

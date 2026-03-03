@@ -1,5 +1,18 @@
 # Frontend Changelog
 
+## [0.0.11] - 2026-03-04 🩺
+
+### [Added]
+- **Diagnostics Panel**: New modal accessible via System Info → Diagnostics button. Shows CUDA, packages, FFmpeg, disk, model files, and live Demucs test.
+- **TIMEOUT Badge**: Orange status badge for sections that timed out during diagnostics.
+- **Copy Report**: One-click copy of full diagnostic report as markdown for sharing.
+- **Loading Hints**: "CUDA and Demucs checks may take up to 20 seconds" shown during diagnostics loading.
+
+### [Fixed]
+- **Diagnostics Timeout**: Increased axios timeout from 30s → 60s to accommodate slow machines where torch import takes 20s.
+- **Timed Out Sections**: CUDA and Demucs sections now show orange timeout banner with recovery advice instead of failing silently.
+
+---
 ## [0.0.11] - 2026-03-03 🎨
 
 ### [Added]

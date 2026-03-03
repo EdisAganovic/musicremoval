@@ -1,0 +1,240 @@
+"""
+PROCESS MANAGER - Tracks and cleans up child processes.
+
+Prevents zombie python.exe / ffmpeg.exe / demucs processes when the app
+exits prematurely (Ctrl+C, window close, crash, etc.).
+
+USAGE:
+    from services.process_manager import tracked_subprocess, cleanup_all_children
+
+    # Instead of subprocess.run(cmd), use:
+    result = tracked_subprocess(cmd, ...)
+
+    # On shutdown:
+    cleanup_all_children()
+"""
+import os
+import sys
+import signal
+import subprocess
+import threading
+import time
+from typing import Optional, List
+from colorama import Fore, Style
+
+
+# Global set of active child processes (thread-safe)
+_active_processes: dict[int, subprocess.Popen] = {}
+_lock = threading.Lock()
+_shutdown_initiated = False
+
+
+def tracked_run(cmd, **kwargs):
+    """
+    Drop-in replacement for subprocess.run() that tracks the child process.
+    On app shutdown, any still-running tracked processes will be terminated.
+    
+    Args:
+        cmd: Command to run (list or string)
+        **kwargs: All kwargs supported by subprocess.run()
+        
+    Returns:
+        subprocess.CompletedProcess (same as subprocess.run)
+    """
+    global _shutdown_initiated
+    if _shutdown_initiated:
+        raise RuntimeError("Cannot start new processes during shutdown")
+
+    # We need to use Popen to track the PID, then wait for completion
+    # Extract timeout from kwargs since Popen doesn't support it directly
+    timeout = kwargs.pop("timeout", None)
+    check = kwargs.pop("check", False)
+
+    # Handle capture_output shorthand
+    if kwargs.pop("capture_output", False):
+        kwargs["stdout"] = subprocess.PIPE
+        kwargs["stderr"] = subprocess.PIPE
+
+    proc = subprocess.Popen(cmd, **kwargs)
+
+    with _lock:
+        _active_processes[proc.pid] = proc
+
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_process(proc)
+        stdout, stderr = proc.communicate()
+        with _lock:
+            _active_processes.pop(proc.pid, None)
+        raise subprocess.TimeoutExpired(cmd, timeout, output=stdout, stderr=stderr)
+    except Exception:
+        _kill_process(proc)
+        with _lock:
+            _active_processes.pop(proc.pid, None)
+        raise
+
+    with _lock:
+        _active_processes.pop(proc.pid, None)
+
+    result = subprocess.CompletedProcess(
+        args=cmd,
+        returncode=proc.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    if check and proc.returncode != 0:
+        raise subprocess.CalledProcessError(
+            proc.returncode, cmd, output=stdout, stderr=stderr
+        )
+
+    return result
+
+
+def _kill_process(proc: subprocess.Popen):
+    """Forcefully kill a process and all its children."""
+    try:
+        if proc.poll() is None:  # Still running
+            if sys.platform == "win32":
+                # On Windows, use taskkill to kill the entire process tree
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=10,
+                )
+            else:
+                # On Unix, kill the process group
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                except (ProcessLookupError, OSError):
+                    pass
+                time.sleep(0.5)
+                if proc.poll() is None:
+                    try:
+                        os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                    except (ProcessLookupError, OSError):
+                        pass
+    except Exception as e:
+        print(f"{Fore.YELLOW}Warning: Could not kill process {proc.pid}: {e}{Style.RESET_ALL}")
+
+
+def get_active_processes() -> List[dict]:
+    """Get info about all currently tracked active processes."""
+    with _lock:
+        result = []
+        for pid, proc in list(_active_processes.items()):
+            if proc.poll() is None:
+                result.append({
+                    "pid": pid,
+                    "args": proc.args if hasattr(proc, "args") else "unknown",
+                    "running": True,
+                })
+            else:
+                # Already finished, clean up
+                _active_processes.pop(pid, None)
+        return result
+
+
+def cleanup_all_children(reason: str = "shutdown"):
+    """
+    Kill all tracked child processes. Called on app shutdown.
+    Also performs a sweep for any orphaned python/ffmpeg/demucs processes
+    that belong to this working directory.
+    """
+    global _shutdown_initiated
+    _shutdown_initiated = True
+
+    with _lock:
+        active = list(_active_processes.items())
+
+    if active:
+        print(f"\n{Fore.YELLOW}[Process Manager] Cleaning up {len(active)} child process(es) ({reason})...{Style.RESET_ALL}")
+        for pid, proc in active:
+            if proc.poll() is None:
+                print(f"  Killing PID {pid}: {getattr(proc, 'args', 'unknown')}")
+                _kill_process(proc)
+
+        # Give processes a moment to die
+        time.sleep(1)
+
+        # Verify they're dead
+        with _lock:
+            still_alive = [(pid, proc) for pid, proc in _active_processes.items() if proc.poll() is None]
+            if still_alive:
+                print(f"{Fore.RED}  Warning: {len(still_alive)} process(es) still alive after cleanup{Style.RESET_ALL}")
+            _active_processes.clear()
+
+    print(f"{Fore.GREEN}[Process Manager] Cleanup complete.{Style.RESET_ALL}")
+    _shutdown_initiated = False
+
+
+def kill_stale_processes():
+    """
+    Kill any leftover python.exe / demucs / ffmpeg processes from previous runs.
+    Called on startup to clean up orphans from a crash.
+    Uses tasklist/taskkill on Windows.
+    """
+    if sys.platform != "win32":
+        return
+
+    my_pid = os.getpid()
+    my_parent_pid = os.getppid()
+    cwd_lower = os.getcwd().lower()
+
+    targets = ["python.exe", "ffmpeg.exe", "ffprobe.exe"]
+    killed_count = 0
+
+    for target in targets:
+        try:
+            # Get all matching processes with their command lines
+            result = subprocess.run(
+                ["wmic", "process", "where", f"Name='{target}'", "get",
+                 "ProcessId,CommandLine", "/format:csv"],
+                capture_output=True, text=True, timeout=10,
+                encoding='utf-8', errors='replace'
+            )
+
+            if result.returncode != 0:
+                continue
+
+            for line in result.stdout.strip().split("\n"):
+                line = line.strip()
+                if not line or "ProcessId" in line or "Node" in line:
+                    continue
+
+                parts = line.split(",")
+                if len(parts) < 3:
+                    continue
+
+                cmd_line = ",".join(parts[1:-1]).lower()
+                try:
+                    pid = int(parts[-1].strip())
+                except ValueError:
+                    continue
+
+                # Skip our own process and parent
+                if pid in (my_pid, my_parent_pid):
+                    continue
+
+                # Only kill if it's related to our project (demucs, spleeter, or our modules)
+                if any(marker in cmd_line for marker in [
+                    "demucs", "spleeter", "module_processor",
+                    "module_demucs", "module_spleeter",
+                    cwd_lower,
+                ]):
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/PID", str(pid)],
+                            capture_output=True, timeout=5
+                        )
+                        killed_count += 1
+                        print(f"  {Fore.YELLOW}Killed stale {target} (PID {pid}){Style.RESET_ALL}")
+                    except Exception:
+                        pass
+
+        except Exception:
+            pass
+
+    if killed_count > 0:
+        print(f"{Fore.GREEN}[Process Manager] Cleaned up {killed_count} stale process(es) from previous run.{Style.RESET_ALL}")

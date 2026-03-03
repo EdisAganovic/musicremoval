@@ -39,6 +39,13 @@ from colorama import Fore, Style
 from tqdm import tqdm
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE
 
+# Use tracked subprocess to prevent zombie processes on app exit
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    # Fallback if running standalone (e.g. from CLI main.py)
+    tracked_run = subprocess.run
+
 def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=2):
     """
     Separates vocals using Demucs (htdemucs model).
@@ -94,7 +101,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                     segment_output_path
                 ]
                 print(f"- Splitting audio: {segment_filename} from {current_start_time:.2f}s for {segment_duration:.2f}s...")
-                subprocess.run(ffmpeg_split_cmd, check=True)
+                tracked_run(ffmpeg_split_cmd, check=True)
                 split_audio_paths.append(segment_output_path)
 
                 current_start_time += segment_duration
@@ -114,14 +121,14 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", "-o", demucs_base_out_path, segment_path]
                 
                 try:
-                    subprocess.run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+                    tracked_run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 except subprocess.CalledProcessError as e:
                     tqdm.write(f"{Fore.YELLOW}Warning: Demucs failed for segment {segment_base_name}. Creating silence.{Style.RESET_ALL}")
                     # Create silence fallback
                     os.makedirs(os.path.dirname(segment_vocal_path), exist_ok=True)
                     silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", segment_vocal_path]
                     try:
-                        subprocess.run(silence_cmd, check=True)
+                        tracked_run(silence_cmd, check=True)
                     except (subprocess.CalledProcessError, OSError):
                         return i, None
                 
@@ -165,7 +172,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                     final_demucs_vocals_temp_path
                 ]
                 print(f"\nJoining Demucs vocal segments to: {final_demucs_vocals_temp_path}")
-                subprocess.run(ffmpeg_concat_cmd, check=True)
+                tracked_run(ffmpeg_concat_cmd, check=True)
                 demucs_vocal_wav_path = final_demucs_vocals_temp_path
                 print(f"\n{Fore.GREEN}\N{check mark} All Demucs vocal segments joined successfully.{Style.RESET_ALL}")
         else:
@@ -178,14 +185,14 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             ]
             print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
             try: 
-                subprocess.run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+                tracked_run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
             except subprocess.CalledProcessError as e:
                 print(f"{Fore.RED}Demucs failed for short audio or no music inside. Creating silence fallback.{Style.RESET_ALL}")
                 demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
                 os.makedirs(os.path.dirname(demucs_vocal_wav_path), exist_ok=True)
                 silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", temp_audio_wav_path, "-af", "volume=0", demucs_vocal_wav_path]
-                subprocess.run(silence_cmd, check=True)
+                tracked_run(silence_cmd, check=True)
 
             print(f"\n{Fore.GREEN}\N{check mark} Demucs separation complete.\n{Style.RESET_ALL}")
 

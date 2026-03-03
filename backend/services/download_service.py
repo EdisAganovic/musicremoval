@@ -123,6 +123,7 @@ def run_yt_dlp(
         'quiet': False,  # Changed to False to ensure progress hooks work
         'no_warnings': True,
         'ignoreerrors': True,
+        'noplaylist': True,  # CRITICAL: Only download the single video, not the entire playlist
         'remote_components': ['ejs:github'],
         'impersonate': ImpersonateTarget(client='chrome'),
     }
