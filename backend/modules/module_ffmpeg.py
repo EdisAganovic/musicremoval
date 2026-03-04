@@ -37,6 +37,11 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from module_file import download_file_concurrent
 
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    tracked_run = subprocess.run
+
 def get_audio_tracks(input_file):
     """
     Retrieves audio tracks from a video file using ffprobe.
@@ -56,7 +61,7 @@ def get_audio_tracks(input_file):
     ]
     
     try:
-        result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        result = tracked_run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         streams = json.loads(result.stdout).get('streams', [])
         audio_tracks = []
         for stream in streams:
@@ -134,7 +139,7 @@ def get_audio_duration(file_path):
     try:
         # Use ffprobe to get duration
         cmd = [FFPROBE_EXE, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         return float(result.stdout.strip())
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error: ffprobe failed to get duration for {file_path}. Is ffprobe installed and in PATH? Error: {e}{Style.RESET_ALL}")
@@ -153,7 +158,7 @@ def get_video_resolution(file_path):
     """
     try:
         cmd = [FFPROBE_EXE, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error: ffprobe failed to get resolution for {file_path}. Error: {e}{Style.RESET_ALL}")
@@ -184,7 +189,7 @@ def get_file_metadata(file_path):
             file_path
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
+            result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
             if result.returncode != 0:
                 print(f"ffprobe failed for {file_path}. Return code: {result.returncode}, stderr: {result.stderr}")
                 return metadata
@@ -249,7 +254,7 @@ def get_video_codec(file_path):
     """
     try:
         cmd = [FFPROBE_EXE, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1", file_path]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error: ffprobe failed to get video codec for {file_path}. Error: {e}{Style.RESET_ALL}")
@@ -267,7 +272,7 @@ def get_ffmpeg_version():
     
     try:
         # Run ffmpeg -version
-        result = subprocess.run([FFMPEG_EXE, "-version"], capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        result = tracked_run([FFMPEG_EXE, "-version"], capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         # First line usually looks like: "ffmpeg version 8.0.1-full_build-www.gyan.dev Copyright..."
         first_line = result.stdout.split('\n')[0]
         
@@ -291,7 +296,7 @@ def check_fdk_aac_codec():
     """
     try:
         cmd = [FFMPEG_EXE, "-encoders"]
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
         if "libfdk_aac" in result.stdout:
             return True
         else:
@@ -336,7 +341,7 @@ def convert_audio_with_ffmpeg(input_path, output_path, codec=None, normalize_aud
         cmd.append(output_path)
         
         print(f"Executing FFmpeg command: {' '.join(cmd)}")
-        subprocess.run(cmd, check=True)
+        tracked_run(cmd, check=True)
         print(f"{Fore.GREEN}Successfully converted {input_path} to {output_path} using {audio_codec}.{Style.RESET_ALL}")
         return True
     except subprocess.CalledProcessError as e:

@@ -45,6 +45,10 @@ from colorama import Fore, Style
 from module_ffmpeg import get_video_resolution
 from utils.validation import sanitize_filename
 
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    tracked_run = subprocess.run
 
 def is_playlist_url(url):
     """
@@ -83,7 +87,7 @@ def check_and_update_ytdlp():
         # Get current yt-dlp version
         version_cmd = ["yt-dlp", "--version"]
         try:
-            version_result = subprocess.run(version_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            version_result = tracked_run(version_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             print(f"{Fore.CYAN}Current yt-dlp version: {version_result.stdout.strip()}{Style.RESET_ALL}")
         except (subprocess.CalledProcessError, FileNotFoundError):
             print(f"{Fore.YELLOW}yt-dlp not found or no version information available.{Style.RESET_ALL}")
@@ -91,7 +95,7 @@ def check_and_update_ytdlp():
         # Use UV to upgrade yt-dlp.
         update_cmd = ["uv", "pip", "install", "--upgrade", "yt-dlp"]
         print(f"{Fore.MAGENTA}Executing: {' '.join(update_cmd)}{Style.RESET_ALL}")
-        result = subprocess.run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        result = tracked_run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
         if "Requirement already satisfied" in result.stdout:
             print(f"{Fore.GREEN}yt-dlp is up to date.{Style.RESET_ALL}")
         else:
@@ -141,7 +145,7 @@ def download_video(url, filename=None, cookies_file=None):
         get_filename_cmd.append(url)
 
         print(f"{Fore.MAGENTA}Determining filename...{Style.RESET_ALL}")
-        result = subprocess.run(get_filename_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        result = tracked_run(get_filename_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
         if result.returncode != 0:
             print(f"\n{Fore.RED}An error occurred while trying to get video metadata (Exit Code: {result.returncode}).{Style.RESET_ALL}")
@@ -156,7 +160,7 @@ def download_video(url, filename=None, cookies_file=None):
             if cookies_file and os.path.exists(cookies_file):
                 list_formats_cmd.extend(["--cookies", cookies_file])
             
-            list_result = subprocess.run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            list_result = tracked_run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
             if list_result.stdout:
                 print(list_result.stdout)
             if list_result.stderr:
@@ -209,7 +213,7 @@ def download_video(url, filename=None, cookies_file=None):
             files_before_attempt = set(os.listdir(download_folder))
             
             # FIX: Capture output for debugging instead of swallowing errors
-            result = subprocess.run(download_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            result = tracked_run(download_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
             
             if result.returncode != 0:
                 print(f"{Fore.RED}Download attempt failed: {result.stderr[:500]}{Style.RESET_ALL}")

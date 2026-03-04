@@ -43,6 +43,11 @@ import tempfile
 import shutil
 from colorama import Fore, Back, Style
 
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    tracked_run = subprocess.run
+
 from module_cuda import check_gpu_cuda_support
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks
 from module_spleeter import separate_with_spleeter
@@ -292,7 +297,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         print(f"{Fore.MAGENTA}Executing: {' '.join(ffmpeg_cmd)}\n")
         try:
             # FIX: Capture stderr to show meaningful error messages, use UTF-8 to handle emojis
-            result = subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            result = tracked_run(ffmpeg_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             print(f"{Fore.GREEN}Audio extraction complete.\n{Style.RESET_ALL}")
         except subprocess.CalledProcessError as e:
             # FIX: Display FFmpeg error output for debugging
@@ -426,7 +431,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 ]
                 
                 print(f"{Fore.MAGENTA}Applying sync filters: {','.join(filter_parts)}{Style.RESET_ALL}")
-                subprocess.run(adjust_cmd, check=True)
+                tracked_run(adjust_cmd, check=True)
                 
                 os.remove(vocal_mixture_wav_path)
                 os.rename(adj_temp_path, vocal_mixture_wav_path)
@@ -509,7 +514,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
                 update_progress("Finalizing output", 95)
-                subprocess.run(final_ffmpeg_cmd, check=True)
+                tracked_run(final_ffmpeg_cmd, check=True)
                 update_progress("Completed", 100)
                 print(f"\n{Fore.GREEN}✔ Successfully created {output_audio}{Style.RESET_ALL}")
                 
@@ -573,7 +578,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 final_ffmpeg_cmd.append(output_video)
                 print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
                 update_progress("Finalizing output", 95)
-                subprocess.run(final_ffmpeg_cmd, check=True)
+                tracked_run(final_ffmpeg_cmd, check=True)
                 update_progress("Completed", 100)
                 print(f"\n{Fore.GREEN}✔ Successfully created {output_video}{Style.RESET_ALL}")
 

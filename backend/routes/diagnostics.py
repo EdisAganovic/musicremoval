@@ -27,6 +27,11 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from fastapi import APIRouter, BackgroundTasks
 from typing import Optional
 
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    tracked_run = subprocess.run
+
 router = APIRouter(prefix="/api/diagnostics", tags=["diagnostics"])
 
 # Shared thread pool for diagnostics (avoids blocking the async loop)
@@ -137,7 +142,7 @@ def _check_cuda():
             cuda_info["reason"] = "torch.cuda.is_available() returned False"
             # Quick nvidia-smi check (5s timeout)
             try:
-                nvidia_smi = subprocess.run(
+                nvidia_smi = tracked_run(
                     ["nvidia-smi", "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
                     capture_output=True, text=True, timeout=5
                 )
@@ -169,7 +174,7 @@ def _check_ffmpeg():
         ffmpeg_info["path"] = FFMPEG_EXE
         ffmpeg_info["exists"] = os.path.exists(FFMPEG_EXE)
         if os.path.exists(FFMPEG_EXE):
-            result = subprocess.run([FFMPEG_EXE, "-version"], capture_output=True, text=True, timeout=5)
+            result = tracked_run([FFMPEG_EXE, "-version"], capture_output=True, text=True, timeout=5)
             first_line = result.stdout.split("\n")[0] if result.stdout else "unknown"
             ffmpeg_info["version"] = first_line
         else:
@@ -388,7 +393,7 @@ def _run_demucs_test(task_id: str):
                 "-ar", "44100", "-ac", "2",
                 test_wav
             ]
-            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=30)
+            result = tracked_run(ffmpeg_cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
                 raise Exception(f"FFmpeg failed: {result.stderr}")
         except Exception as e:
@@ -428,7 +433,7 @@ def _run_demucs_test(task_id: str):
         tasks[task_id]["current_step"] = f"Running: {' '.join(demucs_cmd)}"
         tasks[task_id]["progress"] = 40
 
-        proc = subprocess.run(
+        proc = tracked_run(
             demucs_cmd,
             capture_output=True, text=True, timeout=300,
             encoding='utf-8', errors='replace'

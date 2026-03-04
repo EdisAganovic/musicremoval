@@ -39,6 +39,13 @@ def main():
     Handles colorama initialization and cleanup.
     """
     init()
+    
+    # Try to clean up any orphaned processes from previous crashes
+    try:
+        from services.process_manager import kill_stale_processes
+        kill_stale_processes()
+    except ImportError:
+        pass
 
     parser = argparse.ArgumentParser(description="Process a video or audio file to separate vocals using Demucs and Spleeter.")
     parser.add_argument("--temp", action="store_true", help="If used, We will display paths, but we will not delete temporary files or dirs")
@@ -122,4 +129,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        try:
+            from services.process_manager import cleanup_all_children
+            cleanup_all_children(reason="CLI exit")
+        except ImportError:
+            pass

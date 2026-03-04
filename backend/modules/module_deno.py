@@ -27,6 +27,11 @@ FLAGS:
 """
 import subprocess
 
+try:
+    from services.process_manager import tracked_run
+except ImportError:
+    tracked_run = subprocess.run
+
 def run_deno_script(script_path: str, args: list = None):
     """Executes a Deno script and returns the output ✨."""
     if args is None:
@@ -34,14 +39,14 @@ def run_deno_script(script_path: str, args: list = None):
     
     # Check if deno is installed
     try:
-        subprocess.run(["deno", "--version"], capture_output=True, check=True)
+        tracked_run(["deno", "--version"], capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         return {"error": "Deno is not installed on this system."}
 
     command = ["deno", "run", "-A", script_path] + args
     
     try:
-        result = subprocess.run(
+        result = tracked_run(
             command,
             capture_output=True,
             text=True,
@@ -59,7 +64,7 @@ def run_deno_script(script_path: str, args: list = None):
 def deno_eval(code: str):
     """Evaluates a snippet of JS/TS code using Deno ⚡."""
     try:
-        result = subprocess.run(
+        result = tracked_run(
             ["deno", "eval", code],
             capture_output=True,
             text=True,
