@@ -453,6 +453,24 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 subfolder: isPlaylist ? playlistSubfolder.trim() || null : null,
                 auto_separate: autoSeparate
             });
+
+            // Handle special responses from server
+            if (response.data.status === 'duplicate') {
+                setStatus('completed');
+                setProgress(100);
+                setCurrentStep('Already downloaded');
+                setError(`Already in library: ${response.data.message}`);
+                return;
+            }
+
+            if (response.data.status === 'processing') {
+                // Already being downloaded — attach to existing task
+                setTaskId(response.data.task_id);
+                setCurrentTaskId(response.data.task_id);
+                setCurrentStep('Download already in progress...');
+                return;
+            }
+
             setTaskId(response.data.task_id);
             setCurrentTaskId(response.data.task_id);
         } catch (err) {

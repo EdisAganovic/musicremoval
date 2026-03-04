@@ -7,9 +7,10 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from typing import List, Dict
 
 from config import (
-    tasks, active_downloads, download_queue, queue_processing,
+    tasks, active_downloads, download_queue,
     save_queue, load_queue, add_notification, log_console
 )
+import core.state as state
 from services.download_service import run_yt_dlp
 from services.queue_service import process_queue
 from models import (
@@ -263,13 +264,19 @@ async def cancel_download(payload: DownloadCancelRequest):
 
 @router.post("/queue/stop")
 async def stop_queue():
-    """Stop the downloaded queue by removing unstarted items."""
+    """Stop queue processing and remove all pending (unstarted) items."""
+    # Set the flag so queue_service loop exits
+    state.queue_processing = False
+
+    # Remove pending items from the queue
     removed = 0
-    # Create a copy since we modify while iterating
-    for item in list(download_queue):
+    items_to_keep = []
+    for item in download_queue:
         if item.get("status") == "pending":
-            download_queue.remove(item)
             removed += 1
+        else:
+            items_to_keep.append(item)
+    download_queue[:] = items_to_keep  # Mutate in-place to keep reference
     if removed > 0:
         save_queue()
     return {"status": "stopped", "removed_items": removed}
@@ -342,26 +349,29 @@ async def add_to_queue_batch(background_tasks: BackgroundTasks, payload: QueueBa
 @router.get("/queue")
 async def get_queue():
     """Get current download queue."""
-    return {"queue": download_queue, "processing": queue_processing}
+    return {"queue": download_queue, "processing": state.queue_processing}
 
 
 @router.post("/queue/remove")
 async def remove_from_queue(payload: QueueActionRequest):
     """Remove an item from the queue."""
-    global download_queue
     if not payload.queue_id:
         raise HTTPException(status_code=400, detail="queue_id required")
 
-    download_queue = [item for item in download_queue if item.get("queue_id") != payload.queue_id]
+    # Mutate in-place to keep the same list reference for queue_service
+    download_queue[:] = [item for item in download_queue if item.get("queue_id") != payload.queue_id]
     save_queue()
     return {"status": "removed", "queue": download_queue}
 
 
 @router.post("/queue/clear")
 async def clear_queue():
-    """Clear the download queue."""
-    global download_queue
-    download_queue = []
+    """Clear completed and failed items from the queue ("Clear Done")."""
+    # Only remove finished items, keep pending and downloading
+    download_queue[:] = [
+        item for item in download_queue
+        if item.get("status") not in ("completed", "failed")
+    ]
     save_queue()
     return {"status": "cleared"}
 
@@ -373,9 +383,4 @@ async def start_queue(background_tasks: BackgroundTasks):
     return {"status": "started"}
 
 
-@router.post("/queue/stop")
-async def stop_queue():
-    """Stop queue processing."""
-    global queue_processing
-    queue_processing = False
-    return {"status": "stopped"}
+# NOTE: /queue/stop is defined above (merged stop + clear pending into one route)

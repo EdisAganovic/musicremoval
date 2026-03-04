@@ -6,22 +6,24 @@ import random
 import uuid
 from colorama import Fore, Style
 
-from config import queue_processing, download_queue, save_queue, tasks
+import core.state as state
+from config import save_queue, tasks
 from services.download_service import run_yt_dlp
 
 
 async def process_queue():
     """Process download queue items one by one."""
-    global queue_processing, download_queue
 
-    if queue_processing:
+    # Check via the canonical state module so stop_queue() changes are visible
+    if state.queue_processing:
         return
 
-    queue_processing = True
+    state.queue_processing = True
 
-    while True:
+    while state.queue_processing:
+        # Find next pending item from the canonical list
         pending_item = None
-        for item in download_queue:
+        for item in state.download_queue:
             if item.get("status") == "pending":
                 pending_item = item
                 break
@@ -54,8 +56,13 @@ async def process_queue():
 
         save_queue()
 
+        # Check if we should stop (user clicked stop while downloading)
+        if not state.queue_processing:
+            break
+
         delay = random.randint(3, 7)
         print(f"{Fore.YELLOW}Waiting {delay} seconds before next download...{Style.RESET_ALL}")
         await asyncio.sleep(delay)
 
-    queue_processing = False
+    state.queue_processing = False
+
