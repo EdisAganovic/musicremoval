@@ -11,6 +11,7 @@
 ### [Fixed]
 - **Diagnostics Timeout**: Increased axios timeout from 30s → 60s to accommodate slow machines where torch import takes 20s.
 - **Timed Out Sections**: CUDA and Demucs sections now show orange timeout banner with recovery advice instead of failing silently.
+- **Spinner Squashing**: Added `flex-shrink-0` to all loading spinners in the downloader tab. Prevents icons from shrinking when displayed alongside long status text like "Analyzing...".
 
 ---
 ## [0.0.11] - 2026-03-03 🎨

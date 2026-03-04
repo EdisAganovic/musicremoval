@@ -11,12 +11,19 @@
 - **Process API**: `GET /api/diagnostics/processes`, `POST /api/diagnostics/kill-processes`, `POST /api/diagnostics/kill-stale` for manual process management.
 - **FFmpeg Shared DLLs**: New `module_ffmpeg_shared.py` auto-downloads BtbN's FFmpeg shared build (~90MB) on first startup when `torchcodec` is installed. Required for Demucs/torchaudio on Windows. Cached in `ffmpeg_shared/` folder.
 - **Troubleshooting Guide**: New `docs/SETUP_TROUBLESHOOTING.md` documenting FFmpeg builds, CUDA mismatches, Defender issues, and zombie processes.
+- **URL Normalization**: Added `normalize_youtube_url` helper in `routes/downloads.py` to handle `youtu.be` links and strip `si=` tracking parameters.
+- **Codec Visibility**: Added short codec names (e.g., `[avc1/mp4a]`, `[vp9]`) to format selection labels for better clarity.
 
 ### [Fixed]
 - **Diagnostics Timeout**: All heavy checks (torch import, Demucs import, nvidia-smi) now run in a thread pool with individual async timeouts (20s). Prevents the health endpoint from hanging forever on slow machines.
 - **Playlist Single Download**: Added `noplaylist: True` to `yt-dlp` options in `download_service.py`. Selecting 1 video from a 50-video playlist no longer downloads all 50.
+- **NoneType Crash Shield**: Added strict null-checks in `download_service.py` (progress hook) and `downloads.py` API routes. Prevents server-side crashes or "stuck" UI spinners when `yt-dlp` returns empty metadata objects.
+- **Deno Challenge Solver**: Removed unsupported `allowJs: true` option from `deno.json`. Fixes `yt-dlp` crashing on JS challenges when using Deno as the runtime.
+- **YouTube Format Fallback**: Extractor now automatically falls back to standard extraction if the primary impersonated client fails.
 
 ### [Changed]
+- **Comprehensive Process Tracking**: Coverage of `tracked_run` extended to `module_ffmpeg.py`, `module_ytdlp.py`, `module_processor.py`, and `module_deno.py` ensure ALL backend subprocesses (yt-dlp, FFmpeg, Deno) are managed.
+- **Aggressive Format Filtering**: Dropdown now skips phantom streams without size info or those using `m3u8` protocols, greatly cleaning up the resolution list.
 - `module_demucs.py`: All `subprocess.run()` calls replaced with `tracked_run()` from process manager.
 - `module_spleeter.py`: All `subprocess.run()` calls replaced with `tracked_run()` from process manager.
 

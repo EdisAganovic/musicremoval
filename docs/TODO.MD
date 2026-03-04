@@ -9,9 +9,9 @@
 **Goal:** Fix issues that cause complete failures or data corruption
 
 - [ ] **FFmpeg Filtergraph Error:** Remove `-c:v copy` when using `-vf` filter, or re-encode video
-- [ ] **Add FFmpeg existence check** before processing
-- [ ] **Add input file validation** before processing
-- [ ] **Handle special characters** in filenames (sanitize or quote properly)
+- [x] **Add FFmpeg existence check** before processing (Done in `download_ffmpeg`)
+- [x] **Add input file validation** before processing (Added strict null-checks for `info` and `info_dict`)
+- [x] **Handle special characters** in filenames (subfolder and title sanitization implemented)
 
 ---
 
@@ -96,9 +96,9 @@
 - [ ] Retry failed downloads with exponential backoff
 - [ ] Validate downloaded file integrity (checksum or minimum size)
 - [ ] Handle partial downloads (resume or redownload)
-- [ ] Detect and handle rate limiting
-- [ ] Handle age-restricted content (cookies)
-- [ ] Handle playlist vs single video detection
+- [x] Detect and handle rate limiting (Enhanced via impersonate and fallback strategies)
+- [x] Handle age-restricted content (Fixed JS challenge solving via Deno config fix)
+- [x] Handle playlist vs single video detection (Implemented in `yt-formats` with dedicated views)
 
 ---
 
@@ -157,8 +157,8 @@
 ### Progress Feedback
 - [ ] Show progress percentage for FFmpeg operations
 - [ ] Show estimated time remaining
-- [ ] Show current processing step clearly
-- [ ] Show file sizes (input/output)
+- [x] Show current processing step clearly (Updated `download_service.py` with descriptive steps)
+- [x] Show file sizes (input/output) (Now displayed in format dropdown and progress hooks)
 - [ ] Show audio/video quality info
 
 ---
