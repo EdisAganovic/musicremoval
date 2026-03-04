@@ -84,7 +84,7 @@ def run_yt_dlp(
                     eta_sec = int(eta) % 60
                     eta_str = f"{eta_min}:{eta_sec:02d}"
                 
-                info_dict = d.get('info_dict', {})
+                info_dict = d.get('info_dict') or {}
                 playlist_index = info_dict.get('playlist_index')
                 playlist_count = info_dict.get('playlist_count') or info_dict.get('n_entries')
                 raw_filename = d.get('filename', '') or ''
@@ -160,9 +160,14 @@ def run_yt_dlp(
             log_console(f"Task {task_id}: Starting extraction, progress=10%", "info")
             
             info = ydl.extract_info(url, download=True)
-            log_console(f"Task {task_id}: Extraction complete, title={info.get('title', 'Unknown')}", "info")
             
-            # Update status after extraction
+            if active_downloads.get(task_id, {}).get("cancel_flag", False):
+                raise Exception("Download cancelled by user")
+            
+            if info is None:
+                raise Exception("Download failed or was aborted by yt-dlp (info missing)")
+
+            log_console(f"Task {task_id}: Extraction complete, title={info.get('title', 'Unknown')}", "info")
             tasks[task_id]["current_step"] = "Starting download..."
             tasks[task_id]["progress"] = 15
             log_console(f"Task {task_id}: Starting download, progress=15%", "info")

@@ -3,6 +3,7 @@ Download and Queue API Routes.
 """
 import uuid
 import asyncio
+import urllib.parse
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from typing import List, Dict
 
@@ -18,6 +19,35 @@ from models import (
     QueueBatchRequest, QueueActionRequest
 )
 from utils.helpers import format_duration
+
+def normalize_youtube_url(url: str) -> str:
+    """Normalizes youtube.com and youtu.be URLs, removing tracking parameters."""
+    if not url:
+        return url
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+        if parsed.netloc in ["youtu.be", "www.youtu.be"]:
+            video_id = parsed.path.strip("/")
+            new_url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Preserve playlist parameter if it exists
+            query = urllib.parse.parse_qs(parsed.query)
+            params = []
+            if "list" in query:
+                params.append(f"list={query['list'][0]}")
+            if "t" in query:
+                params.append(f"t={query['t'][0]}")
+            if params:
+                new_url += "&" + "&".join(params)
+            return new_url
+    except Exception:
+        pass
+    
+    # Strip tracking parameter `si` from any URL to avoid yt-dlp issues
+    if "si=" in url:
+        import re
+        url = re.sub(r'([?&])si=[^&]*(&|$)', r'\1', url).rstrip('?&')
+    return url
 
 router = APIRouter(prefix="/api", tags=["downloads"])
 
@@ -50,7 +80,7 @@ async def get_yt_formats(payload: dict):
     import yt_dlp
     from yt_dlp.networking.impersonate import ImpersonateTarget
     
-    url = payload.get("url")
+    url = normalize_youtube_url(payload.get("url"))
     check_playlist = payload.get("check_playlist", False)
     
     if not url:
@@ -122,20 +152,44 @@ async def get_yt_formats(payload: dict):
             }
 
         # Single video
-        ydl_opts = {
-            'quiet': True,
-            'noplaylist': True,
-            'remote_components': ['ejs:github'],
-            'impersonate': ImpersonateTarget(client='chrome'),
-        }
-        
-        def get_video_info():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        def get_video_info(use_impersonate=True):
+            opts = {
+                'quiet': True,
+                'noplaylist': True,
+                'remote_components': ['ejs:github'],
+            }
+            if use_impersonate:
+                opts['impersonate'] = ImpersonateTarget(client='chrome')
+                
+            with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(url, download=False)
 
-        info = await asyncio.to_thread(get_video_info)
+        try:
+            # Try first with impersonate (often gets better formats but can fail on challenge)
+            info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=True))
+        except Exception as e:
+            log_console(f"Impersonate failed ({e}), falling back to standard extraction", "warning")
+            # Fallback without impersonate (guarantees at least m3u8 fallback strings)
+            info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=False))
+            
+        if info is None:
+            raise Exception("Video is no longer available or age-restricted (yt-dlp returned no metadata).")
+            
         formats = []
         for f in info.get('formats', []):
+            # Get size, prefer exact filesize
+            fs = f.get('filesize')
+            fsa = f.get('filesize_approx')
+            size_val = fs if fs is not None else fsa
+            
+            # Skip if truly no size info
+            if size_val is None or size_val == 0:
+                continue
+                
+            # Extra protection: skip 'm3u8' protocols which are often the duplicates without real sizes
+            if f.get('protocol') == 'm3u8_native' or 'm3u8' in f.get('url', ''):
+                continue
+                
             format_info = {
                 "format_id": f.get("format_id"),
                 "ext": f.get("ext"),
@@ -143,12 +197,27 @@ async def get_yt_formats(payload: dict):
                 "vcodec": f.get("vcodec"),
                 "acodec": f.get("acodec"),
                 "note": f.get("format_note"),
-                "filesize": f.get("filesize"),
+                "filesize": size_val,
                 "url": f.get("url")
             }
-            label = f"{f.get('ext')} - {f.get('resolution')} ({f.get('format_note') or ''})"
-            if f.get('vcodec') == 'none':
-                label = f"Audio: {f.get('ext')} ({f.get('format_note') or ''})"
+            note = f.get('format_note')
+            note_str = f" ({note})" if note else ""
+            
+            vcodec = f.get('vcodec') or 'none'
+            acodec = f.get('acodec') or 'none'
+            
+            # Show short codec names (e.g., avc1.4D401E -> avc1)
+            codecs = []
+            if vcodec != 'none':
+                codecs.append(vcodec.split('.')[0])
+            if acodec != 'none':
+                codecs.append(acodec.split('.')[0])
+                
+            codec_str = f" [{'/'.join(codecs)}]" if codecs else ""
+
+            label = f"{f.get('ext')} - {f.get('resolution')}{codec_str}{note_str}"
+            if vcodec == 'none':
+                label = f"Audio: {f.get('ext')}{codec_str}{note_str}"
             format_info["label"] = label
             formats.append(format_info)
 
@@ -176,7 +245,7 @@ async def get_yt_formats(payload: dict):
 @router.post("/download")
 async def download_video(background_tasks: BackgroundTasks, payload: dict):
     """Start a YouTube download."""
-    url = payload.get("url")
+    url = normalize_youtube_url(payload.get("url"))
     format_type = payload.get("format", "audio")
     format_id = payload.get("format_id")
     auto_separate = payload.get("auto_separate", False)
@@ -288,15 +357,17 @@ async def add_to_queue(background_tasks: BackgroundTasks, payload: QueueAddReque
     if not payload.url:
         raise HTTPException(status_code=400, detail="URL is required")
 
+    url = normalize_youtube_url(payload.url)
+
     from config import get_full_library
     library = get_full_library()
     for item in library:
-        if item.get("url") == payload.url:
+        if item.get("url") == url:
             return {"status": "already_downloaded", "task_id": item.get("task_id")}
 
     queue_item = {
         "queue_id": str(uuid.uuid4()),
-        "url": payload.url,
+        "url": url,
         "title": payload.title or "",
         "format_type": payload.format,
         "format_id": payload.format_id,
@@ -323,7 +394,7 @@ async def add_to_queue_batch(background_tasks: BackgroundTasks, payload: QueueBa
 
     added_count = 0
     for video in payload.videos:
-        url = video.get("url")
+        url = normalize_youtube_url(video.get("url"))
         if url:
             queue_item = {
                 "queue_id": str(uuid.uuid4()),

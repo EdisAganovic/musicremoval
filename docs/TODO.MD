@@ -1,144 +1,152 @@
 # TODO: Music Removal App - Error Handling & Edge Cases
 
-## Known Issues (From Logs)
-
-### FFmpeg Filtergraph Error
-**Problem:** `Filtering and streamcopy cannot be used together`
-- When using `-vf` (video filter) with `-c:v copy` (codec copy), FFmpeg throws an error
-- **Fix:** Either remove `-c:v copy` and re-encode video, or remove `-vf` filter if not needed
+> **Organized by Sprints** - Each sprint represents a focused iteration of ~1-3 days
 
 ---
 
-## Error Handling Improvements
+## Sprint 0: Critical Bug Fixes (IMMEDIATE)
 
-### 1. FFmpeg Command Validation
-- [ ] Validate FFmpeg command arguments before execution
-- [ ] Detect incompatible flag combinations (e.g., `-vf` + `-c:v copy`)
-- [ ] Implement a command builder that prevents invalid combinations
-- [ ] Add pre-flight check for FFmpeg binary existence and version
+**Goal:** Fix issues that cause complete failures or data corruption
 
-### 2. FFmpeg Execution Error Handling
+- [ ] **FFmpeg Filtergraph Error:** Remove `-c:v copy` when using `-vf` filter, or re-encode video
+- [ ] **Add FFmpeg existence check** before processing
+- [ ] **Add input file validation** before processing
+- [ ] **Handle special characters** in filenames (sanitize or quote properly)
+
+---
+
+## Sprint 1: Process Timeout & Hanging Prevention
+
+**Goal:** Prevent processes from getting stuck indefinitely
+
+### module_spleeter.py
+- [ ] Add 300s timeout to Spleeter commands (per segment)
+- [ ] Add try-except for `TimeoutExpired`
+- [ ] Continue processing remaining segments if one fails
+
+### module_demucs.py
+- [ ] Add 600s timeout to Demucs commands (per segment)
+- [ ] Catch `TimeoutExpired` in parallel processor
+- [ ] Ensure silence fallback works for timeouts too
+
+### module_processor.py
+- [ ] Add 60s timeout to FFmpeg sync adjustment
+- [ ] Add 120s timeout to final audio conversion
+- [ ] Add 600s timeout to final video creation
+- [ ] Add comprehensive try-except-finally blocks for temp file cleanup
+
+### module_ytdlp.py
+- [ ] Add 600s timeout per download attempt
+- [ ] Add exponential backoff with max 3 retries
+
+### process_manager.py
+- [ ] Add default timeout parameter to `tracked_run()`
+- [ ] Add logging for timeout events
+
+---
+
+## Sprint 2: FFmpeg Error Handling
+
+**Goal:** Robust FFmpeg execution with clear error messages
+
 - [ ] Catch and parse FFmpeg exit codes
 - [ ] Log full FFmpeg stderr output to a debug log file
-- [ ] Implement retry logic for transient failures
+- [ ] Implement retry logic for transient failures (2 retries)
 - [ ] Provide user-friendly error messages (not just stack traces)
 - [ ] Handle specific errors:
-  - Input file not found
-  - Codec not available
-  - Disk space insufficient
-  - Permission denied
-  - Invalid filter/graph
+  - [ ] Input file not found
+  - [ ] Codec not available
+  - [ ] Disk space insufficient
+  - [ ] Permission denied
+  - [ ] Invalid filter/graph
 
-### 3. File System Error Handling
-- [ ] Check disk space before processing
+---
+
+## Sprint 3: File System & Path Handling
+
+**Goal:** Handle all file system edge cases gracefully
+
+### Validation
+- [ ] Check disk space before processing (min 2GB free)
 - [ ] Validate input file exists and is readable
 - [ ] Ensure output directory exists (create if not)
 - [ ] Handle file locking issues (file in use by another process)
-- [ ] Clean up temp files on failure
-- [ ] Handle special characters in filenames (already an issue with `｜`)
 
-### 4. Network/Download Error Handling
-- [ ] Handle download timeouts
+### Path Sanitization
+- [ ] Handle special characters: `｜`, `:`, `*`, `?`, `"`, `<`, `>`, `|`
+- [ ] Handle emojis in filenames
+- [ ] Handle very long file paths (> 260 characters on Windows)
+- [ ] Handle Unicode characters in filenames
+- [ ] Handle spaces in file paths
+- [ ] Normalize relative vs absolute paths
+
+### Cleanup
+- [ ] Clean up temp files on failure (finally blocks)
+- [ ] Verify temp file cleanup on success
+- [ ] Handle output file already exists (overwrite vs skip)
+- [ ] Handle read-only output directory
+
+---
+
+## Sprint 4: Download & Network Resilience
+
+**Goal:** Reliable downloads with proper error recovery
+
+- [ ] Handle download timeouts (see Sprint 1)
 - [ ] Retry failed downloads with exponential backoff
-- [ ] Validate downloaded file integrity (checksum or size)
-- [ ] Handle partial downloads
+- [ ] Validate downloaded file integrity (checksum or minimum size)
+- [ ] Handle partial downloads (resume or redownload)
 - [ ] Detect and handle rate limiting
+- [ ] Handle age-restricted content (cookies)
+- [ ] Handle playlist vs single video detection
 
-### 5. Audio Processing Errors
-- [ ] Handle videos with no audio track
-- [ ] Handle videos with multiple audio tracks
-- [ ] Detect unsupported audio codecs
+---
+
+## Sprint 5: Audio Processing Edge Cases
+
+**Goal:** Handle all audio/video stream variations
+
+### Input Handling
+- [ ] Handle videos with no audio track (skip or error gracefully)
+- [ ] Handle videos with multiple audio tracks (auto-select by language)
+- [ ] Detect unsupported audio codecs (suggest conversion)
 - [ ] Handle audio extraction failures
-- [ ] Validate audio file before merging
+
+### Duration Edge Cases
+- [ ] Handle very short videos (< 1 second)
+- [ ] Handle very long videos (> 4 hours)
+- [ ] Handle variable frame rate videos
+
+### Quality/Format Edge Cases
+- [ ] Handle 4K/8K resolution videos
+- [ ] Handle unusual codecs (HEVC, VP9, AV1)
+- [ ] Handle corrupted or partially downloaded input files
+- [ ] Handle live stream recordings (incomplete files)
 
 ---
 
-## Edge Cases to Handle
+## Sprint 6: Monitoring & Logging
 
-### Input Video Edge Cases
-- [ ] Video with no audio stream
-- [ ] Video with multiple audio streams
-- [ ] Video with unusual resolutions (non-standard aspect ratios)
-- [ ] Video with variable frame rate
-- [ ] Very short videos (< 1 second)
-- [ ] Very long videos (> 4 hours)
-- [ ] 4K/8K resolution videos
-- [ ] Videos with unusual codecs (HEVC, VP9, AV1)
-- [ ] Corrupted or partially downloaded input files
-- [ ] Live stream recordings (incomplete files)
-
-### File Path Edge Cases
-- [ ] Filenames with special characters: `｜`, `:`, `*`, `?`, `"`, `<`, `>`, `|`
-- [ ] Filenames with emojis
-- [ ] Very long file paths (> 260 characters on Windows)
-- [ ] Unicode characters in filenames
-- [ ] Spaces in file paths
-- [ ] Relative vs absolute path handling
-
-### System Edge Cases
-- [ ] No disk space available
-- [ ] FFmpeg not installed or not in PATH
-- [ ] Wrong FFmpeg version (too old)
-- [ ] Concurrent processing (multiple instances running)
-- [ ] Process interrupted (Ctrl+C, power loss)
-- [ ] Running on different OS (Windows, macOS, Linux)
-- [ ] Running in restricted environment (no temp folder access)
-
-### Output Edge Cases
-- [ ] Output file already exists (overwrite vs skip)
-- [ ] Output directory is read-only
-- [ ] Output filename conflicts
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- [ ] Test FFmpeg command builder with various input combinations
-- [ ] Test file validation functions
-- [ ] Test path sanitization functions
-- [ ] Test error parsing functions
-
-### Integration Tests
-- [ ] Test full pipeline with sample videos:
-  - [ ] Standard 1080p video with AAC audio
-  - [ ] Video with no audio
-  - [ ] Video with multiple audio tracks
-  - [ ] Video with special characters in filename
-  - [ ] 4K video
-  - [ ] Very short video
-  - [ ] Very long video
-- [ ] Test error recovery (simulate failures at each step)
-- [ ] Test cleanup after failure
-
-### Manual Testing Checklist
-- [ ] Download test (if applicable)
-- [ ] Audio extraction
-- [ ] Audio removal/replacement
-- [ ] Video merging
-- [ ] Output file validation
-- [ ] Temp file cleanup
-- [ ] Error message clarity
-
----
-
-## Monitoring & Observability
+**Goal:** Comprehensive observability for debugging
 
 ### Logging Improvements
 - [ ] Add structured logging (JSON format option)
-- [ ] Include context in logs (filename, step, timestamp)
+- [ ] Include context in logs (filename, step, timestamp, PID)
 - [ ] Add log levels (DEBUG, INFO, WARNING, ERROR)
-- [ ] Log FFmpeg full output to separate debug file
+- [ ] Log FFmpeg full output to separate debug file (`_temp/ffmpeg_debug.log`)
 - [ ] Add progress indicators for long operations
 
 ### Health Checks
 - [ ] Pre-run system check (FFmpeg, disk space, permissions)
 - [ ] Output file validation after processing
 - [ ] Temp file cleanup verification
+- [ ] Add `/api/diagnostics` endpoint improvements
 
 ---
 
-## User Experience Improvements
+## Sprint 7: User Experience
+
+**Goal:** Clear feedback and helpful error messages
 
 ### Error Messages
 - [ ] Translate technical errors to user-friendly messages
@@ -151,14 +159,53 @@
 - [ ] Show estimated time remaining
 - [ ] Show current processing step clearly
 - [ ] Show file sizes (input/output)
+- [ ] Show audio/video quality info
 
 ---
 
-## Immediate Action Items
+## Backlog: Future Improvements
 
-1. **Fix FFmpeg command:** Remove `-c:v copy` when using `-vf` filter, or re-encode video
-2. **Add FFmpeg existence check** before processing
-3. **Add input file validation** before processing
-4. **Add temp file cleanup** on failure
-5. **Improve error messages** to be user-friendly
-6. **Handle special characters** in filenames (sanitize or quote properly)
+### Testing Strategy
+- [ ] Unit tests for FFmpeg command builder
+- [ ] Unit tests for file validation functions
+- [ ] Unit tests for path sanitization functions
+- [ ] Integration tests with sample videos:
+  - [ ] Standard 1080p video with AAC audio
+  - [ ] Video with no audio
+  - [ ] Video with multiple audio tracks
+  - [ ] Video with special characters in filename
+  - [ ] 4K video
+  - [ ] Very short video
+  - [ ] Very long video
+- [ ] Test error recovery (simulate failures at each step)
+- [ ] Test cleanup after failure
+
+### System Edge Cases
+- [ ] Handle concurrent processing (multiple instances running)
+- [ ] Handle process interrupted (Ctrl+C, power loss)
+- [ ] Cross-platform testing (Windows, macOS, Linux)
+- [ ] Handle restricted environments (no temp folder access)
+
+---
+
+## Reference: Critical Issues Matrix
+
+| Module | Issue | Risk | Sprint |
+|--------|-------|------|--------|
+| module_spleeter.py:68 | No timeout on Spleeter | HIGH | 1 |
+| module_demucs.py:75 | No timeout on Demucs | HIGH | 1 |
+| module_processor.py:358 | FFmpeg sync no timeout | MEDIUM | 1 |
+| module_processor.py:405 | Final conversion no timeout | MEDIUM | 1 |
+| module_processor.py:445 | Video creation no timeout | MEDIUM | 1 |
+| module_ytdlp.py:133 | Download can hang forever | HIGH | 1 |
+
+---
+
+## Good Practices Already in Place ✅
+
+- ✅ Process manager tracks all subprocess calls via `tracked_run()`
+- ✅ Stale process cleanup on startup (`kill_stale_processes()`)
+- ✅ Child process cleanup on shutdown (`cleanup_all_children()`)
+- ✅ FFmpeg module has error handling for `CalledProcessError`
+- ✅ Main entry has `finally` blocks for cleanup
+- ✅ Diagnostics endpoint for health checks

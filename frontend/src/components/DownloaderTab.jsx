@@ -559,7 +559,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                         >
                             {isAnalyzing ? (
                                 <>
-                                    <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
+                                    <Loader2 className="w-5 h-5 animate-spin text-blue-400 flex-shrink-0" />
                                     <span>Analyzing...</span>
                                 </>
                             ) : (
@@ -831,7 +831,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                         <div className="relative z-10 flex items-center space-x-2">
                             {status === 'processing' ? (
                                 <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
                                     <span>Downloading...</span>
                                 </>
                             ) : (
