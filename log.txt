@@ -1,1 +1,5 @@
 [2026-03-06 23:45:00] [System] Logging initialized. All process failures will be recorded here.
+[2026-03-07 00:26:03] [SpawnWithJob] Failed to set job object information. Error: 24
+[2026-03-07 00:28:03] [SpawnWithJob] Fatal error: The system cannot find the file specified
+   at System.Diagnostics.Process.StartWithCreateProcess(ProcessStartInfo startInfo)
+   at ProcessWrapper.Program.Main(String[] args)
