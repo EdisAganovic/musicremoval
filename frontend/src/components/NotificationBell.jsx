@@ -55,6 +55,7 @@ const NotificationBell = () => {
         markAllRead,
         markSingleRead,
         clearAll,
+        fetchNotifications,
         getNotificationIcon,
         getNotificationColor
     } = useNotifications();
@@ -80,12 +81,11 @@ const NotificationBell = () => {
                 onClick={() => setIsOpen(!isOpen)}
                 className="relative p-3 bg-dark-800/80 hover:bg-dark-700 rounded-xl border border-white/10 transition-all group"
             >
-                <Bell className={`w-5 h-5 transition-colors ${
-                    unreadCount > 0 
-                        ? 'text-red-400 group-hover:text-red-300' 
+                <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0
+                        ? 'text-red-400 group-hover:text-red-300'
                         : 'text-gray-400 group-hover:text-white'
-                }`} />
-                
+                    }`} />
+
                 {/* Unread Badge */}
                 {unreadCount > 0 && (
                     <motion.div
@@ -187,11 +187,10 @@ const NotificationBell = () => {
                                                 key={notification.id}
                                                 initial={{ opacity: 0, x: -20 }}
                                                 animate={{ opacity: 1, x: 0 }}
-                                                className={`p-4 transition-all cursor-pointer ${
-                                                    notification.read 
-                                                        ? 'bg-transparent' 
+                                                className={`p-4 transition-all cursor-pointer ${notification.read
+                                                        ? 'bg-transparent'
                                                         : getNotificationColor(notification.type)
-                                                } hover:bg-white/5`}
+                                                    } hover:bg-white/5`}
                                                 onClick={() => markSingleRead(notification.id)}
                                             >
                                                 <div className="flex items-start space-x-3">
@@ -200,9 +199,8 @@ const NotificationBell = () => {
                                                     </span>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-start justify-between">
-                                                            <p className={`text-sm font-semibold truncate ${
-                                                                notification.read ? 'text-gray-400' : 'text-white'
-                                                            }`}>
+                                                            <p className={`text-sm font-semibold truncate ${notification.read ? 'text-gray-400' : 'text-white'
+                                                                }`}>
                                                                 {notification.title}
                                                             </p>
                                                             {!notification.read && (
@@ -223,8 +221,8 @@ const NotificationBell = () => {
                                                                         onClick={async (e) => {
                                                                             e.stopPropagation();
                                                                             try {
-                                                                                await axios.post(`${BACKEND_URL}/api/open-file`, { 
-                                                                                    path: notification.data.file_path 
+                                                                                await axios.post(`${BACKEND_URL}/api/open-file`, {
+                                                                                    path: notification.data.file_path
                                                                                 });
                                                                             } catch (err) {
                                                                                 console.error("Failed to open file", err);

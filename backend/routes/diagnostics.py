@@ -60,18 +60,30 @@ def _get_package_version(package_name: str) -> str:
 
 
 def _get_disk_space(path: str) -> dict:
-    """Get disk space info for the given path."""
+    """Get disk space info for the given path. If path doesn't exist, check the parent."""
+    original_path = path
     try:
+        # If path doesn't exist, try to get usage of the first existing parent
+        while path and not os.path.exists(path):
+            parent = os.path.dirname(path)
+            if parent == path: # Root reached
+                break
+            path = parent
+            
+        if not path or not os.path.exists(path):
+            return {"path": original_path, "error": "Path and parent directories do not exist"}
+
         usage = shutil.disk_usage(path)
         return {
-            "path": path,
+            "path": original_path,
+            "real_path": path if path != original_path else None,
             "total_gb": round(usage.total / (1024**3), 2),
             "used_gb": round(usage.used / (1024**3), 2),
             "free_gb": round(usage.free / (1024**3), 2),
             "percent_used": round((usage.used / usage.total) * 100, 1),
         }
     except Exception as e:
-        return {"path": path, "error": str(e)}
+        return {"path": original_path, "error": str(e)}
 
 
 def _check_system():
@@ -108,11 +120,18 @@ def _check_packages():
     return {pkg: _get_package_version(pkg) for pkg in packages}
 
 
+import torch
+try:
+    import demucs
+    import demucs.separate
+    DEMUCS_AVAILABLE = True
+except ImportError:
+    DEMUCS_AVAILABLE = False
+
 def _check_cuda():
-    """Check CUDA/GPU availability. This is the SLOW one (imports torch)."""
+    """Check CUDA/GPU availability. This is now fast since torch is imported at top level."""
     cuda_info = {"available": False}
     try:
-        import torch
         cuda_info["available"] = torch.cuda.is_available()
         cuda_info["torch_version"] = torch.__version__
         cuda_info["torch_cuda_version"] = getattr(torch.version, "cuda", None)
@@ -158,8 +177,6 @@ def _check_cuda():
             except Exception as e:
                 cuda_info["nvidia_smi_error"] = str(e)
 
-    except ImportError:
-        cuda_info["error"] = "PyTorch not installed"
     except Exception as e:
         cuda_info["error"] = str(e)
 
@@ -193,26 +210,21 @@ def _check_ffmpeg():
 
 
 def _check_demucs_import():
-    """Try importing demucs (can be slow)."""
+    """Check if demucs was successfully imported on startup."""
     demucs_import = {}
-    try:
-        import demucs
-        demucs_import["importable"] = True
-        demucs_import["location"] = os.path.dirname(demucs.__file__)
-    except ImportError as e:
+    if DEMUCS_AVAILABLE:
+        try:
+            import demucs
+            demucs_import["importable"] = True
+            demucs_import["location"] = os.path.dirname(demucs.__file__)
+            demucs_import["separate_importable"] = True
+        except Exception as e:
+            demucs_import["importable"] = False
+            demucs_import["error"] = str(e)
+    else:
         demucs_import["importable"] = False
-        demucs_import["error"] = str(e)
-    except Exception as e:
-        demucs_import["importable"] = False
-        demucs_import["error"] = str(e)
-
-    try:
-        import demucs.separate
-        demucs_import["separate_importable"] = True
-    except Exception as e:
-        demucs_import["separate_importable"] = False
-        demucs_import["separate_error"] = str(e)
-
+        demucs_import["error"] = "Demucs not installed or failed to import on startup"
+    
     return demucs_import
 
 
@@ -298,51 +310,50 @@ async def full_health_check():
     so a slow import (torch/demucs) doesn't block everything.
     """
     loop = asyncio.get_event_loop()
+    
+    # 1. Start all tasks concurrently
+    tasks = {
+        "system": loop.run_in_executor(_diag_pool, _check_system),
+        "packages": loop.run_in_executor(_diag_pool, _check_packages),
+        "disk_dirs": loop.run_in_executor(_diag_pool, _check_disk_and_dirs),
+        "cuda": loop.run_in_executor(_diag_pool, _check_cuda),
+        "ffmpeg": loop.run_in_executor(_diag_pool, _check_ffmpeg),
+        "models": loop.run_in_executor(_diag_pool, _check_models),
+        "demucs": loop.run_in_executor(_diag_pool, _check_demucs_import)
+    }
+
     results = {}
-
-    # Fast checks - run directly (no heavy imports)
-    results["system"] = _check_system()
-    results["packages"] = _check_packages()
-
-    disk_dirs = _check_disk_and_dirs()
+    
+    # Wait for fast ones first
+    results["system"] = await tasks["system"]
+    results["packages"] = await tasks["packages"]
+    results["models"] = await tasks["models"]
+    
+    disk_dirs = await tasks["disk_dirs"]
     results["disk"] = disk_dirs["disk"]
     results["directories"] = disk_dirs["directories"]
 
-    # Heavy checks - run in thread pool with timeouts
-    # These run concurrently for speed
-    cuda_future = loop.run_in_executor(_diag_pool, _check_cuda)
-    ffmpeg_future = loop.run_in_executor(_diag_pool, _check_ffmpeg)
-
-    # CUDA check with 20s timeout (importing torch can be slow)
+    # Heavy checks with individual timeouts
     try:
-        results["cuda"] = await asyncio.wait_for(cuda_future, timeout=20)
+        results["cuda"] = await asyncio.wait_for(tasks["cuda"], timeout=20)
     except asyncio.TimeoutError:
-        results["cuda"] = {
-            "available": False,
-            "error": "CUDA check timed out after 20s (torch import is very slow on this machine)",
-            "timed_out": True,
-        }
+        results["cuda"] = {"available": False, "error": "CUDA check timed out", "timed_out": True}
+    except Exception as e:
+        results["cuda"] = {"available": False, "error": str(e)}
 
-    # FFmpeg check with 10s timeout
     try:
-        results["ffmpeg"] = await asyncio.wait_for(ffmpeg_future, timeout=10)
+        results["ffmpeg"] = await asyncio.wait_for(tasks["ffmpeg"], timeout=10)
     except asyncio.TimeoutError:
-        results["ffmpeg"] = {"error": "FFmpeg check timed out after 10s", "timed_out": True}
+        results["ffmpeg"] = {"error": "FFmpeg check timed out", "timed_out": True}
+    except Exception as e:
+        results["ffmpeg"] = {"error": str(e)}
 
-    # Model files (fast, filesystem only)
-    results["models"] = _check_models()
-
-    # Demucs import test with 20s timeout
-    demucs_future = loop.run_in_executor(_diag_pool, _check_demucs_import)
     try:
-        results["demucs_import"] = await asyncio.wait_for(demucs_future, timeout=20)
+        results["demucs_import"] = await asyncio.wait_for(tasks["demucs"], timeout=20)
     except asyncio.TimeoutError:
-        results["demucs_import"] = {
-            "importable": False,
-            "error": "Demucs import timed out after 20s",
-            "timed_out": True,
-            "separate_importable": False,
-        }
+        results["demucs_import"] = {"importable": False, "error": "Demucs import timed out", "timed_out": True}
+    except Exception as e:
+        results["demucs_import"] = {"importable": False, "error": str(e)}
 
     return results
 

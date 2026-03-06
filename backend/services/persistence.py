@@ -23,12 +23,27 @@ from utils.file_ops import safe_makedirs
 
 def init_data_directory():
     """
-    Ensure data directory exists and all required JSON files are initialized.
-    Should be called on app startup.
+    Ensure all required directories and JSON files exist on app startup.
     """
-    data_dir = "data"
-    safe_makedirs(data_dir, exist_ok=True)
+    # 1. Create required working directories
+    required_dirs = [
+        "data",
+        "download",
+        "nomusic",
+        "uploads",
+        "_temp",
+        "_processing_intermediates",
+        "pretrained_models"
+    ]
+    
+    for d in required_dirs:
+        path = os.path.abspath(d)
+        if not os.path.exists(path):
+            safe_makedirs(path, exist_ok=True)
+            print(f"{Fore.GREEN}Created directory: {d}{Style.RESET_ALL}")
 
+    # 2. Initialize required JSON files
+    data_dir = "data"
     required_files = {
         "library.json": [],
         "download_queue.json": [],
@@ -47,7 +62,7 @@ def init_data_directory():
             except (OSError, IOError, TypeError) as e:
                 print(f"{Fore.RED}Error creating {filepath}: {e}{Style.RESET_ALL}")
 
-    # Also create video.json with default settings if missing
+    # 3. Create video.json with default settings if missing
     video_config_path = os.path.join(data_dir, "video.json")
     if not os.path.exists(video_config_path):
         default_video_config = {

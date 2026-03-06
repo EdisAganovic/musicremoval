@@ -106,7 +106,11 @@ function AppContent() {
   useEffect(() => {
     if (showConsole) {
       fetchConsoleLogs();
-      const interval = setInterval(fetchConsoleLogs, 2000);
+      const interval = setInterval(() => {
+        if (!document.hidden) {
+          fetchConsoleLogs();
+        }
+      }, 3000); // 3s instead of 2s for better efficiency
       return () => clearInterval(interval);
     }
   }, [showConsole]);

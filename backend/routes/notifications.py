@@ -1,13 +1,16 @@
-"""
-Notifications and System API Routes.
-"""
 import os
 import sys
 import json
 import subprocess
 import time
 import shutil
+import asyncio
+import importlib.metadata
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, HTTPException
+
+import torch
+import psutil
 
 from config import (
     console_logs, notifications, MAX_LOGS, MAX_NOTIFICATIONS,
@@ -91,138 +94,160 @@ async def clear_console_logs():
     return {"status": "cleared"}
 
 
-# Cache for system info to avoid expensive subprocess calls every time
+# --- OPTIMIZATION: Caching and Parallelism ---
+# Cache for system info to avoid expensive calculations every time
 _system_info_cache = {"data": None, "expiry": 0}
 SYSTEM_INFO_CACHE_TTL = 300  # 5 minutes
 
+# Static info cache (rarely/never changes)
+_static_info = None
+_diag_executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="sysinfo")
+
+def get_static_info():
+    """Gather info that doesn't change: package versions, python version, GPU specs."""
+    global _static_info
+    if _static_info:
+        return _static_info
+
+    info = {
+        "packages": {
+            "python": sys.version.split()[0],
+            "yt-dlp": "N/A",
+            "demucs": "N/A",
+            "spleeter": "N/A",
+            "pytorch": torch.__version__,
+            "torchaudio": "N/A",
+            "ffmpeg": "N/A",
+            "fdk_aac": False
+        },
+        "gpu": {
+            "available": False,
+            "name": "N/A",
+            "vram_total": "N/A",
+            "cuda_version": "N/A"
+        }
+    }
+
+    # Packages
+    for pkg in ["yt-dlp", "demucs", "spleeter", "torchaudio"]:
+        try:
+            info["packages"][pkg] = importlib.metadata.version(pkg)
+        except Exception:
+            pass
+
+    # FFmpeg
+    try:
+        from modules.module_ffmpeg import get_ffmpeg_version, check_fdk_aac_codec
+        info["packages"]["ffmpeg"] = get_ffmpeg_version()
+        info["packages"]["fdk_aac"] = check_fdk_aac_codec()
+    except Exception:
+        pass
+
+    # GPU
+    try:
+        if torch.cuda.is_available():
+            info["gpu"]["available"] = True
+            info["gpu"]["name"] = torch.cuda.get_device_name(0)
+            info["gpu"]["cuda_version"] = torch.version.cuda
+            total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            info["gpu"]["vram_total"] = f"{total_vram:.1f} GB"
+    except Exception:
+        pass
+
+    _static_info = info
+    return info
+
+def get_folder_size(folder):
+    """Calculate total size of a folder (expensive)."""
+    total = 0
+    if os.path.exists(folder):
+        for root, dirs, files in os.walk(folder):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except (OSError, IOError):
+                    pass
+    return total
+
+def get_library_stats():
+    """Calculate library size (expensive)."""
+    library = get_full_library()
+    total_files = len(library)
+    total_size_bytes = 0
+    for item in library:
+        for f in item.get("result_files", []):
+            try:
+                if os.path.exists(f):
+                    total_size_bytes += os.path.getsize(f)
+            except (OSError, IOError):
+                pass
+    return {
+        "total_files": total_files,
+        "total_size": f"{total_size_bytes / (1024**2):.1f} MB"
+    }
+
+def get_dynamic_info():
+    """Gather info that changes frequently but is fast to get: RAM, Disk free."""
+    info = {
+        "memory": {"total": "N/A", "available": "N/A", "demucs_usage": "~8GB per job"},
+        "storage": {"total": "N/A", "free": "N/A"}
+    }
+    try:
+        mem = psutil.virtual_memory()
+        info["memory"]["total"] = f"{mem.total / (1024**3):.1f} GB"
+        info["memory"]["available"] = f"{mem.available / (1024**3):.1f} GB"
+        
+        disk = psutil.disk_usage(os.path.abspath("."))
+        info["storage"]["total"] = f"{disk.total / (1024**3):.1f} GB"
+        info["storage"]["free"] = f"{disk.free / (1024**3):.1f} GB"
+    except Exception:
+        pass
+    return info
+
 @router.get("/system-info")
 async def get_system_info():
-    """Get system information including GPU, CUDA, and package versions."""
-    import torch
-    import asyncio
-    import time
-    
+    """Get system information with optimized gathering and caching."""
     global _system_info_cache
     
     now = time.time()
     if _system_info_cache["data"] and now < _system_info_cache["expiry"]:
         return _system_info_cache["data"]
 
-    def gather_info():
-        info = {
-            "gpu": {
-                "available": False,
-                "name": "N/A",
-                "vram_total": "N/A",
-                "vram_free": "N/A",
-                "cuda_version": "N/A"
-            },
-            "packages": {
-                "python": sys.version.split()[0],
-                "yt-dlp": "N/A",
-                "demucs": "N/A",
-                "spleeter": "N/A",
-                "pytorch": torch.__version__,
-                "torchaudio": "N/A",
-                "ffmpeg": "N/A"
-            },
-            "processing": {
-                "demucs_workers": 2,
-                "segment_duration": "600s"
-            },
-            "memory": {
-                "total": "N/A",
-                "available": "N/A",
-                "demucs_usage": "~8GB per job"
-            },
-            "storage": {
-                "total": "N/A",
-                "free": "N/A",
-                "output_folder": os.path.abspath("nomusic"),
-                "download_folder": os.path.abspath("download"),
-                "output_size": "0 MB",
-                "download_size": "0 MB"
-            },
-            "library": {
-                "total_files": 0,
-                "total_size": "0 MB"
-            }
-        }
+    # Start independent tasks concurrently
+    loop = asyncio.get_event_loop()
+    
+    # 1. Static and Dynamic info (fast)
+    static_info_task = loop.run_in_executor(_diag_executor, get_static_info)
+    dynamic_info_task = loop.run_in_executor(_diag_executor, get_dynamic_info)
+    
+    # 2. Folder sizes and Library stats (slow)
+    nomusic_size_task = loop.run_in_executor(_diag_executor, get_folder_size, "nomusic")
+    download_size_task = loop.run_in_executor(_diag_executor, get_folder_size, "download")
+    library_stats_task = loop.run_in_executor(_diag_executor, get_library_stats)
 
-        # Check GPU
-        if torch.cuda.is_available():
-            info["gpu"]["available"] = True
-            info["gpu"]["name"] = torch.cuda.get_device_name(0)
-            info["gpu"]["cuda_version"] = torch.version.cuda
+    # Wait for everything
+    static_info, dynamic_info, nomusic_size, download_size, library_stats = await asyncio.gather(
+        static_info_task, dynamic_info_task, nomusic_size_task, download_size_task, library_stats_task
+    )
 
-            try:
-                total_vram = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                info["gpu"]["vram_total"] = f"{total_vram:.1f} GB"
-            except (AttributeError, TypeError, OverflowError):
-                pass
+    # Assemble final object
+    info = {
+        **static_info,
+        **dynamic_info,
+        "processing": {
+            "demucs_workers": 2,
+            "segment_duration": "600s"
+        },
+        "storage": {
+            **dynamic_info["storage"],
+            "output_folder": os.path.abspath("nomusic"),
+            "download_folder": os.path.abspath("download"),
+            "output_size": f"{nomusic_size / (1024**2):.1f} MB",
+            "download_size": f"{download_size / (1024**2):.1f} MB"
+        },
+        "library": library_stats
+    }
 
-        # Get package versions using importlib.metadata
-        import importlib.metadata
-        
-        for pkg in ["yt-dlp", "demucs", "spleeter", "torchaudio"]:
-            try:
-                info["packages"][pkg] = importlib.metadata.version(pkg)
-            except Exception:
-                pass
-
-        # Check FFmpeg
-        from modules.module_ffmpeg import get_ffmpeg_version, check_fdk_aac_codec
-        ffmpeg_ver = get_ffmpeg_version()
-        info["packages"]["ffmpeg"] = ffmpeg_ver
-        info["packages"]["fdk_aac"] = check_fdk_aac_codec()
-
-        # Get memory info
-        try:
-            import psutil
-            mem = psutil.virtual_memory()
-            info["memory"]["total"] = f"{mem.total / (1024**3):.1f} GB"
-            info["memory"]["available"] = f"{mem.available / (1024**3):.1f} GB"
-        except (ImportError, AttributeError, TypeError):
-            pass
-
-        # Get storage info
-        try:
-            import psutil
-            disk = psutil.disk_usage(os.path.abspath("."))
-            info["storage"]["total"] = f"{disk.total / (1024**3):.1f} GB"
-            info["storage"]["free"] = f"{disk.free / (1024**3):.1f} GB"
-        except (ImportError, AttributeError, TypeError, OSError):
-            pass
-
-        # Calculate folder sizes
-        def get_folder_size(folder):
-            total = 0
-            if os.path.exists(folder):
-                for root, dirs, files in os.walk(folder):
-                    for f in files:
-                        try:
-                            total += os.path.getsize(os.path.join(root, f))
-                        except (OSError, IOError):
-                            pass
-            return total
-
-        output_size = get_folder_size("nomusic")
-        download_size = get_folder_size("download")
-        info["storage"]["output_size"] = f"{output_size / (1024**2):.1f} MB"
-        info["storage"]["download_size"] = f"{download_size / (1024**2):.1f} MB"
-
-        # Library stats
-        library = get_full_library()
-        info["library"]["total_files"] = len(library)
-        library_size = sum(
-            sum(os.path.getsize(f) for f in item.get("result_files", []) if os.path.exists(f))
-            for item in library
-        )
-        info["library"]["total_size"] = f"{library_size / (1024**2):.1f} MB"
-
-        return info
-
-    info = await asyncio.to_thread(gather_info)
     _system_info_cache = {
         "data": info,
         "expiry": time.time() + SYSTEM_INFO_CACHE_TTL

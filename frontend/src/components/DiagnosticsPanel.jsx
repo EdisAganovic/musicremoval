@@ -86,6 +86,7 @@ const DiagnosticsPanel = ({ onClose }) => {
     const [testResult, setTestResult] = useState(null);
     const [testRunning, setTestRunning] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [showCpuWarning, setShowCpuWarning] = useState(false);
 
     const runHealthCheck = async () => {
         setLoading(true);
@@ -93,6 +94,11 @@ const DiagnosticsPanel = ({ onClose }) => {
         try {
             const response = await axios.get(`${BACKEND_URL}/api/diagnostics/health`, { timeout: 60000 });
             setHealthData(response.data);
+
+            // Auto-trigger CPU warning if detected
+            if (response.data.cuda?.torch_version?.includes('+cpu')) {
+                setShowCpuWarning(true);
+            }
         } catch (err) {
             setError(err.response?.data?.detail || err.message || 'Failed to fetch diagnostics');
         } finally {
@@ -343,10 +349,20 @@ const DiagnosticsPanel = ({ onClose }) => {
                                         <InfoRow label="nvidia-smi" value={healthData.cuda.nvidia_smi_output} mono />
                                     )}
 
-                                    {!healthData.cuda?.available && !healthData.cuda?.hint && (
-                                        <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg space-y-1">
-                                            <p className="text-xs text-red-400 font-medium">⚠️ CUDA is not available. Demucs will run on CPU (much slower).</p>
-                                            <p className="text-[10px] text-red-400/70">Fix: Install PyTorch with CUDA from pytorch.org - e.g. pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121</p>
+                                    {!healthData.cuda?.available && (
+                                        <div className="mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs text-red-400 font-bold">⚠️ GPU Acceleration Disabled (CPU Mode)</p>
+                                                <button
+                                                    onClick={() => setShowCpuWarning(true)}
+                                                    className="px-2 py-0.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-[10px] font-bold rounded border border-red-500/30 transition-all underline decoration-red-500/30 underline-offset-2"
+                                                >
+                                                    View GPU Fix
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-red-400/80 leading-relaxed">
+                                                Demucs will run on your CPU, which is up to 50x slower than a GPU. If you have an NVIDIA card, you should install the CUDA version of PyTorch.
+                                            </p>
                                         </div>
                                     )}
                                 </div>
@@ -578,6 +594,88 @@ const DiagnosticsPanel = ({ onClose }) => {
                     )}
                 </div>
             </motion.div>
+
+            {/* GPU Fix Modal Overlay */}
+            <AnimatePresence>
+                {showCpuWarning && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[70] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md"
+                        onClick={() => setShowCpuWarning(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-dark-900 border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+                        >
+                            <div className="p-6 border-b border-white/5 bg-red-500/10 flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-red-500/20 rounded-lg">
+                                        <AlertTriangle className="w-6 h-6 text-red-400" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-white">GPU Acceleration Fix</h3>
+                                </div>
+                                <button onClick={() => setShowCpuWarning(false)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-gray-300">
+                                    We detected that <span className="text-red-400 font-bold">PyTorch (CPU version)</span> is installed.
+                                    This makes audio separation extremely slow.
+                                </p>
+
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Step 1: Uninstall CPU version</p>
+                                        <div className="bg-black/40 rounded-lg p-3 border border-white/5 relative group">
+                                            <code className="text-xs text-blue-400 font-mono block break-all">
+                                                uv pip uninstall torch torchvision torchaudio
+                                            </code>
+                                            <button
+                                                onClick={() => navigator.clipboard.writeText("uv pip uninstall torch torchvision torchaudio")}
+                                                className="absolute top-2 right-2 p-1.5 bg-dark-800 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Copy className="w-3.5 h-3.5 text-gray-400" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Step 2: Install GPU version (CUDA 12.8)</p>
+                                        <div className="bg-black/40 rounded-lg p-3 border border-white/5 relative group font-mono">
+                                            <code className="text-xs text-emerald-400 block break-all">
+                                                uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+                                            </code>
+                                            <button
+                                                onClick={() => navigator.clipboard.writeText("uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128")}
+                                                className="absolute top-2 right-2 p-1.5 bg-dark-800 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Copy className="w-3.5 h-3.5 text-gray-400" />
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-gray-500 italic">Note: Replace <span className="text-white">cu128</span> with your specific CUDA version if different (e.g., cu118, cu121).</p>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 flex justify-end">
+                                    <button
+                                        onClick={() => setShowCpuWarning(false)}
+                                        className="px-6 py-2 bg-dark-800 hover:bg-dark-700 text-white rounded-xl text-sm font-bold transition-all border border-white/10"
+                                    >
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };

@@ -51,22 +51,40 @@ export const NotificationProvider = ({ children }) => {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    const [isFetching, setIsFetching] = useState(false);
 
     // Fetch notifications
-    const fetchNotifications = useCallback(async () => {
+    const fetchNotifications = useCallback(async (isManual = false) => {
+        // Prevent overlapping fetches unless manual refresh
+        if (isFetching && !isManual) return;
+
+        // Skip polling if tab is hidden to save resources
+        if (!isManual && document.hidden) return;
+
         try {
+            setIsFetching(true);
             const response = await axios.get(`${BACKEND_URL}/api/notifications`);
             setNotifications(response.data.notifications || []);
             setUnreadCount(response.data.unread_count || 0);
         } catch (err) {
             console.error("Failed to fetch notifications", err);
+        } finally {
+            setIsFetching(false);
         }
-    }, []);
+    }, [isFetching]);
 
     // Initial fetch and polling
     useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 3000);
+        // Initial load
+        fetchNotifications(true);
+
+        // Smart polling: only when the document is visible
+        const interval = setInterval(() => {
+            if (!document.hidden) {
+                fetchNotifications();
+            }
+        }, 4000); // 4s for better battery/network efficiency
+
         return () => clearInterval(interval);
     }, [fetchNotifications]);
 
@@ -128,6 +146,7 @@ export const NotificationProvider = ({ children }) => {
             notifications,
             unreadCount,
             isOpen,
+            isFetching,
             setIsOpen,
             fetchNotifications,
             markAllRead,
