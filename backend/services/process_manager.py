@@ -31,6 +31,20 @@ _SPAWN_EXE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 _USE_JOB_OBJECTS = sys.platform == "win32" and os.path.exists(_SPAWN_EXE)
 
 
+def _log_fail(message: str):
+    """Log failures into log.txt in the project root."""
+    try:
+        # backend/services/process_manager.py -> backend/services -> backend -> root
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        log_path = os.path.join(root_dir, "log.txt")
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] [ProcessManager] {message}\n")
+    except Exception as e:
+        # Fallback to stderr if logging fails
+        print(f"Failed to write to log.txt: {e}", file=sys.stderr)
+
+
 def tracked_run(cmd, **kwargs):
     """
     Drop-in replacement for subprocess.run() that tracks the child process.
@@ -74,12 +88,14 @@ def tracked_run(cmd, **kwargs):
     try:
         stdout, stderr = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
+        _log_fail(f"Timeout ({timeout}s) for command: {original_cmd}")
         _kill_process(proc)
         stdout, stderr = proc.communicate()
         with _lock:
             _active_processes.pop(proc.pid, None)
         raise subprocess.TimeoutExpired(original_cmd, timeout, output=stdout, stderr=stderr)
-    except Exception:
+    except Exception as e:
+        _log_fail(f"Exception while running command {original_cmd}: {e}")
         _kill_process(proc)
         with _lock:
             _active_processes.pop(proc.pid, None)
@@ -96,6 +112,7 @@ def tracked_run(cmd, **kwargs):
     )
 
     if check and proc.returncode != 0:
+        _log_fail(f"Process failed with exit code {proc.returncode}: {original_cmd}\nStderr: {stderr.decode() if isinstance(stderr, bytes) else stderr}")
         raise subprocess.CalledProcessError(
             proc.returncode, original_cmd, output=stdout, stderr=stderr
         )

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
+using System.IO;
 
 namespace ProcessWrapper
 {
@@ -15,8 +16,9 @@ namespace ProcessWrapper
             public UInt32 LimitFlags;
             public UIntPtr MinimumWorkingSetSize;
             public UIntPtr MaximumWorkingSetSize;
-            public UInt32 ActiveProcessLimit;
             public UIntPtr Affinitiy;
+            public UInt32 ActiveProcessLimit;
+            public UIntPtr AffinitiyValue;
             public UInt32 PriorityClass;
             public UInt32 SchedulingClass;
         }
@@ -48,16 +50,29 @@ namespace ProcessWrapper
             ExtendedLimitInformation = 9
         }
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         static extern IntPtr CreateJobObject(IntPtr lpJobAttributes, string lpName);
 
-        [DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
         static extern bool SetInformationJobObject(IntPtr hJob, JobObjectInfoClass JobObjectInfoClass, IntPtr lpJobObjectInfo, uint cbJobObjectInfoLength);
 
-        [DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll", SetLastError = true)]
         static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);
 
         const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
+
+        static void Log(string message)
+        {
+            try
+            {
+                string exeDir = AppDomain.CurrentDomain.BaseDirectory;
+                string rootDir = Path.GetFullPath(Path.Combine(exeDir, "..", ".."));
+                string logPath = Path.Combine(rootDir, "log.txt");
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                File.AppendAllText(logPath, $"[{timestamp}] [SpawnWithJob] {message}" + Environment.NewLine);
+            }
+            catch { }
+        }
 
         static int Main(string[] args)
         {
@@ -67,9 +82,14 @@ namespace ProcessWrapper
                 return 1;
             }
 
+            string command = args[0];
+            string fullLine = string.Join(" ", args);
+
             IntPtr hJob = CreateJobObject(IntPtr.Zero, null);
             if (hJob == IntPtr.Zero)
             {
+                string err = $"Failed to create job object. Error: {Marshal.GetLastWin32Error()}";
+                Log(err);
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
@@ -83,6 +103,8 @@ namespace ProcessWrapper
                 Marshal.StructureToPtr(info, extendedInfoPtr, false);
                 if (!SetInformationJobObject(hJob, JobObjectInfoClass.ExtendedLimitInformation, extendedInfoPtr, (uint)length))
                 {
+                    string err = $"Failed to set job object information. Error: {Marshal.GetLastWin32Error()}";
+                    Log(err);
                     throw new Win32Exception(Marshal.GetLastWin32Error());
                 }
             }
@@ -91,7 +113,6 @@ namespace ProcessWrapper
                 Marshal.FreeHGlobal(extendedInfoPtr);
             }
 
-            string command = args[0];
             string arguments = args.Length > 1 ? string.Join(" ", EscapeArguments(args, 1)) : "";
 
             ProcessStartInfo startInfo = new ProcessStartInfo(command, arguments)
@@ -114,6 +135,7 @@ namespace ProcessWrapper
 
                 if (!childProcess.Start())
                 {
+                    Log($"Failed to start process: {command} {arguments}");
                     Console.Error.WriteLine("Failed to start process.");
                     return 1;
                 }
@@ -121,6 +143,8 @@ namespace ProcessWrapper
                 if (!AssignProcessToJobObject(hJob, childProcess.Handle))
                 {
                     // This might fail if the process already exited or other reasons
+                    // Log it as a warning
+                    Log($"Warning: Failed to assign process {childProcess.Id} to job object. Error: {Marshal.GetLastWin32Error()}");
                 }
 
                 // Start asynchronous reading
@@ -128,10 +152,17 @@ namespace ProcessWrapper
                 childProcess.BeginErrorReadLine();
 
                 childProcess.WaitForExit();
+                
+                if (childProcess.ExitCode != 0)
+                {
+                    Log($"Process exited with non-zero code {childProcess.ExitCode}: {command} {arguments}");
+                }
+                
                 return childProcess.ExitCode;
             }
             catch (Exception ex)
             {
+                Log($"Exception while running {command}: {ex.Message}{Environment.NewLine}{ex.StackTrace}");
                 Console.Error.WriteLine("Error: " + ex.Message);
                 return 1;
             }
@@ -156,3 +187,4 @@ namespace ProcessWrapper
         }
     }
 }
+
