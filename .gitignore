@@ -26,9 +26,10 @@ data/metadata_cache.json
 data/notifications.json
 data/tasks.json
 data/video.json
-*.exe
 *.mp4
 *.mp3
 *.mkv
 *.aac
 *.webm
+ffmpeg.exe
+ffprobe.exe
