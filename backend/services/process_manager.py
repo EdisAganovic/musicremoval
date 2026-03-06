@@ -5,10 +5,10 @@ Prevents zombie python.exe / ffmpeg.exe / demucs processes when the app
 exits prematurely (Ctrl+C, window close, crash, etc.).
 
 USAGE:
-    from services.process_manager import tracked_subprocess, cleanup_all_children
+    from services.process_manager import tracked_run, cleanup_all_children
 
     # Instead of subprocess.run(cmd), use:
-    result = tracked_subprocess(cmd, ...)
+    result = tracked_run(cmd, ...)
 
     # On shutdown:
     cleanup_all_children()
@@ -27,12 +27,15 @@ from colorama import Fore, Style
 _active_processes: dict[int, subprocess.Popen] = {}
 _lock = threading.Lock()
 _shutdown_initiated = False
+_SPAWN_EXE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "SpawnWithJob.exe")
+_USE_JOB_OBJECTS = sys.platform == "win32" and os.path.exists(_SPAWN_EXE)
 
 
 def tracked_run(cmd, **kwargs):
     """
     Drop-in replacement for subprocess.run() that tracks the child process.
     On app shutdown, any still-running tracked processes will be terminated.
+    On Windows, it uses SpawnWithJob.exe to ensure process tree cleanup even on crash.
     
     Args:
         cmd: Command to run (list or string)
@@ -44,6 +47,14 @@ def tracked_run(cmd, **kwargs):
     global _shutdown_initiated
     if _shutdown_initiated:
         raise RuntimeError("Cannot start new processes during shutdown")
+
+    original_cmd = cmd
+    # Use SpawnWithJob.exe if available on Windows to prevent zombies
+    if _USE_JOB_OBJECTS:
+        if isinstance(cmd, list):
+            cmd = [_SPAWN_EXE] + list(cmd)
+        elif isinstance(cmd, str):
+            cmd = f'"{_SPAWN_EXE}" {cmd}'
 
     # We need to use Popen to track the PID, then wait for completion
     # Extract timeout from kwargs since Popen doesn't support it directly
@@ -67,7 +78,7 @@ def tracked_run(cmd, **kwargs):
         stdout, stderr = proc.communicate()
         with _lock:
             _active_processes.pop(proc.pid, None)
-        raise subprocess.TimeoutExpired(cmd, timeout, output=stdout, stderr=stderr)
+        raise subprocess.TimeoutExpired(original_cmd, timeout, output=stdout, stderr=stderr)
     except Exception:
         _kill_process(proc)
         with _lock:
@@ -78,7 +89,7 @@ def tracked_run(cmd, **kwargs):
         _active_processes.pop(proc.pid, None)
 
     result = subprocess.CompletedProcess(
-        args=cmd,
+        args=original_cmd,
         returncode=proc.returncode,
         stdout=stdout,
         stderr=stderr,
@@ -86,7 +97,7 @@ def tracked_run(cmd, **kwargs):
 
     if check and proc.returncode != 0:
         raise subprocess.CalledProcessError(
-            proc.returncode, cmd, output=stdout, stderr=stderr
+            proc.returncode, original_cmd, output=stdout, stderr=stderr
         )
 
     return result
