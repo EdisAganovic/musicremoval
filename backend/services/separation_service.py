@@ -6,7 +6,7 @@ import time
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 
 
-def run_separation(task_id: str, file_path: str, duration=None, model="both"):
+def run_separation(task_id: str, file_path: str, duration=None, model="both", skip_video_encoding=False):
     """
     Run vocal separation on a file.
     
@@ -59,7 +59,10 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both"):
                         file_item["current_step"] = step
 
         filename = os.path.basename(file_path)
-        success_result, phase_timings = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress, model=model)
+        success_result, phase_timings = process_file(
+            file_path, keep_temp=False, duration=duration, progress_callback=on_progress, 
+            model=model, skip_video_encoding=skip_video_encoding
+        )
 
         if success_result:
             tasks[task_id]["status"] = "completed"
@@ -120,6 +123,7 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both"):
                 "source_file": file_path,
                 "metadata": get_file_metadata_cached(result_files[0]) if result_files else {},
                 "model": model,
+                "skip_video_encoding": skip_video_encoding,
                 "start_time": tasks[task_id].get("start_time"),
                 "end_time": tasks[task_id].get("end_time"),
                 "processing_time": tasks[task_id].get("processing_time"),

@@ -90,6 +90,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [processingTime, setProcessingTime] = useState(null);
   const [detailedTimings, setDetailedTimings] = useState(null);
+  const [skipVideoEncoding, setSkipVideoEncoding] = useState(false);
 
   const fileInputRef = useRef(null);
   const batchListRef = useRef(null);
@@ -137,6 +138,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     setError(null);
     setResultFiles([]);
     setMetadata(null);
+    setSkipVideoEncoding(false);
   };
 
   // Keyboard Shortcuts
@@ -358,12 +360,11 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
       setStatus("processing");
       setProgress(0);
-      setCurrentStep("Starting batch process...");
-
       const response = await axios.post(`${BACKEND_URL}/api/folder-queue/process`, {
         queue_id: queueId,
         selected_files: selectedFiles,
-        model
+        model,
+        skip_video_encoding: skipVideoEncoding
       });
 
       setBatchId(response.data.batch_id);
@@ -391,6 +392,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         const response = await axios.post(`${BACKEND_URL}/api/separate-file`, {
           file_path: libraryFilePath,
           model,
+          skip_video_encoding: skipVideoEncoding
         });
         setTaskId(response.data.task_id);
       } else {
@@ -398,6 +400,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("model", model);
+        formData.append("skip_video_encoding", skipVideoEncoding);
 
         setStatus("uploading");
         setCurrentStep("Transferring file...");
@@ -490,7 +493,27 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         ))}
       </div>
 
-      {/* Folder Selection - Only show in folder mode */}
+      {/* Skip Video Encoding Toggle */}
+      <div className="flex justify-center mb-6">
+        <label className="flex items-center space-x-3 cursor-pointer group">
+          <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${skipVideoEncoding ? 'bg-emerald-600' : 'bg-dark-700'}`}>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={skipVideoEncoding}
+              onChange={() => setSkipVideoEncoding(!skipVideoEncoding)}
+            />
+            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${skipVideoEncoding ? 'translate-x-6' : ''}`} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
+              <Video className="w-4 h-4 text-emerald-400" />
+              Skip Video Encoding
+            </span>
+            <span className="text-[10px] text-gray-500">Fast mode: uses original video stream</span>
+          </div>
+        </label>
+      </div>
       {processingMode === "folder" && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}

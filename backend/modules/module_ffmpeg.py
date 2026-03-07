@@ -71,9 +71,28 @@ def get_audio_tracks(input_file):
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"{Fore.RED}Error getting audio tracks: {e}{Style.RESET_ALL}")
         return []
-    except json.JSONDecodeError:
-        print(f"{Fore.RED}Error parsing ffprobe output.{Style.RESET_ALL}")
-        return []
+def get_video_codec(file_path):
+    """
+    Retrieves the video codec name from a file using ffprobe.
+    """
+    if not FFMPEG_EXE:
+        return "unknown"
+
+    ffprobe_exe = FFMPEG_EXE.replace('ffmpeg', 'ffprobe')
+    command = [
+        ffprobe_exe,
+        "-v", "quiet",
+        "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        file_path
+    ]
+    
+    try:
+        result = tracked_run(command, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        return result.stdout.strip() or "unknown"
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "unknown"
 
 
 FFMPEG_EXE = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ffmpeg.exe'))

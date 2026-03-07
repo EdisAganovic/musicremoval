@@ -74,6 +74,10 @@ DEFAULT_CONFIG = {
     },
     "output": {
         "format": "mp4"
+    },
+    "processing": {
+        "demucs_workers": 2,
+        "skip_video_encoding": False
     }
 }
 
@@ -172,7 +176,7 @@ def is_video_file(file_path):
     """Check if the file is a video file."""
     return file_path.lower().endswith(VIDEO_EXTENSIONS)
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both"):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -590,6 +594,21 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 output_video = os.path.join(output_folder, f"{base_filename}.{output_format}")
                 print(f"{Fore.CYAN}Output video file: {output_video}{Style.RESET_ALL}")
 
+                # Override audio settings if we're skipping video encoding for specific containers
+                if skip_video_encoding:
+                    from modules.module_ffmpeg import get_video_codec
+                    v_codec = get_video_codec(input_file).lower()
+                    print(f"{Fore.BLUE}Detected video codec: {v_codec}{Style.RESET_ALL}")
+                    
+                    if v_codec in ['h264', 'hevc', 'h265']:
+                        audio_codec = 'aac'
+                        print(f"{Fore.BLUE}Using AAC audio for H.264/H.265 compatibility.{Style.RESET_ALL}")
+                    elif v_codec in ['vp9', 'av1', 'vp8']:
+                        audio_codec = 'libopus'
+                        print(f"{Fore.BLUE}Using Opus audio for WebM/AV1 compatibility.{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}Unknown video codec '{v_codec}'. Using default '{audio_codec}'.{Style.RESET_ALL}")
+
                 final_ffmpeg_cmd = [
                     FFMPEG_EXE,
                     "-loglevel", "error",
@@ -598,11 +617,12 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     "-i", combined_vocals_aac_path,
                 ]
 
-                # Only apply scaling and pixel format conversion if we are transcoding (not using 'copy')
-                # Filtering and streamcopy cannot be used together in FFmpeg
-                if video_codec != "copy":
-                    # Force yuv420p for h264 compatibility (especially with HDR 10-bit sources like the user's Baymax file)
-                    # This fixes "[h264_nvenc] CreateInputBuffer failed: invalid param (8)"
+                # If skip_video_encoding is True OR settings specify copy, we copy the original video stream
+                if skip_video_encoding or video_codec == "copy":
+                    final_ffmpeg_cmd.extend(["-c:v", "copy"])
+                    # If we skip re-encoding, we should NOT apply scaling or pixel format conversion (filtering)
+                elif video_codec != "copy":
+                    # Force yuv420p for h264 compatibility
                     final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080,format=yuv420p", "-c:v", video_codec])
                     if video_bitrate:
                         final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
@@ -614,6 +634,11 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 ])
                 if audio_bitrate:
                     final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+
+                # Muxer specific options
+                if skip_video_encoding:
+                    # If we skip encoding, we should try to preserve the original container if possible or follow output settings
+                    pass
 
                 final_ffmpeg_cmd.extend([
                     "-map", "0:v:0",

@@ -75,6 +75,7 @@ class FileActionRequest(BaseModel):
 class SeparateRequest(BaseModel):
     file_path: str
     model: str = "both"
+    skip_video_encoding: bool = False
 
 
 class FolderScanRequest(BaseModel):
@@ -97,6 +98,7 @@ class FolderQueueProcessRequest(BaseModel):
     model: str = "both"
     selected_files: Optional[List[str]] = None
     duration: Optional[int] = None
+    skip_video_encoding: bool = False
 
 
 class DeleteFileRequest(BaseModel):

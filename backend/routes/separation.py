@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api", tags=["separation"])
 
 
 @router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both")):
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), skip_video_encoding: bool = Form(False)):
     """Upload and separate vocals from an audio file."""
     from modules.module_ffmpeg import get_file_metadata
     from colorama import Fore, Style
@@ -74,19 +74,20 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
     print(f"Batch ID: {batch_id}")
     print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
-    background_tasks.add_task(run_separation, task_id, file_path, model=model)
+    background_tasks.add_task(run_separation, task_id, file_path, model=model, skip_video_encoding=skip_video_encoding)
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
 
 @router.post("/separate-file")
-async def separate_file(background_tasks: BackgroundTasks, payload: dict):
+async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequest):
     """Separate vocals from an existing file on the server."""
     from modules.module_ffmpeg import get_file_metadata
     from colorama import Fore, Style
 
-    file_path = payload.get("file_path")
-    model = payload.get("model", "both")
+    file_path = payload.file_path
+    model = payload.model
+    skip_video_encoding = payload.skip_video_encoding
 
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -137,7 +138,7 @@ async def separate_file(background_tasks: BackgroundTasks, payload: dict):
     print(f"Batch ID: {batch_id}")
     print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
-    background_tasks.add_task(run_separation, task_id, file_path, model=model)
+    background_tasks.add_task(run_separation, task_id, file_path, model=model, skip_video_encoding=skip_video_encoding)
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
@@ -309,7 +310,14 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             "status": "pending"
         })
 
-        background_tasks.add_task(run_separation, task_id, file_path, payload.duration if hasattr(payload, 'duration') else None, model=payload.model)
+        background_tasks.add_task(
+            run_separation, 
+            task_id, 
+            file_path, 
+            payload.duration if hasattr(payload, 'duration') else None, 
+            model=payload.model,
+            skip_video_encoding=payload.skip_video_encoding
+        )
 
     print(f"{Fore.GREEN}✓ Batch processing started with {len(selected_files)} files{Style.RESET_ALL}\n")
 
