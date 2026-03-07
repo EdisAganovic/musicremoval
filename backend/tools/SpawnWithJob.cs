@@ -8,18 +8,19 @@ namespace ProcessWrapper
 {
     class Program
     {
-        [StructLayout(LayoutKind.Sequential)]
+        // Using explicit layout to ensure x64 alignment (SIZE_T/UIntPtr needs 8-byte alignment)
+        [StructLayout(LayoutKind.Explicit)]
         struct JOBOBJECT_BASIC_LIMIT_INFORMATION
         {
-            public Int64 PerProcessUserTimeLimit;
-            public Int64 PerJobUserTimeLimit;
-            public UInt32 LimitFlags;
-            public UIntPtr MinimumWorkingSetSize;
-            public UIntPtr MaximumWorkingSetSize;
-            public UInt32 ActiveProcessLimit;
-            public UIntPtr Affinity;
-            public UInt32 PriorityClass;
-            public UInt32 SchedulingClass;
+            [FieldOffset(0)] public Int64 PerProcessUserTimeLimit;
+            [FieldOffset(8)] public Int64 PerJobUserTimeLimit;
+            [FieldOffset(16)] public UInt32 LimitFlags;
+            [FieldOffset(24)] public UIntPtr MinimumWorkingSetSize;
+            [FieldOffset(32)] public UIntPtr MaximumWorkingSetSize;
+            [FieldOffset(40)] public UInt32 ActiveProcessLimit;
+            [FieldOffset(48)] public UIntPtr Affinity;
+            [FieldOffset(56)] public UInt32 PriorityClass;
+            [FieldOffset(60)] public UInt32 SchedulingClass;
         }
 
         enum JobObjectInfoClass
@@ -48,22 +49,14 @@ namespace ProcessWrapper
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 File.AppendAllText(logPath, string.Format("[{0}] [SpawnWithJob] {1}{2}", timestamp, message, Environment.NewLine));
             }
-            catch (Exception ex)
-            {
-                // Last ditch effort to stderr if log file fails
-                Console.Error.WriteLine("[SpawnWithJob] Failed to log to file: " + ex.Message);
-            }
+            catch (Exception) { }
         }
 
         static int Main(string[] args)
         {
             try
             {
-                if (args.Length == 0)
-                {
-                    Console.WriteLine("Usage: SpawnWithJob.exe <command> [args...]");
-                    return 1;
-                }
+                if (args.Length == 0) return 0;
 
                 string command = args[0];
                 string arguments = args.Length > 1 ? string.Join(" ", EscapeArguments(args, 1)) : "";
@@ -71,10 +64,8 @@ namespace ProcessWrapper
                 IntPtr hJob = CreateJobObject(IntPtr.Zero, null);
                 if (hJob == IntPtr.Zero)
                 {
-                    int errCode = Marshal.GetLastWin32Error();
-                    string err = string.Format("Failed to create job object. Error: {0}", errCode);
-                    Log(err);
-                    throw new Win32Exception(errCode);
+                    Log("Failed to create job object.");
+                    return 1;
                 }
 
                 var info = new JOBOBJECT_BASIC_LIMIT_INFORMATION();
@@ -88,20 +79,10 @@ namespace ProcessWrapper
                     if (!SetInformationJobObject(hJob, JobObjectInfoClass.BasicLimitInformation, infoPtr, (uint)length))
                     {
                         int errCode = Marshal.GetLastWin32Error();
-                        string err = string.Format("Failed to set job object information (Class 2). Error: {0}", errCode);
-                        Log(err);
-                        // We don't throw here, just log. Class 2 should almost always work.
+                        Log(string.Format("Failed to set job limits. Error: {0}. Continuing anyway...", errCode));
                     }
                 }
-                finally
-                {
-                    Marshal.FreeHGlobal(infoPtr);
-                }
-
-                // If command has spaces and isn't quoted, quote it
-                if (command.Contains(" ") && !command.StartsWith("\"")) {
-                    command = "\"" + command + "\"";
-                }
+                finally { Marshal.FreeHGlobal(infoPtr); }
 
                 ProcessStartInfo startInfo = new ProcessStartInfo(command, arguments)
                 {
@@ -112,46 +93,24 @@ namespace ProcessWrapper
                     RedirectStandardInput = true
                 };
 
-                using (Process childProcess = new Process())
+                using (Process proc = new Process())
                 {
-                    childProcess.StartInfo = startInfo;
-                    
-                    // Set up event handlers for output and error
-                    childProcess.OutputDataReceived += (sender, e) => { if (e.Data != null) Console.WriteLine(e.Data); };
-                    childProcess.ErrorDataReceived += (sender, e) => { if (e.Data != null) Console.Error.WriteLine(e.Data); };
+                    proc.StartInfo = startInfo;
+                    proc.OutputDataReceived += (s, e) => { if (e.Data != null) Console.WriteLine(e.Data); };
+                    proc.ErrorDataReceived += (s, e) => { if (e.Data != null) Console.Error.WriteLine(e.Data); };
 
-                    if (!childProcess.Start())
-                    {
-                        Log(string.Format("Failed to start process: {0} {1}", command, arguments));
-                        Console.Error.WriteLine("Failed to start process.");
-                        return 1;
-                    }
+                    if (!proc.Start()) return 1;
+                    AssignProcessToJobObject(hJob, proc.Handle);
 
-                    if (!AssignProcessToJobObject(hJob, childProcess.Handle))
-                    {
-                        int errCode = Marshal.GetLastWin32Error();
-                        Log(string.Format("Warning: Failed to assign process {0} to job object. Error: {1}", childProcess.Id, errCode));
-                    }
-
-                    // Start asynchronous reading
-                    childProcess.BeginOutputReadLine();
-                    childProcess.BeginErrorReadLine();
-
-                    childProcess.WaitForExit();
-                    
-                    if (childProcess.ExitCode != 0)
-                    {
-                        Log(string.Format("Process exited with non-zero code {0}: {1} {2}", childProcess.ExitCode, command, arguments));
-                    }
-                    
-                    return childProcess.ExitCode;
+                    proc.BeginOutputReadLine();
+                    proc.BeginErrorReadLine();
+                    proc.WaitForExit();
+                    return proc.ExitCode;
                 }
             }
             catch (Exception ex)
             {
-                string msg = string.Format("Fatal error: {0}{1}{2}", ex.Message, Environment.NewLine, ex.StackTrace);
-                Log(msg);
-                Console.Error.WriteLine("Error: " + ex.Message);
+                Log("Fatal: " + ex.Message);
                 return 1;
             }
         }
@@ -162,18 +121,12 @@ namespace ProcessWrapper
             for (int i = start; i < args.Length; i++)
             {
                 string arg = args[i];
-                // Simple escaping for arguments with spaces
                 if (arg.Contains(" ") || arg.Contains("\""))
-                {
                     escaped[i - start] = "\"" + arg.Replace("\"", "\\\"") + "\"";
-                }
                 else
-                {
                     escaped[i - start] = arg;
-                }
             }
             return escaped;
         }
     }
 }
-
