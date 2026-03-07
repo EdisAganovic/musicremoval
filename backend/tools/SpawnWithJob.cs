@@ -8,24 +8,45 @@ namespace ProcessWrapper
 {
     class Program
     {
-        // Using explicit layout to ensure x64 alignment (SIZE_T/UIntPtr needs 8-byte alignment)
-        [StructLayout(LayoutKind.Explicit)]
+        [StructLayout(LayoutKind.Sequential)]
         struct JOBOBJECT_BASIC_LIMIT_INFORMATION
         {
-            [FieldOffset(0)] public Int64 PerProcessUserTimeLimit;
-            [FieldOffset(8)] public Int64 PerJobUserTimeLimit;
-            [FieldOffset(16)] public UInt32 LimitFlags;
-            [FieldOffset(24)] public UIntPtr MinimumWorkingSetSize;
-            [FieldOffset(32)] public UIntPtr MaximumWorkingSetSize;
-            [FieldOffset(40)] public UInt32 ActiveProcessLimit;
-            [FieldOffset(48)] public UIntPtr Affinity;
-            [FieldOffset(56)] public UInt32 PriorityClass;
-            [FieldOffset(60)] public UInt32 SchedulingClass;
+            public Int64 PerProcessUserTimeLimit;
+            public Int64 PerJobUserTimeLimit;
+            public uint LimitFlags;
+            public UIntPtr MinimumWorkingSetSize;
+            public UIntPtr MaximumWorkingSetSize;
+            public uint ActiveProcessLimit;
+            public UIntPtr Affinity;
+            public uint PriorityClass;
+            public uint SchedulingClass;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct IO_COUNTERS
+        {
+            public ulong ReadOperationCount;
+            public ulong WriteOperationCount;
+            public ulong OtherOperationCount;
+            public ulong ReadTransferCount;
+            public ulong WriteTransferCount;
+            public ulong OtherTransferCount;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+        {
+            public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+            public IO_COUNTERS IoInfo;
+            public UIntPtr ProcessMemoryLimit;
+            public UIntPtr JobMemoryLimit;
+            public UIntPtr PeakProcessMemoryLimit;
+            public UIntPtr PeakJobMemoryLimit;
         }
 
         enum JobObjectInfoClass
         {
-            BasicLimitInformation = 2
+            ExtendedLimitInformation = 9
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -68,18 +89,18 @@ namespace ProcessWrapper
                     return 1;
                 }
 
-                var info = new JOBOBJECT_BASIC_LIMIT_INFORMATION();
-                info.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 
-                int length = Marshal.SizeOf(typeof(JOBOBJECT_BASIC_LIMIT_INFORMATION));
+                int length = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
                 IntPtr infoPtr = Marshal.AllocHGlobal(length);
                 try
                 {
                     Marshal.StructureToPtr(info, infoPtr, false);
-                    if (!SetInformationJobObject(hJob, JobObjectInfoClass.BasicLimitInformation, infoPtr, (uint)length))
+                    if (!SetInformationJobObject(hJob, JobObjectInfoClass.ExtendedLimitInformation, infoPtr, (uint)length))
                     {
                         int errCode = Marshal.GetLastWin32Error();
-                        Log(string.Format("Failed to set job limits. Error: {0}. Continuing anyway...", errCode));
+                        Log(string.Format("Failed to set job limits (Class 9). Error: {0}. Continuing anyway...", errCode));
                     }
                 }
                 finally { Marshal.FreeHGlobal(infoPtr); }
@@ -100,7 +121,13 @@ namespace ProcessWrapper
                     proc.ErrorDataReceived += (s, e) => { if (e.Data != null) Console.Error.WriteLine(e.Data); };
 
                     if (!proc.Start()) return 1;
-                    AssignProcessToJobObject(hJob, proc.Handle);
+                    
+                    // Assign to job immediately after start
+                    if (!AssignProcessToJobObject(hJob, proc.Handle))
+                    {
+                        int errCode = Marshal.GetLastWin32Error();
+                        Log(string.Format("Warning: AssignProcessToJobObject failed. Error: {0}", errCode));
+                    }
 
                     proc.BeginOutputReadLine();
                     proc.BeginErrorReadLine();
