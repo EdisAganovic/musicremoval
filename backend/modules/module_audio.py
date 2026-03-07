@@ -123,15 +123,30 @@ def align_audio_tracks(track1_path, track2_path, output_aligned_track1_path, out
 
     print(f"\n{Fore.CYAN}Attempting to align audio tracks using FFT cross-correlation...{Style.RESET_ALL}")
     try:
-        audio1, sr1 = sf.read(track1_path)
-        audio2, sr2 = sf.read(track2_path)
+        # Optimization: Read only the first 2 minutes for lag calculation
+        # We need the sample rate first
+        info1 = sf.info(track1_path)
+        sr1 = info1.samplerate
+        info2 = sf.info(track2_path)
+        sr2 = info2.samplerate
 
-        delay_samples, delay_ms = calculate_audio_lag(audio1, sr1, audio2, sr2)
+        # Read only up to 120 seconds of frames
+        max_frames1 = int(sr1 * 120)
+        max_frames2 = int(sr2 * 120)
+        
+        audio1_segment, _ = sf.read(track1_path, frames=max_frames1)
+        audio2_segment, _ = sf.read(track2_path, frames=max_frames2)
+
+        delay_samples, delay_ms = calculate_audio_lag(audio1_segment, sr1, audio2_segment, sr2)
         
         if delay_ms == 0:
             print(f"{Fore.YELLOW}Warning: Weak correlation or no delay detected.{Style.RESET_ALL}")
         else:
             print(f"{Fore.BLUE}Calculated audio delay: {delay_ms:.2f} ms ({delay_samples} samples){Style.RESET_ALL}")
+
+        # Now read the FULL audio only if we actually need to pad/align
+        audio1, _ = sf.read(track1_path)
+        audio2, _ = sf.read(track2_path)
 
         aligned_audio1 = audio1
         aligned_audio2 = audio2

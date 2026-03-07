@@ -389,12 +389,22 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             # Step 4b: Detect REAL lag between original and processed mixture
             print(f"{Fore.CYAN}4b. Final synchronization check...{Style.RESET_ALL}")
             try:
-                # Read original (mono subset for check) and processed
-                ref_audio, ref_sr = sf.read(temp_audio_wav_path)
-                proc_audio, proc_sr = sf.read(vocal_mixture_wav_path)
+                # Optimization: Read only the beginning of files for lag detection
+                # We need the sample rates first
+                ref_info = sf.info(temp_audio_wav_path)
+                ref_sr = ref_info.samplerate
+                proc_info = sf.info(vocal_mixture_wav_path)
+                proc_sr = proc_info.samplerate
+
+                # Read only up to 120 seconds of frames
+                max_frames_ref = int(ref_sr * 120)
+                max_frames_proc = int(proc_sr * 120)
+
+                ref_audio_segment, _ = sf.read(temp_audio_wav_path, frames=max_frames_ref)
+                proc_audio_segment, _ = sf.read(vocal_mixture_wav_path, frames=max_frames_proc)
                 
-                # We only need to check the beginning for lag
-                _, lag_ms = calculate_audio_lag(proc_audio, proc_sr, ref_audio, ref_sr)
+                # Detect REAL lag between original and processed mixture using segments
+                _, lag_ms = calculate_audio_lag(proc_audio_segment, proc_sr, ref_audio_segment, ref_sr)
                 
                 print(f"{Fore.BLUE}Detected start lag: {lag_ms:.2f} ms{Style.RESET_ALL}")
                 
