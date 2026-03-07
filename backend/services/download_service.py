@@ -241,7 +241,8 @@ def run_yt_dlp(
                     "download_info": tasks[task_id]["download_info"],
                     "metadata": file_metadata,
                     "status": "completed",
-                    "format": format_type
+                    "format": format_type,
+                    "model": "both" if auto_separate else None
                 }
                 save_to_library(library_entry)
 
@@ -264,7 +265,7 @@ def run_yt_dlp(
                     from modules.module_ffmpeg import download_ffmpeg
 
                     if download_ffmpeg():
-                        process_file(filename, keep_temp=False)
+                        success, _ = process_file(filename, keep_temp=False)
                         log_console(f"Auto-separation completed for {filename}", "success")
                         tasks[task_id]["progress"] = 100
                         tasks[task_id]["current_step"] = "Separation complete"

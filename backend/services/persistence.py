@@ -215,6 +215,16 @@ def save_to_library(task_data):
 
         existing_ids = {t.get("task_id") for t in library if isinstance(t, dict)}
         existing_urls = {t.get("url") for t in library if isinstance(t, dict) and t.get("url")}
+        
+        # New: Track by result file path to replace older versions of the same file
+        existing_result_path_index = -1
+        new_result_path = task_data.get("result_files", [None])[0]
+        
+        if new_result_path:
+            for i, item in enumerate(library):
+                if isinstance(item, dict) and item.get("result_files") and item["result_files"][0] == new_result_path:
+                    existing_result_path_index = i
+                    break
 
         # Normalize paths in task_data before saving
         if "result_files" in task_data:
@@ -231,16 +241,31 @@ def save_to_library(task_data):
         if "created_at" not in task_data:
             task_data["created_at"] = time.time()
 
-        if task_id not in existing_ids and (not task_url or task_url not in existing_urls):
-            library.insert(0, task_data)
-        elif task_url and task_url in existing_urls:
+        # Replacement Logic
+        replaced = False
+        
+        # 1. Replace by URL (Priority for downloads)
+        if task_url and task_url in existing_urls:
             for i, item in enumerate(library):
                 if item.get("url") == task_url:
-                    # Preserve original created_at when updating
                     if item.get("created_at"):
                         task_data["created_at"] = item["created_at"]
                     library[i] = task_data
+                    replaced = True
                     break
+        
+        # 2. Replace by Result Path (Priority for separations)
+        elif existing_result_path_index != -1:
+            # Preserve original created_at
+            old_item = library[existing_result_path_index]
+            if old_item.get("created_at"):
+                task_data["created_at"] = old_item["created_at"]
+            library[existing_result_path_index] = task_data
+            replaced = True
+        
+        # 3. Add new entry if NOT replaced and NOT a duplicate task_id
+        if not replaced and task_id not in existing_ids:
+            library.insert(0, task_data)
 
         library = library[:500]
 

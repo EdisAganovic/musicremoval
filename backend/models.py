@@ -26,6 +26,9 @@ class TaskStatus(BaseModel):
     metadata: dict = {}
     download_info: dict = {}
     url: str = ""
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    processing_time: Optional[float] = None
 
 
 class DownloadRequest(BaseModel):

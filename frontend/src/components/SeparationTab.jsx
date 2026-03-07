@@ -88,6 +88,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [metadata, setMetadata] = useState(null);
   const [processingMode, setProcessingMode] = useState("single");
   const [isScanning, setIsScanning] = useState(false);
+  const [processingTime, setProcessingTime] = useState(null);
+  const [detailedTimings, setDetailedTimings] = useState(null);
 
   const fileInputRef = useRef(null);
   const batchListRef = useRef(null);
@@ -177,6 +179,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
 
           if (data.status === "completed") {
             setResultFiles(data.result_files || data.resultFiles || []);
+            setProcessingTime(data.processing_time || data.processingTime);
+            setDetailedTimings(data.timings);
             clearInterval(interval);
           } else if (data.status === "failed" || data.status === "error") {
             setError("Process failed: Check backend logs.");
@@ -450,8 +454,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         <button
           onClick={() => { setProcessingMode("single"); setBatchFiles([]); setBatchId(null); }}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center space-x-2 ${processingMode === "single"
-              ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
-              : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
+            ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
+            : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
             }`}
         >
           <UploadCloud className="w-4 h-4" />
@@ -460,8 +464,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         <button
           onClick={() => { setProcessingMode("folder"); setFile(null); }}
           className={`px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 border flex items-center space-x-2 ${processingMode === "folder"
-              ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
-              : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
+            ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
+            : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
             }`}
         >
           <FolderInput className="w-4 h-4" />
@@ -476,8 +480,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             key={`model-${m}`}
             onClick={() => setModel(m)}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent ${model === m
-                ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
-                : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700"
+              ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
+              : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700"
               }`}
           >
             <span className="capitalize">{m}</span>{" "}
@@ -603,20 +607,20 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                       <div
                         key={`batch-file-${fileInfo.task_id || fileInfo.id || idx}-${idx}`}
                         className={`flex items-center justify-between p-3 rounded-lg border transition-all ${status === "processing"
-                            ? (fileInfo.status === "completed" ? "bg-emerald-600/10 border-emerald-500/30" :
-                              fileInfo.status === "failed" ? "bg-red-600/10 border-red-500/30" :
-                                fileInfo.status === "processing" ? "bg-primary-600/10 border-primary-500/30" :
-                                  "bg-dark-800/80 border-white/10")
-                            : (fileInfo.selected ? "bg-dark-800/80 border-white/10" : "bg-dark-900/50 border-white/5 opacity-60")
+                          ? (fileInfo.status === "completed" ? "bg-emerald-600/10 border-emerald-500/30" :
+                            fileInfo.status === "failed" ? "bg-red-600/10 border-red-500/30" :
+                              fileInfo.status === "processing" ? "bg-primary-600/10 border-primary-500/30" :
+                                "bg-dark-800/80 border-white/10")
+                          : (fileInfo.selected ? "bg-dark-800/80 border-white/10" : "bg-dark-900/50 border-white/5 opacity-60")
                           }`}
                       >
                         <div className="flex items-center space-x-3 flex-1 min-w-0">
                           {status === "processing" ? (
                             /* Show status icon during processing */
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${fileInfo.status === "completed" ? "bg-emerald-600/20" :
-                                fileInfo.status === "failed" ? "bg-red-600/20" :
-                                  fileInfo.status === "processing" ? "bg-primary-600/20" :
-                                    "bg-dark-700"
+                              fileInfo.status === "failed" ? "bg-red-600/20" :
+                                fileInfo.status === "processing" ? "bg-primary-600/20" :
+                                  "bg-dark-700"
                               }`}>
                               {fileInfo.status === "completed" ? (
                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -962,8 +966,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   animate={{ width: `${progress}%` }}
                   transition={{ type: "spring", stiffness: 50, damping: 20 }}
                   className={`h-full rounded-full relative overflow-hidden transition-colors duration-500 ${status === "completed"
-                      ? "bg-emerald-500"
-                      : "bg-gradient-to-r from-primary-500 to-accent-500"
+                    ? "bg-emerald-500"
+                    : "bg-gradient-to-r from-primary-500 to-accent-500"
                     }`}
                 >
                   <div
@@ -997,6 +1001,50 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
               <p className="text-emerald-200/80 text-sm mt-1">
                 Your files are ready in the output directory.
               </p>
+              {processingTime && (
+                <div className="mt-2 space-y-1">
+                  <div className="text-[10px] uppercase tracking-widest text-emerald-400 font-mono font-bold">
+                    Total process time: {processingTime < 60
+                      ? `${processingTime.toFixed(1)}s`
+                      : `${Math.floor(processingTime / 60)}m ${Math.round(processingTime % 60)}s`}
+                  </div>
+
+                  {detailedTimings && (
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-3 px-4 py-3 bg-black/20 rounded-xl border border-white/5">
+                      {detailedTimings.extract && (
+                        <div className="text-[9px] text-gray-400 font-mono">
+                          <span className="text-gray-300 font-bold">1. EXTRACT:</span> {detailedTimings.extract.toFixed(1)}s
+                        </div>
+                      )}
+                      {detailedTimings.spleeter && (
+                        <div className="text-[9px] text-gray-400 font-mono">
+                          <span className="text-blue-400 font-bold">2. SPLEETER:</span> {detailedTimings.spleeter.toFixed(1)}s
+                        </div>
+                      )}
+                      {detailedTimings.demucs && (
+                        <div className="text-[9px] text-gray-400 font-mono">
+                          <span className="text-orange-400 font-bold">3. DEMUCS:</span> {detailedTimings.demucs.toFixed(1)}s
+                        </div>
+                      )}
+                      {detailedTimings.mixing && (
+                        <div className="text-[9px] text-gray-400 font-mono">
+                          <span className="text-emerald-400 font-bold">4. MIX/ALIGN:</span> {detailedTimings.mixing.toFixed(1)}s
+                        </div>
+                      )}
+                      {detailedTimings.sync && (
+                        <div className="text-[9px] text-gray-400 font-mono">
+                          <span className="text-purple-400 font-bold">5. SYNC:</span> {detailedTimings.sync.toFixed(1)}s
+                        </div>
+                      )}
+                      {detailedTimings.output && (
+                        <div className="text-[9px] text-gray-400 font-mono">
+                          <span className="text-pink-400 font-bold">6. OUTPUT:</span> {detailedTimings.output.toFixed(1)}s
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex flex-col items-center space-y-4 pt-2">
               <div className="flex justify-center space-x-3">

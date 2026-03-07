@@ -528,8 +528,16 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                     <td className="px-4 py-2">
                                         <div className="flex items-center space-x-3">
                                             <div
-                                                className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer bg-gradient-to-tr from-indigo-600 to-primary-500"
+                                                className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer shadow-lg transition-transform hover:scale-105 ${item.model === 'spleeter'
+                                                    ? 'bg-gradient-to-tr from-blue-600 to-blue-400 shadow-blue-500/20'
+                                                    : item.model === 'demucs'
+                                                        ? 'bg-gradient-to-tr from-orange-600 to-orange-400 shadow-orange-500/20'
+                                                        : item.model === 'both'
+                                                            ? 'bg-gradient-to-tr from-emerald-600 to-emerald-400 shadow-emerald-500/20'
+                                                            : 'bg-gradient-to-tr from-indigo-600 to-primary-500 shadow-primary-500/20'
+                                                    }`}
                                                 onClick={() => libraryAPI.openFile(item.result_files?.[0]).catch(() => toast.error("Cannot open file."))}
+                                                title={item.model ? `Separated using ${item.model}` : (item.metadata?.is_video ? 'Video' : 'Audio')}
                                             >
                                                 {item.metadata?.is_video ? (
                                                     <Video className="w-4 h-4 text-white" />
@@ -537,12 +545,22 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                                                     <Music className="w-4 h-4 text-white" />
                                                 )}
                                             </div>
-                                            <span
-                                                className="text-sm font-medium text-white truncate max-w-full"
-                                                title={item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
-                                            >
-                                                {item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
-                                            </span>
+                                            <div className="flex flex-col min-w-0">
+                                                <span
+                                                    className="text-sm font-medium text-white truncate max-w-full"
+                                                    title={item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
+                                                >
+                                                    {item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
+                                                </span>
+                                                {item.model && (
+                                                    <span className={`text-[10px] uppercase tracking-wider font-bold ${item.model === 'spleeter' ? 'text-blue-400' :
+                                                        item.model === 'demucs' ? 'text-orange-400' :
+                                                            'text-emerald-400'
+                                                        }`}>
+                                                        {item.model}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="px-4 py-2">

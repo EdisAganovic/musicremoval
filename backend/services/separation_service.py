@@ -2,6 +2,7 @@
 Separation service - handles vocal separation using Demucs/Spleeter.
 """
 import os
+import time
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 
 
@@ -24,6 +25,7 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both"):
     try:
         tasks[task_id]["status"] = "processing"
         tasks[task_id]["current_step"] = "Starting separation..."
+        tasks[task_id]["start_time"] = time.time()
 
         # Update batch parent if exists
         batch_id = tasks[task_id].get("batch_id")
@@ -57,12 +59,16 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both"):
                         file_item["current_step"] = step
 
         filename = os.path.basename(file_path)
-        success = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress, model=model)
+        success_result, phase_timings = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress, model=model)
 
-        if success:
+        if success_result:
             tasks[task_id]["status"] = "completed"
             tasks[task_id]["progress"] = 100
             tasks[task_id]["current_step"] = "Separation complete"
+            tasks[task_id]["end_time"] = time.time()
+            tasks[task_id]["processing_time"] = tasks[task_id]["end_time"] - tasks[task_id]["start_time"]
+            tasks[task_id]["timings"] = phase_timings
+            
             from services.persistence import save_tasks_sync
             save_tasks_sync()
 
@@ -97,8 +103,8 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both"):
                         result_files.append(os.path.join(output_dir, f))
 
             # Fallback to the direct return value if we couldn't find matching files via scan
-            if not result_files and isinstance(success, str):
-                result_files = [success]
+            if not result_files and isinstance(success_result, str):
+                result_files = [success_result]
 
             tasks[task_id]["result_files"] = result_files
 
@@ -112,7 +118,12 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both"):
                 "status": "completed",
                 "format": "separation",
                 "source_file": file_path,
-                "metadata": get_file_metadata_cached(result_files[0]) if result_files else {}
+                "metadata": get_file_metadata_cached(result_files[0]) if result_files else {},
+                "model": model,
+                "start_time": tasks[task_id].get("start_time"),
+                "end_time": tasks[task_id].get("end_time"),
+                "processing_time": tasks[task_id].get("processing_time"),
+                "timings": tasks[task_id].get("timings")
             }
             save_to_library(library_entry)
 
