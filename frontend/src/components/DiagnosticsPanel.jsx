@@ -631,6 +631,24 @@ const DiagnosticsPanel = ({ onClose }) => {
                                 </p>
 
                                 <div className="space-y-4">
+                                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-2">
+                                        <p className="text-xs font-bold text-emerald-400 flex items-center">
+                                            <Zap className="w-3.5 h-3.5 mr-2" />
+                                            Automated Method (Recommended)
+                                        </p>
+                                        <p className="text-[10px] text-emerald-400/80">
+                                            We've created a script to do this for you. Open your project folder and run:
+                                        </p>
+                                        <div className="bg-black/40 rounded-lg p-2 border border-white/5 font-mono text-center">
+                                            <code className="text-xs text-white">GPU Fix.bat</code>
+                                        </div>
+                                    </div>
+
+                                    <div className="relative py-2">
+                                        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
+                                        <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-dark-900 px-2 text-gray-600 font-bold tracking-widest">Or Manual Method</span></div>
+                                    </div>
+
                                     <div className="space-y-2">
                                         <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Step 1: Uninstall CPU version</p>
                                         <div className="bg-black/40 rounded-lg p-3 border border-white/5 relative group">
