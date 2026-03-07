@@ -5,7 +5,7 @@ import os
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 
 
-def run_separation(task_id: str, file_path: str, duration=None):
+def run_separation(task_id: str, file_path: str, duration=None, model="both"):
     """
     Run vocal separation on a file.
     
@@ -13,6 +13,7 @@ def run_separation(task_id: str, file_path: str, duration=None):
         task_id: Unique task identifier
         file_path: Path to the file to process
         duration: Optional duration limit in seconds
+        model: Separation model to use (spleeter, demucs, both)
     
     Returns:
         None (updates tasks dict with results)
@@ -56,7 +57,7 @@ def run_separation(task_id: str, file_path: str, duration=None):
                         file_item["current_step"] = step
 
         filename = os.path.basename(file_path)
-        success = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress)
+        success = process_file(file_path, keep_temp=False, duration=duration, progress_callback=on_progress, model=model)
 
         if success:
             tasks[task_id]["status"] = "completed"

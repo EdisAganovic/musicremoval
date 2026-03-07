@@ -71,7 +71,7 @@ class FileActionRequest(BaseModel):
 
 class SeparateRequest(BaseModel):
     file_path: str
-    model: str = "htdemucs"
+    model: str = "both"
 
 
 class FolderScanRequest(BaseModel):
@@ -91,7 +91,7 @@ class FolderQueueRemoveRequest(BaseModel):
 
 class FolderQueueProcessRequest(BaseModel):
     queue_id: str
-    model: str = "htdemucs"
+    model: str = "both"
     selected_files: Optional[List[str]] = None
     duration: Optional[int] = None
 

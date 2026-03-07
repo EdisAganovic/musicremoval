@@ -171,7 +171,7 @@ def is_video_file(file_path):
     """Check if the file is a video file."""
     return file_path.lower().endswith(VIDEO_EXTENSIONS)
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both"):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -237,11 +237,13 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
     temp_spleeter_segments_dir = None
     spleeter_vocal_wav_path = None
     temp_demucs_segments_dir = None
+    demucs_vocal_wav_path = None
     combined_vocals_aac_path = None
 
     try:
         file_type = "audio" if is_audio_only else "video"
         print(f"\n{Back.YELLOW}{Fore.BLACK}# MUSIC REMOVAL STARTED FOR {input_file} ({file_type} file) ---")
+        print(f"Model selection: {model}")
         print(f"{Style.RESET_ALL}")
 
         # Step 0: Audio Track Selection
@@ -311,12 +313,19 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         demucs_workers = settings.get('processing', {}).get('demucs_workers', 2)
 
         # Both models return (path_to_wav, temp_segments_dir)
-        update_progress("Running Spleeter", 20)
-        spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext)
-        update_progress("Running Demucs", 50)
-        demucs_vocal_wav_path, temp_demucs_segments_dir = separate_with_demucs(
-            temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=demucs_workers
-        )
+        if model == "spleeter" or model == "both":
+            update_progress("Running Spleeter", 20 if model == "both" else 15)
+            spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext)
+        else:
+            print(f"{Fore.YELLOW}Skipping Spleeter based on model selection.{Style.RESET_ALL}")
+
+        if model == "demucs" or model == "both":
+            update_progress("Running Demucs", 50 if model == "both" else 15)
+            demucs_vocal_wav_path, temp_demucs_segments_dir = separate_with_demucs(
+                temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=demucs_workers
+            )
+        else:
+            print(f"{Fore.YELLOW}Skipping Demucs based on model selection.{Style.RESET_ALL}")
 
         # Step 4: Logic for Alinging and Mixing the results
         print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals...{Style.RESET_ALL}\n")
@@ -558,10 +567,12 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     "-i", combined_vocals_aac_path,
                 ]
 
-                # Only apply scaling if we are transcoding (not using 'copy')
+                # Only apply scaling and pixel format conversion if we are transcoding (not using 'copy')
                 # Filtering and streamcopy cannot be used together in FFmpeg
                 if video_codec != "copy":
-                    final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080", "-c:v", video_codec])
+                    # Force yuv420p for h264 compatibility (especially with HDR 10-bit sources like the user's Baymax file)
+                    # This fixes "[h264_nvenc] CreateInputBuffer failed: invalid param (8)"
+                    final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080,format=yuv420p", "-c:v", video_codec])
                     if video_bitrate:
                         final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
                 else:

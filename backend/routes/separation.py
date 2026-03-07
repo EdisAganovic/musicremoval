@@ -4,7 +4,7 @@ Separation API Routes - handles vocal separation using Demucs/Spleeter.
 import os
 import uuid
 import asyncio
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Form
 from typing import List
 
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api", tags=["separation"])
 
 
 @router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both")):
     """Upload and separate vocals from an audio file."""
     from modules.module_ffmpeg import get_file_metadata
     from colorama import Fore, Style
@@ -74,7 +74,7 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
     print(f"Batch ID: {batch_id}")
     print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
-    background_tasks.add_task(run_separation, task_id, file_path)
+    background_tasks.add_task(run_separation, task_id, file_path, model=model)
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
@@ -137,7 +137,7 @@ async def separate_file(background_tasks: BackgroundTasks, payload: dict):
     print(f"Batch ID: {batch_id}")
     print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
-    background_tasks.add_task(run_separation, task_id, file_path)
+    background_tasks.add_task(run_separation, task_id, file_path, model=model)
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
@@ -309,7 +309,7 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             "status": "pending"
         })
 
-        background_tasks.add_task(run_separation, task_id, file_path, payload.duration if hasattr(payload, 'duration') else None)
+        background_tasks.add_task(run_separation, task_id, file_path, payload.duration if hasattr(payload, 'duration') else None, model=payload.model)
 
     print(f"{Fore.GREEN}✓ Batch processing started with {len(selected_files)} files{Style.RESET_ALL}\n")
 
