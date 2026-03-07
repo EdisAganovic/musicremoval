@@ -1,5 +1,17 @@
 # Backend Changelog
 
+## [0.0.13] - 2026-03-07 🛡️
+
+### [Added]
+- **Theme Color Refinement**: Overhauled the backend logging and console colors to align with the new Emerald Green theme.
+- **Data Integrity Check**: Added documentation and diagnostic insights for library path mismatches. Identified issues where absolute file paths from external systems (e.g., client's computer) caused library entries to be pruned.
+- **Notification Filtering**: Restricted in-app notifications to only show "error" and "warning" types. Routine "success" and "info" messages are now only logged to the console to reduce clutter.
+
+### [Improved]
+- **Library Scanning**: Provided instructions for manual library resets (`library.json` and `metadata_cache.json`) to recover from corrupted path data.
+
+---
+
 ## [0.0.12] - 2026-03-07 🛡️
 
 ### [Added]

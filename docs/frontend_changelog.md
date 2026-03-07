@@ -1,5 +1,16 @@
 # Frontend Changelog
 
+## [0.0.13] - 2026-03-07 🚀
+
+### [Added]
+- **Emerald Green Theme**: Complete visual theme overhaul. All primary accents, gradients, search highlights, and component borders transitioned to emerald green.
+- **Interactive State Refinement**: Added better tooltips and hover effects to the Library list items.
+
+### [Fixed]
+- **Theme Consistency**: Applied the emerald green theme to the search focus bar and active pagination indicators.
+
+---
+
 ## [0.0.12] - 2026-03-07 🚀
 
 ### [Fixed]

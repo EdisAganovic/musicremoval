@@ -1,10 +1,10 @@
 # Demucs & Spleeter Vocal Extractor
 
-**Version:** 0.0.5 | **Last Updated:** 2026-03-02
+**Version:** 0.0.13 | **Last Updated:** 2026-03-07
 
 A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.5-blue)
+![Version](https://img.shields.io/badge/version-0.0.13-emerald)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.100+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
@@ -55,6 +55,7 @@ run_app.bat  # Windows
 
 ### 🎯 Core Functionality
 
+- **Emerald Green Theme**: Modern, premium UI design with emerald green accents and glassmorphism.
 - **Dual AI Models**: Combines Demucs (htdemucs) and Spleeter for best-in-class separation
 - **Smart Audio Alignment**: Automatic cross-correlation alignment for perfect sync
 - **Long Audio Segmentation**: Auto-splits files >10 minutes for reliable processing

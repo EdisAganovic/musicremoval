@@ -401,6 +401,11 @@ def save_notifications():
 async def add_notification_async(type: str, title: str, message: str, data: dict = None):
     """Adds a new notification with lock protection."""
     async with notifications_lock:
+        # Only display error and warning messages in notifications
+        if type.lower() not in ["error", "warning"]:
+            print(f"[{type.upper()}] (Notified to console only): {title} - {message}")
+            return
+
         notification = {
             "id": str(uuid.uuid4()),
             "type": type,
@@ -420,6 +425,11 @@ async def add_notification_async(type: str, title: str, message: str, data: dict
 
 def add_notification(type: str, title: str, message: str, data: dict = None):
     """Adds a new notification."""
+    # Only display error and warning messages in notifications
+    if type.lower() not in ["error", "warning"]:
+        print(f"[{type.upper()}] (Notified to console only): {title} - {message}")
+        return
+
     notification = {
         "id": str(uuid.uuid4()),
         "type": type,
