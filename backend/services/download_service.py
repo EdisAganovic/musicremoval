@@ -120,12 +120,19 @@ def run_yt_dlp(
     ydl_opts = {
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
         'progress_hooks': [progress_hook],
-        'quiet': False,  # Changed to False to ensure progress hooks work
+        'quiet': False,  
         'no_warnings': True,
         'ignoreerrors': True,
-        'noplaylist': True,  # CRITICAL: Only download the single video, not the entire playlist
+        'noplaylist': True,
         'remote_components': ['ejs:github'],
         'impersonate': ImpersonateTarget(client='chrome'),
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'web', 'mweb', 'android'],
+                'n_js_engine': ['javascript']
+            }
+        },
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     }
 
     if format_type == 'audio':

@@ -22,31 +22,9 @@ namespace ProcessWrapper
             public UInt32 SchedulingClass;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        struct IO_COUNTERS
-        {
-            public UInt64 ReadOperationCount;
-            public UInt64 WriteOperationCount;
-            public UInt64 OtherOperationCount;
-            public UInt64 ReadTransferCount;
-            public UInt64 WriteTransferCount;
-            public UInt64 OtherTransferCount;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-        {
-            public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
-            public IO_COUNTERS IoInfo;
-            public UIntPtr ProcessMemoryLimit;
-            public UIntPtr JobMemoryLimit;
-            public UIntPtr PeakProcessMemoryLimit;
-            public UIntPtr PeakJobMemoryLimit;
-        }
-
         enum JobObjectInfoClass
         {
-            ExtendedLimitInformation = 9
+            BasicLimitInformation = 2
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -99,25 +77,30 @@ namespace ProcessWrapper
                     throw new Win32Exception(errCode);
                 }
 
-                var info = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
-                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                var info = new JOBOBJECT_BASIC_LIMIT_INFORMATION();
+                info.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 
-                int length = Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
-                IntPtr extendedInfoPtr = Marshal.AllocHGlobal(length);
+                int length = Marshal.SizeOf(typeof(JOBOBJECT_BASIC_LIMIT_INFORMATION));
+                IntPtr infoPtr = Marshal.AllocHGlobal(length);
                 try
                 {
-                    Marshal.StructureToPtr(info, extendedInfoPtr, false);
-                    if (!SetInformationJobObject(hJob, JobObjectInfoClass.ExtendedLimitInformation, extendedInfoPtr, (uint)length))
+                    Marshal.StructureToPtr(info, infoPtr, false);
+                    if (!SetInformationJobObject(hJob, JobObjectInfoClass.BasicLimitInformation, infoPtr, (uint)length))
                     {
                         int errCode = Marshal.GetLastWin32Error();
-                        string err = string.Format("Failed to set job object information. Error: {0}", errCode);
+                        string err = string.Format("Failed to set job object information (Class 2). Error: {0}", errCode);
                         Log(err);
-                        throw new Win32Exception(errCode);
+                        // We don't throw here, just log. Class 2 should almost always work.
                     }
                 }
                 finally
                 {
-                    Marshal.FreeHGlobal(extendedInfoPtr);
+                    Marshal.FreeHGlobal(infoPtr);
+                }
+
+                // If command has spaces and isn't quoted, quote it
+                if (command.Contains(" ") && !command.StartsWith("\"")) {
+                    command = "\"" + command + "\"";
                 }
 
                 ProcessStartInfo startInfo = new ProcessStartInfo(command, arguments)

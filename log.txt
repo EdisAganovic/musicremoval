@@ -3,3 +3,39 @@
 [2026-03-07 00:28:03] [SpawnWithJob] Fatal error: The system cannot find the file specified
    at System.Diagnostics.Process.StartWithCreateProcess(ProcessStartInfo startInfo)
    at ProcessWrapper.Program.Main(String[] args)
+[2026-03-07 01:13:44] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:13:54] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:13:55] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:01] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:04] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:04] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:04] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:04] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:04] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:26] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:26] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:42] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:42] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:45] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:45] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:46] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:16:53] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:17:20] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:17:20] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:18:49] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:18:50] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:17] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:55] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:56] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:56] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:56] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:57] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:19:57] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:19] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:19] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:36] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:36] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:39] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:39] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:39] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87
+[2026-03-07 01:20:48] [SpawnWithJob] Failed to set job object information (Class 2). Error: 87

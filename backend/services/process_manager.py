@@ -65,10 +65,27 @@ def tracked_run(cmd, **kwargs):
     original_cmd = cmd
     # Use SpawnWithJob.exe if available on Windows to prevent zombies
     if _USE_JOB_OBJECTS:
-        if isinstance(cmd, list):
-            cmd = [_SPAWN_EXE] + list(cmd)
+        # Resolve the actual executable to ensure SpawnWithJob can find it
+        import shutil
+        executable = None
+        if isinstance(cmd, list) and cmd:
+            executable = cmd[0]
         elif isinstance(cmd, str):
-            cmd = f'"{_SPAWN_EXE}" {cmd}'
+            # Very basic string split to find the executable part
+            executable = cmd.split()[0].strip('"')
+            
+        if executable:
+            resolved_path = shutil.which(executable)
+            if resolved_path:
+                # Command exists in PATH or is absolute, we can wrap it
+                if isinstance(cmd, list):
+                    cmd = [_SPAWN_EXE] + list(cmd)
+                elif isinstance(cmd, str):
+                    cmd = f'"{_SPAWN_EXE}" {cmd}'
+            else:
+                # Command not found in PATH, let normal subprocess handle it 
+                # (it will throw FileNotFoundError with a better message)
+                pass
 
     # We need to use Popen to track the PID, then wait for completion
     # Extract timeout from kwargs since Popen doesn't support it directly

@@ -86,6 +86,10 @@ async def startup_event():
     from modules.module_ffmpeg_shared import ensure_ffmpeg_shared
     ensure_ffmpeg_shared()
 
+    # Check for yt-dlp updates on startup
+    from modules.module_ytdlp import check_and_update_ytdlp
+    check_and_update_ytdlp()
+
     # Load persisted data
     load_queue()
     load_notifications()
@@ -98,19 +102,6 @@ async def startup_event():
 
     # Start background cleanup scheduler (runs every hour)
     await start_cleanup_scheduler(interval_seconds=3600)
-
-    # Register signal handlers for graceful cleanup
-    def _signal_handler(signum, frame):
-        print(f"\n{Fore.YELLOW}Signal {signum} received, cleaning up...{Style.RESET_ALL}")
-        cleanup_all_children(reason=f"signal {signum}")
-        sys.exit(0)
-
-    try:
-        signal.signal(signal.SIGINT, _signal_handler)
-        signal.signal(signal.SIGTERM, _signal_handler)
-    except (ValueError, OSError):
-        # signal handlers can only be set in the main thread
-        pass
 
     log_console("Backend started successfully", "success")
 

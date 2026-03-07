@@ -81,28 +81,42 @@ def is_playlist_url(url):
 def check_and_update_ytdlp():
     """
     Checks for yt-dlp updates and installs or upgrades it.
+    Uses sys.executable to ensure we use the current environment's python.
     """
     print(f"{Fore.CYAN}Checking for yt-dlp updates...{Style.RESET_ALL}")
     try:
-        # Get current yt-dlp version
-        version_cmd = ["yt-dlp", "--version"]
+        # Get current yt-dlp version using python -m yt_dlp
+        version_cmd = [sys.executable, "-m", "yt_dlp", "--version"]
         try:
             version_result = tracked_run(version_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             print(f"{Fore.CYAN}Current yt-dlp version: {version_result.stdout.strip()}{Style.RESET_ALL}")
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            print(f"{Fore.YELLOW}yt-dlp not found or no version information available.{Style.RESET_ALL}")
+        except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
+            print(f"{Fore.YELLOW}yt-dlp module not ready or version check failed: {e}{Style.RESET_ALL}")
 
-        # Use UV to upgrade yt-dlp.
-        update_cmd = ["uv", "pip", "install", "--upgrade", "yt-dlp"]
+        # Try to use UV to upgrade yt-dlp if available, else fallback to standard pip
+        import shutil
+        has_uv = shutil.which("uv") is not None
+        
+        if has_uv:
+            update_cmd = ["uv", "pip", "install", "--upgrade", "yt-dlp"]
+        else:
+            update_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
+            
         print(f"{Fore.MAGENTA}Executing: {' '.join(update_cmd)}{Style.RESET_ALL}")
-        result = tracked_run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        
+        # Use a timeout for the update to prevent hanging
+        result = tracked_run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60)
+        
         if "Requirement already satisfied" in result.stdout:
             print(f"{Fore.GREEN}yt-dlp is up to date.{Style.RESET_ALL}")
         else:
             print(f"{Fore.GREEN}yt-dlp has been installed/updated successfully.{Style.RESET_ALL}")
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"{Fore.RED}Error updating yt-dlp: {e}\n{e.stderr}{Style.RESET_ALL}")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"{Fore.RED}Error updating yt-dlp: {e}{Style.RESET_ALL}")
+        return False
+    except Exception as e:
+        print(f"{Fore.RED}Unexpected error during yt-dlp update: {e}{Style.RESET_ALL}")
         return False
 
 def download_video(url, filename=None, cookies_file=None):
@@ -114,7 +128,7 @@ def download_video(url, filename=None, cookies_file=None):
     if not check_and_update_ytdlp():
         return None
 
-    download_folder = "downloads"
+    download_folder = "download"
     os.makedirs(download_folder, exist_ok=True)
 
     try:
@@ -135,8 +149,9 @@ def download_video(url, filename=None, cookies_file=None):
             "--ignore-errors",
             "--fragment-retries", "infinite",
             "--retry-sleep", "fragment:exp=1:300",
-            "--extractor-args", "youtube:player_client=default,ios",
+            "--extractor-args", "youtube:player_client=ios,web,mweb,android;n_js_engine=javascript",
             "--remote-components", "ejs:github",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "-o", output_template,
         ]
         if cookies_file and os.path.exists(cookies_file):
@@ -192,7 +207,9 @@ def download_video(url, filename=None, cookies_file=None):
             "--ignore-errors",
             "--fragment-retries", "infinite",
             "--retry-sleep", "fragment:exp=1:300",
+            "--extractor-args", "youtube:player_client=ios,web,mweb,android;n_js_engine=javascript",
             "--remote-components", "ejs:github",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "-o", output_template,
         ]
         
