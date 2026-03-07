@@ -29,7 +29,7 @@ init(autoreset=True)
 app = FastAPI(
     title="DemucsPleeter API",
     description="API for vocal separation and YouTube downloading",
-    version="1.0.0"
+    version="0.0.12"
 )
 
 # Enable CORS for React frontend

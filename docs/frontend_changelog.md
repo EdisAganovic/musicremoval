@@ -1,6 +1,13 @@
 # Frontend Changelog
 
-## [0.0.11] - 2026-03-04 🩺
+## [0.0.12] - 2026-03-07 🚀
+
+### [Fixed]
+- **Version Display**: App header now correctly displays `v0.0.12`, synced across the entire stack.
+- **UI Responsiveness**: Improved interface stability during long-running background synchronization tasks.
+
+---
+
 
 ### [Added]
 - **Diagnostics Panel**: New modal accessible via System Info → Diagnostics button. Shows CUDA, packages, FFmpeg, disk, model files, and live Demucs test.

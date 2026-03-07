@@ -1,6 +1,21 @@
 # Backend Changelog
 
-## [0.0.11] - 2026-03-04 🔧
+## [0.0.12] - 2026-03-07 🛡️
+
+### [Added]
+- **Zombie Process Protection**: Integrated Windows Job Object management (`SpawnWithJob.exe`) to ensure child processes (Demucs, FFmpeg, Spleeter) are terminated even if the backend crashes.
+- **Enhanced Logging**: Integrated process failure logging to `log.txt` via the C# wrapper for better post-mortem analysis.
+
+### [Fixed]
+- **Job Limit Errors**: Resolved "Failed to set job limits" (Error 87) on Windows systems.
+- **Sync Performance**: Optimized synchronization check logic to prevent hanging during the final verification step.
+
+### [Changed]
+- **I/O Optimization**: Refined asynchronous I/O and file handle management to prevent disk cache saturation.
+- **Version Alignment**: Synced backend version string to `0.0.12`.
+
+---
+
 
 ### [Added]
 - **Diagnostics API**: New `/api/diagnostics/health` endpoint with comprehensive system checks (CUDA, FFmpeg, packages, disk, models, Demucs import).
