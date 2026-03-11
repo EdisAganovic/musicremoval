@@ -19,6 +19,7 @@ from models import (
     QueueBatchRequest, QueueActionRequest
 )
 from utils.helpers import format_duration
+from utils.validation import is_youtube_url
 
 def normalize_youtube_url(url: str) -> str:
     """Normalizes youtube.com and youtu.be URLs, removing tracking parameters."""
@@ -76,120 +77,136 @@ async def get_all_downloads():
 
 @router.post("/yt-formats")
 async def get_yt_formats(payload: dict):
-    """Fetches available formats for a YouTube URL."""
+    """Fetches available formats for any URL supported by yt-dlp (YouTube, Facebook, etc)."""
     import yt_dlp
     from yt_dlp.networking.impersonate import ImpersonateTarget
-    
+
     url = normalize_youtube_url(payload.get("url"))
     check_playlist = payload.get("check_playlist", False)
-    
+
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
+    yt_url = is_youtube_url(url)
+
     try:
-        is_playlist_url = any(indicator in url for indicator in [
-            '/playlist?', 'list=PL', 'list=UU', 'list=RD', 'list=LL',
-            '/channel/', '/@', '/c/'
-        ])
+        # ── YouTube playlist / channel handling ──────────────────────────────
+        if yt_url and check_playlist:
+            is_playlist_url = any(indicator in url for indicator in [
+                '/playlist?', 'list=PL', 'list=UU', 'list=RD', 'list=LL',
+                '/channel/', '/@', '/c/'
+            ])
 
-        if check_playlist and is_playlist_url:
-            # Handle playlist/channel URLs
-            if '/@' in url or '/channel/' in url:
-                if '/@' in url:
-                    channel_handle = url.split('/@')[1].split('?')[0].split('/')[0]
-                    url = f"https://www.youtube.com/@{channel_handle}/videos"
-                elif '/channel/' in url:
-                    channel_id = url.split('/channel/')[1].split('?')[0].split('/')[0]
-                    url = f"https://www.youtube.com/channel/{channel_id}/videos"
+            if is_playlist_url:
+                # Handle playlist/channel URLs
+                if '/@' in url or '/channel/' in url:
+                    if '/@' in url:
+                        channel_handle = url.split('/@')[1].split('?')[0].split('/')[0]
+                        url = f"https://www.youtube.com/@{channel_handle}/videos"
+                    elif '/channel/' in url:
+                        channel_id = url.split('/channel/')[1].split('?')[0].split('/')[0]
+                        url = f"https://www.youtube.com/channel/{channel_id}/videos"
 
-            if '/featured' in url:
-                url = url.replace('/featured', '/videos')
-            if '/shorts' in url:
-                url = url.replace('/shorts', '/videos')
+                if '/featured' in url:
+                    url = url.replace('/featured', '/videos')
+                if '/shorts' in url:
+                    url = url.replace('/shorts', '/videos')
 
-            log_console(f"Fetching playlist/channel info: {url}", "info")
-            
-            ydl_opts = {
-                'quiet': True,
-                'ignoreerrors': True,
-                'noplaylist': False,
-                'extract_flat': 'in_playlist',
-                'remote_components': ['ejs:github'],
-            }
+                log_console(f"Fetching playlist/channel info: {url}", "info")
 
-            def get_playlist_info():
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    return ydl.extract_info(url, download=False)
+                ydl_opts = {
+                    'quiet': True,
+                    'ignoreerrors': True,
+                    'noplaylist': False,
+                    'extract_flat': 'in_playlist',
+                    'remote_components': ['ejs:github'],
+                }
 
-            info = await asyncio.to_thread(get_playlist_info)
-            videos = []
-            entries = info.get('entries', []) if info.get('_type') in ['playlist', 'multi_video'] else [info]
+                def get_playlist_info():
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        return ydl.extract_info(url, download=False)
 
-            # Convert generator/iterator to list if necessary
-            entries = list(entries)
+                info = await asyncio.to_thread(get_playlist_info)
+                videos = []
+                entries = info.get('entries', []) if info.get('_type') in ['playlist', 'multi_video'] else [info]
+                entries = list(entries)
 
-            for entry in entries:
-                if entry:
-                    title = entry.get('title', 'Unknown')
-                    # Skip missing or explicitly private/deleted videos
-                    if not title or title.lower() in ['[private video]', '[deleted video]', 'private video', 'deleted video']:
-                        continue
+                for entry in entries:
+                    if entry:
+                        title = entry.get('title', 'Unknown')
+                        if not title or title.lower() in ['[private video]', '[deleted video]', 'private video', 'deleted video']:
+                            continue
+                        videos.append({
+                            "id": entry.get('id', ''),
+                            "title": title,
+                            "thumbnail": entry.get('thumbnail', '') or next(iter(t['url'] for t in entry.get('thumbnails', []) if 'url' in t), ''),
+                            "duration": format_duration(entry.get('duration', 0)),
+                            "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
+                        })
 
-                    videos.append({
-                        "id": entry.get('id', ''),
-                        "title": title,
-                        "thumbnail": entry.get('thumbnail', '') or next(iter(t['url'] for t in entry.get('thumbnails', []) if 'url' in t), ''),
-                        "duration": format_duration(entry.get('duration', 0)),
-                        "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
-                    })
+                return {
+                    "is_playlist": True,
+                    "title": info.get("title", "Playlist"),
+                    "thumbnail": info.get("thumbnail", ""),
+                    "video_count": len(videos),
+                    "videos": videos
+                }
 
-            return {
-                "is_playlist": True,
-                "title": info.get("title", "Playlist"),
-                "thumbnail": info.get("thumbnail", ""),
-                "video_count": len(videos),
-                "videos": videos
-            }
-
-        # Single video
+        # ── Single video / non-YouTube URL ───────────────────────────────────
         def get_video_info(use_impersonate=True):
             opts = {
                 'quiet': True,
                 'noplaylist': True,
-                'remote_components': ['ejs:github'],
             }
-            if use_impersonate:
-                opts['impersonate'] = ImpersonateTarget(client='chrome')
-                
+            if yt_url:
+                # YouTube-specific enhancements
+                opts['remote_components'] = ['ejs:github']
+                opts['extractor_args'] = {
+                    'youtube': {
+                        'player_client': 'ios,web,mweb,android',
+                        'n_js_engine': 'javascript'
+                    }
+                }
+                if use_impersonate:
+                    opts['impersonate'] = ImpersonateTarget(client='chrome')
+            # For non-YouTube, just let yt-dlp handle it natively
+
             with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(url, download=False)
 
         try:
-            # Try first with impersonate (often gets better formats but can fail on challenge)
             info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=True))
         except Exception as e:
-            log_console(f"Impersonate failed ({e}), falling back to standard extraction", "warning")
-            # Fallback without impersonate (guarantees at least m3u8 fallback strings)
-            info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=False))
-            
+            if yt_url:
+                log_console(f"Impersonate failed ({e}), falling back to standard extraction", "warning")
+                info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=False))
+            else:
+                # Non-YouTube: just retry without any special args
+                info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=False))
+
         if info is None:
-            raise Exception("Video is no longer available or age-restricted (yt-dlp returned no metadata).")
-            
+            raise Exception("Video is unavailable or yt-dlp could not fetch metadata.")
+
         formats = []
         for f in info.get('formats', []):
-            # Get size, prefer exact filesize
             fs = f.get('filesize')
             fsa = f.get('filesize_approx')
             size_val = fs if fs is not None else fsa
-            
-            # Skip if truly no size info
-            if size_val is None or size_val == 0:
-                continue
-                
-            # Extra protection: skip 'm3u8' protocols which are often the duplicates without real sizes
-            if f.get('protocol') == 'm3u8_native' or 'm3u8' in f.get('url', ''):
-                continue
-                
+
+            # For non-YouTube platforms, include formats even without known size
+            # (Facebook, Instagram, TikTok often don't report exact sizes)
+            if not yt_url:
+                # Include if it has a resolution or is audio-only
+                if f.get('resolution') is None and f.get('vcodec') not in [None, 'none'] and f.get('acodec') in [None, 'none']:
+                    continue  # Skip video-only with no resolution info
+            else:
+                # For YouTube: skip if truly no size info
+                if size_val is None or size_val == 0:
+                    continue
+                # Extra protection: skip m3u8 protocols which are often duplicates
+                if f.get('protocol') == 'm3u8_native' or 'm3u8' in f.get('url', ''):
+                    continue
+
             format_info = {
                 "format_id": f.get("format_id"),
                 "ext": f.get("ext"),
@@ -202,24 +219,35 @@ async def get_yt_formats(payload: dict):
             }
             note = f.get('format_note')
             note_str = f" ({note})" if note else ""
-            
+
             vcodec = f.get('vcodec') or 'none'
             acodec = f.get('acodec') or 'none'
-            
-            # Show short codec names (e.g., avc1.4D401E -> avc1)
+
             codecs = []
             if vcodec != 'none':
                 codecs.append(vcodec.split('.')[0])
             if acodec != 'none':
                 codecs.append(acodec.split('.')[0])
-                
+
             codec_str = f" [{'/'.join(codecs)}]" if codecs else ""
 
-            label = f"{f.get('ext')} - {f.get('resolution')}{codec_str}{note_str}"
+            resolution = f.get('resolution') or 'audio'
+            label = f"{f.get('ext')} - {resolution}{codec_str}{note_str}"
             if vcodec == 'none':
                 label = f"Audio: {f.get('ext')}{codec_str}{note_str}"
+            if size_val:
+                label += f" ({size_val / 1024 / 1024:.1f} MB)"
             format_info["label"] = label
             formats.append(format_info)
+
+        # Deduplicate by format_id
+        seen_ids = set()
+        unique_formats = []
+        for f in formats:
+            fid = f.get("format_id")
+            if fid not in seen_ids:
+                seen_ids.add(fid)
+                unique_formats.append(f)
 
         available_subs = []
         if 'subtitles' in info:
@@ -230,16 +258,23 @@ async def get_yt_formats(payload: dict):
                 if not any(s['code'] == lang for s in available_subs):
                     available_subs.append({"code": lang, "label": f"{lang} (Auto-generated)"})
 
+        # Determine platform
+        import urllib.parse as _up
+        platform = _up.urlparse(url).netloc.lower().replace('www.', '').split('.')[0]
+
         return {
             "is_playlist": False,
             "title": info.get("title"),
             "thumbnail": info.get("thumbnail"),
             "id": info.get("id"),
-            "formats": formats,
-            "subtitles": available_subs
+            "formats": unique_formats,
+            "subtitles": available_subs,
+            "platform": platform,
+            "is_youtube": yt_url,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.post("/download")

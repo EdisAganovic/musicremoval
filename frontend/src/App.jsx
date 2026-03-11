@@ -216,7 +216,7 @@ function AppContent() {
                 )}
                 <span className="relative z-10 flex items-center space-x-2">
                   {tab === 'separation' ? <AudioLines className="w-4 h-4" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
-                  <span className="capitalize">{tab === 'downloader' ? 'YT Downloader' : tab}</span>
+                  <span className="capitalize">{tab === 'downloader' ? 'Downloader' : tab}</span>
                 </span>
               </button>
             ))}

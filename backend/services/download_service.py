@@ -1,5 +1,5 @@
 """
-Download service - handles YouTube downloads via yt-dlp.
+Download service - handles downloads via yt-dlp (YouTube, Facebook, and more).
 """
 import os
 import asyncio
@@ -11,6 +11,7 @@ from config import (
     log_console, download_queue, save_queue, get_full_library
 )
 from utils.helpers import format_duration
+from utils.validation import is_youtube_url
 
 
 def run_yt_dlp(
@@ -22,9 +23,11 @@ def run_yt_dlp(
     auto_separate: bool = False,
     subfolder: str = None
 ):
-    """Download video/audio from YouTube using yt-dlp."""
+    """Download video/audio from any yt-dlp supported platform."""
     import yt_dlp
     from yt_dlp.networking.impersonate import ImpersonateTarget
+
+    yt_url = is_youtube_url(url)
 
     tasks[task_id] = {
         "task_id": task_id,
@@ -120,20 +123,26 @@ def run_yt_dlp(
     ydl_opts = {
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
         'progress_hooks': [progress_hook],
-        'quiet': False,  
+        'quiet': False,
         'no_warnings': True,
         'ignoreerrors': True,
         'noplaylist': True,
-        'remote_components': ['ejs:github'],
-        'impersonate': ImpersonateTarget(client='chrome'),
-        'extractor_args': {
-            'youtube': {
-                'player_client': 'ios,web,mweb,android',
-                'n_js_engine': 'javascript'
-            }
-        },
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     }
+
+    if yt_url:
+        # YouTube-specific: use advanced extractor args + impersonation + remote components
+        ydl_opts.update({
+            'remote_components': ['ejs:github'],
+            'impersonate': ImpersonateTarget(client='chrome'),
+            'extractor_args': {
+                'youtube': {
+                    'player_client': 'ios,web,mweb,android',
+                    'n_js_engine': 'javascript'
+                }
+            },
+        })
+    # For non-YouTube (Facebook, Instagram, TikTok, etc.) yt-dlp handles it natively
 
     if format_type == 'audio':
         ydl_opts.update({
@@ -174,10 +183,12 @@ def run_yt_dlp(
             if info is None:
                 raise Exception("Download failed or was aborted by yt-dlp (info missing)")
 
-            log_console(f"Task {task_id}: Extraction complete, title={info.get('title', 'Unknown')}", "info")
+            video_title = info.get('title', 'Unknown')
+            log_prefix = f"[{video_title[:40]}]" if video_title != 'Unknown' else f"[{task_id[:8]}]"
+            log_console(f"{log_prefix} Extraction complete", "info")
             tasks[task_id]["current_step"] = "Starting download..."
             tasks[task_id]["progress"] = 15
-            log_console(f"Task {task_id}: Starting download, progress=15%", "info")
+            log_console(f"{log_prefix} Starting download, progress=15%", "info")
             
             filename = ydl.prepare_filename(info)
 

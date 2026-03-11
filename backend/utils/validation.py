@@ -56,6 +56,20 @@ def validate_youtube_url(url: str) -> bool:
     return False
 
 
+def is_youtube_url(url: str) -> bool:
+    """
+    Returns True if URL is from YouTube (youtube.com or youtu.be).
+    Used to determine whether to apply YouTube-specific yt-dlp options.
+    """
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url.strip())
+        return parsed.netloc.lower().replace('www.', '') in ['youtube.com', 'youtu.be']
+    except Exception:
+        return False
+
+
 def sanitize_filename(filename: str, max_length: int = 255) -> str:
     """
     Sanitize filename by removing or replacing invalid characters.

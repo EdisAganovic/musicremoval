@@ -56,6 +56,7 @@ from utils.validation import (
     safe_path,
     validate_url,
     validate_youtube_url,
+    is_youtube_url,
     sanitize_filename,
 )
 
@@ -149,6 +150,7 @@ __all__ = [
     "safe_path",
     "validate_url",
     "validate_youtube_url",
+    "is_youtube_url",
     "sanitize_filename",
     # async_tools
     "TransactionContext",

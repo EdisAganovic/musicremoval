@@ -380,15 +380,24 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 setPlaylistSubfolder(safeTitle);
             } else {
                 // Single video - filter formats
-                const filtered = response.data.formats.filter(f => {
-                    if (format === 'audio') return f.vcodec === 'none';
-                    return f.vcodec !== 'none';
+                const allFormats = response.data.formats || [];
+                const isYt = response.data.is_youtube;
+                const filtered = allFormats.filter(f => {
+                    if (format === 'audio') {
+                        // Audio: vcodec is 'none' or missing, or format explicitly audio-only
+                        return f.vcodec === 'none' || (!f.vcodec && f.acodec && f.acodec !== 'none');
+                    }
+                    // Video: must have some video codec
+                    // For non-YouTube, vcodec may be null but format has a resolution
+                    return f.vcodec && f.vcodec !== 'none';
                 });
 
-                setAvailableFormats(filtered);
-                if (filtered.length > 0) {
-                    // Select best by default (usually last in list)
-                    setSelectedFormatId(filtered[filtered.length - 1].format_id);
+                // If no filtered formats (e.g. Facebook returns combined streams), show all
+                const finalFormats = filtered.length > 0 ? filtered : allFormats;
+
+                setAvailableFormats(finalFormats);
+                if (finalFormats.length > 0) {
+                    setSelectedFormatId(finalFormats[finalFormats.length - 1].format_id);
                 }
             }
         } catch (err) {
@@ -407,13 +416,18 @@ const DownloaderTab = ({ analyzingProgress }) => {
     // Update filtered formats when tab changes
     useEffect(() => {
         if (videoInfo && !videoInfo.is_playlist && videoInfo.formats) {
-            const filtered = videoInfo.formats.filter(f => {
-                if (format === 'audio') return f.vcodec === 'none';
-                return f.vcodec !== 'none';
+            const isYt = videoInfo.is_youtube;
+            const allFormats = videoInfo.formats;
+            const filtered = allFormats.filter(f => {
+                if (format === 'audio') {
+                    return f.vcodec === 'none' || (!f.vcodec && f.acodec && f.acodec !== 'none');
+                }
+                return f.vcodec && f.vcodec !== 'none';
             });
-            setAvailableFormats(filtered);
-            if (filtered.length > 0 && !lastVideoId) {
-                setSelectedFormatId(filtered[filtered.length - 1].format_id);
+            const finalFormats = filtered.length > 0 ? filtered : allFormats;
+            setAvailableFormats(finalFormats);
+            if (finalFormats.length > 0 && !lastVideoId) {
+                setSelectedFormatId(finalFormats[finalFormats.length - 1].format_id);
             }
         }
     }, [format, videoInfo]);
@@ -436,6 +450,10 @@ const DownloaderTab = ({ analyzingProgress }) => {
         }
     }, [selectedFormatId, videoInfo, url, rememberFormat]);
 
+    // Track title of the video that is CURRENTLY downloading
+    // (distinct from videoInfo.title which may change as user analyzes new URLs)
+    const [downloadingTitle, setDownloadingTitle] = useState('');
+
     const handleDownload = async () => {
         if (!url) return;
 
@@ -444,6 +462,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
         setCurrentStep('Starting download...');
         setDownloadInfo({ speed: '', eta: '' });
         setError(null);
+        // Capture the title NOW before videoInfo might change
+        setDownloadingTitle(videoInfo?.title || url);
 
         try {
             const response = await axios.post(`${BACKEND_URL}/api/download`, {
@@ -479,6 +499,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
             setStatus('error');
         }
     };
+
 
     const handleCancelDownload = async (idToCancel) => {
         const targetId = idToCancel || currentTaskId || taskId;
@@ -543,7 +564,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
                             type="text"
                             value={url}
                             onChange={(e) => setUrl(e.target.value)}
-                            placeholder="Paste YouTube URL here..."
+                            onKeyDown={(e) => { if (e.key === 'Enter' && url && !isAnalyzing) handleAnalyze(); }}
+                            placeholder="Paste URL here... (YouTube, Facebook, Instagram, TikTok, etc.)"
                             className="w-full bg-transparent text-white py-5 pr-4 border-none focus:ring-0 placeholder-gray-600 text-lg font-medium"
                         />
                         <button
@@ -709,9 +731,16 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center space-x-2 mb-1">
-                                            {videoInfo.id && (
+                                            {/* Show video ID badge only for YouTube */}
+                                            {videoInfo.id && videoInfo.is_youtube && (
                                                 <span className="text-[10px] font-mono text-primary-400 bg-primary-600/20 px-2 py-0.5 rounded">
                                                     [{videoInfo.id}]
+                                                </span>
+                                            )}
+                                            {/* Show platform badge for non-YouTube */}
+                                            {videoInfo.platform && !videoInfo.is_youtube && (
+                                                <span className="text-[10px] font-mono text-blue-400 bg-blue-600/20 px-2 py-0.5 rounded capitalize">
+                                                    {videoInfo.platform}
                                                 </span>
                                             )}
                                             <h4 className="text-white font-bold truncate leading-tight flex-1">{videoInfo.title}</h4>
@@ -875,7 +904,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                 </div>
                                 <div>
                                     <h3 className="text-white font-bold leading-tight">
-                                        {videoInfo?.title || 'Downloading...'}
+                                        {downloadingTitle || 'Downloading...'}
                                     </h3>
                                 </div>
                             </div>
