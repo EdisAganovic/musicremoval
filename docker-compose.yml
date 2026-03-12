@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  spleeter:
+    image: deezer/spleeter:3.6-2stems
+    volumes:
+      - .:/input
+      - ./spleeter_out:/output
+    # The command will be overridden when running from the script
+    command: ["separate", "-p", "spleeter:2stems", "-o", "/output"]

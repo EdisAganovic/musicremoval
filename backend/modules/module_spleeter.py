@@ -33,6 +33,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import concurrent.futures
 from colorama import Fore, Style
 from tqdm import tqdm
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE
@@ -42,6 +43,38 @@ try:
     from services.process_manager import tracked_run
 except ImportError:
     tracked_run = subprocess.run
+
+def get_spleeter_workers():
+    """Reads the number of Spleeter workers from data/video.json."""
+    config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "video.json"))
+    default_workers = 4
+    if os.path.exists(config_path):
+        try:
+            import json
+            with open(config_path, "r") as f:
+                data = json.load(f)
+                return data.get("processing", {}).get("spleeter_workers", default_workers)
+        except Exception as e:
+            print(f"{Fore.YELLOW}Warning: Could not read Spleeter workers from video.json ({e}). Using default: {default_workers}{Style.RESET_ALL}")
+    return default_workers
+
+SPLEETER_IMAGE = "deezer/spleeter:3.6-2stems"
+MAX_WORKERS = get_spleeter_workers()
+# Path on host for pretrained models
+MODEL_DIRECTORY_HOST = os.path.abspath("pretrained_models")
+
+def is_docker_available():
+    """Checks if Docker is running and the required Spleeter image is present."""
+    try:
+        # Check if docker is running
+        subprocess.run(["docker", "info"], check=True, capture_output=True)
+        # Check if the image exists
+        result = subprocess.run(["docker", "images", "-q", SPLEETER_IMAGE], check=True, capture_output=True, text=True)
+        if result.stdout.strip():
+            return True
+        return False
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
 
 def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext):
     """
@@ -97,18 +130,53 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
 
             print(f"\n{Fore.GREEN}\N{check mark} Audio splitted into {len(split_audio_paths)} segments for Spleeter.{Style.RESET_ALL}")
 
-            for i, segment_path in tqdm(enumerate(split_audio_paths), total=len(split_audio_paths), desc="Spleeter segments", unit="seg"):
+            use_docker = is_docker_available()
+            if use_docker:
+                print(f"{Fore.GREEN}Docker detected. Using {SPLEETER_IMAGE} with {MAX_WORKERS} workers.{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.YELLOW}Docker not available or image missing. Falling back to local Spleeter.{Style.RESET_ALL}")
+
+            def process_segment(i, segment_path):
                 segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
                 
-                spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
-                tqdm.write(f"{Fore.MAGENTA}Processing segment {i+1}/{len(split_audio_paths)} with Spleeter{Style.RESET_ALL}")
-                tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
-
-                segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
-                if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
-                    spleeter_segment_vocal_paths.append(segment_vocal_path)
+                if use_docker:
+                    # Docker command
+                    # We volume map the input file directory and the output directory
+                    input_dir = os.path.dirname(os.path.abspath(segment_path))
+                    input_file = os.path.basename(segment_path)
+                    output_dir_abs = os.path.abspath(spleeter_out_path)
+                    
+                    spleeter_cmd = [
+                        "docker", "run", "--rm",
+                        "-v", f"{input_dir}:/input",
+                        "-v", f"{output_dir_abs}:/output",
+                        "-v", f"{MODEL_DIRECTORY_HOST}:/model",
+                        "-e", "MODEL_PATH=/model",
+                        SPLEETER_IMAGE,
+                        "separate", "-p", "spleeter:2stems", "-o", "/output", f"/input/{input_file}"
+                    ]
                 else:
-                    print(f"{Fore.YELLOW}Warning: Spleeter vocals for segment {segment_base_name} not found or empty. Skipping.{Style.RESET_ALL}")
+                    # Local command
+                    spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
+                
+                # tqdm.write(f"{Fore.MAGENTA}Processing segment {i+1} with {'Docker' if use_docker else 'Local Spleeter'}{Style.RESET_ALL}")
+                tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+                
+                segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
+                return segment_vocal_path
+
+            # Use ThreadPoolExecutor for parallel processing
+            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                future_to_segment = {executor.submit(process_segment, i, path): path for i, path in enumerate(split_audio_paths)}
+                for future in tqdm(concurrent.futures.as_completed(future_to_segment), total=len(split_audio_paths), desc="Spleeter segments", unit="seg"):
+                    segment_vocal_path = future.result()
+                    if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
+                        spleeter_segment_vocal_paths.append(segment_vocal_path)
+                    else:
+                        print(f"{Fore.YELLOW}Warning: Spleeter vocals for segment not found or empty. Skipping.{Style.RESET_ALL}")
+
+            # Re-sort paths to match original order (crucial for concatenation)
+            spleeter_segment_vocal_paths.sort() 
 
             if not spleeter_segment_vocal_paths:
                 print(f"{Fore.RED}Error: No Spleeter vocal segments generated.{Style.RESET_ALL}")
@@ -125,7 +193,24 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 spleeter_vocal_wav_path = final_spleeter_vocals_temp_path
                 print(f"\n{Fore.GREEN}\N{check mark} All Spleeter vocal segments joined successfully.{Style.RESET_ALL}")
         else:
-            spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
+            use_docker = is_docker_available()
+            if use_docker:
+                print(f"{Fore.GREEN}Docker detected. Using {SPLEETER_IMAGE} for single file.{Style.RESET_ALL}")
+                input_dir = os.path.dirname(os.path.abspath(temp_audio_wav_path))
+                input_file = os.path.basename(temp_audio_wav_path)
+                output_dir_abs = os.path.abspath(spleeter_out_path)
+                spleeter_cmd = [
+                    "docker", "run", "--rm",
+                    "-v", f"{input_dir}:/input",
+                    "-v", f"{output_dir_abs}:/output",
+                    "-v", f"{MODEL_DIRECTORY_HOST}:/model",
+                    "-e", "MODEL_PATH=/model",
+                    SPLEETER_IMAGE,
+                    "separate", "-p", "spleeter:2stems", "-o", "/output", f"/input/{input_file}"
+                ]
+            else:
+                spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
+            
             print(f"{Fore.MAGENTA}Executing: {' '.join(spleeter_cmd)}{Style.RESET_ALL}\n")
             tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
             spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
