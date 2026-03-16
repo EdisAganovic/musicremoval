@@ -1,12 +1,12 @@
 # Demucs & Spleeter Vocal Extractor
 
-**Version:** 0.0.13 | **Last Updated:** 2026-03-07
+**Version:** 0.0.13 | **Last Updated:** 2026-03-16
 
 A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
 ![Version](https://img.shields.io/badge/version-0.0.13-emerald)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![FastAPI](https://img.shields.io/badge/fastapi-0.100+-green.svg)
+![FastAPI](https://img.shields.io/badge/fastapi-0.129+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
 
 ---
@@ -51,6 +51,132 @@ run_app.bat  # Windows
 
 ---
 
+## 🍎 MacBook Installation Guide
+
+### Prerequisites for macOS
+
+Before installing the application on your MacBook, ensure you have the following:
+
+1. **macOS 10.15+** (Catalina or later recommended)
+2. **Xcode Command Line Tools**: Install with `xcode-select --install`
+3. **Homebrew Package Manager**: Install from https://brew.sh/
+4. **Python 3.10+** (with pip)
+5. **Node.js 18+** (with npm)
+
+### Step-by-Step Installation on MacBook
+
+#### 1. Install Prerequisites
+
+**Install Homebrew (if not already installed):**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**Install Xcode Command Line Tools:**
+
+```bash
+xcode-select --install
+```
+
+**Install Python 3.10+ via Homebrew:**
+
+```bash
+brew install python@3.10
+```
+
+**Install Node.js 18+ via Homebrew:**
+
+```bash
+brew install node
+```
+
+**Verify installations:**
+
+```bash
+python3 --version    # Should show Python 3.10.x or higher
+node --version       # Should show v18.x.x or higher
+npm --version        # Should show 9.x.x or higher
+```
+
+#### 2. Install UV Package Manager
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+#### 3. Clone the Repository
+
+```bash
+# Clone the repository
+git clone https://github.com/your-repo/demucspleeter.git
+cd demucspleeter
+```
+
+#### 4. Set Up Python Environment
+
+```bash
+# Create virtual environment with Python 3.10
+uv venv --python 3.10
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Upgrade pip
+python -m pip install --upgrade pip
+```
+
+#### 5. Install Dependencies
+
+```bash
+# Install Python dependencies
+uv pip install -r requirements.txt
+
+# Navigate to frontend and install dependencies
+cd frontend
+npm install
+cd ..
+```
+
+#### 6. Configure for macOS
+
+**Create environment file for frontend:**
+
+```bash
+# In the frontend directory, create .env file
+echo "VITE_API_BASE_URL=http://localhost:5170/api" > frontend/.env
+```
+
+#### 7. Run the Application
+
+```bash
+# Make sure you're in the project root directory
+# Activate virtual environment if not already activated
+source .venv/bin/activate
+
+# Run the application
+./run_app.sh
+```
+
+The application should now be running:
+- **Backend API**: http://localhost:5170
+- **Frontend**: http://localhost:5173
+
+### MacBook-Specific Notes
+
+- **Apple Silicon (M1/M2/M3)**: The application is compatible with Apple Silicon MacBooks. If you encounter any issues with certain packages, you may need to install packages with the `--no-binary` flag or use Rosetta 2 translation layer.
+  
+- **Rosetta 2**: If you experience compatibility issues with certain Python packages, install Rosetta 2:
+  ```bash
+  softwareupdate --install-rosetta
+  ```
+
+- **Security Settings**: On newer macOS versions, you might need to allow the application to run after installation due to security settings.
+
+- **GPU Acceleration**: Note that CUDA GPU acceleration is only available on NVIDIA GPUs. On MacBook with Apple Silicon, the application will use the built-in Neural Engine and CPU for processing, which is still quite efficient.
+
+---
+
 ## ✨ Key Features
 
 ### 🎯 Core Functionality
@@ -62,15 +188,21 @@ run_app.bat  # Windows
 - **Multi-Track Support**: Handles videos with multiple audio tracks (auto-select by language)
 - **GPU Acceleration**: Full CUDA support for 5-10x faster processing
 
-### 🚀 New in v0.0.5
+### 🚀 New in v0.0.13
+- **Emerald Green Theme**: Complete visual overhaul with premium emerald green accents and glassmorphism.
+- **Data Integrity Shield**: Automatic detection and reporting of library path mismatches.
+- **Notification Filtering**: Cleaner UI by showing only critical warnings and errors in-app.
 
-#### Production-Grade Batch Processing
+### 🚀 New in v0.0.12
+- **Diagnostics Dashboard**: Comprehensive system health check (CUDA, FFmpeg, Torch, Disk, and AI Models).
+- **Zombie Process Protection**: Windows Job Object integration to ensure zero leftover processes on crash.
+- **Process Manager**: Intelligent tracking and graceful cleanup of all child subprocesses.
+- **FFmpeg Shared DLLs**: Automatic download of BtbN shared builds for enhanced `torchcodec` compatibility.
 
-- **Enhanced Stability**: Fixed polling race conditions that caused "0% complete" UI errors.
-- **Persistent Counters**: Batch success/fail tracking survives even after individual task cleanup.
-- **Intelligent Scrolling**: Batch list now automatically scrolls to follow the currently processing file.
-- **Scanning Feedback**: Visual "Scanning..." state and input locking during folder metadata extraction.
-- **Individual Task Polling**: Detailed progress tracking for every single file in a batch.
+### 🚀 New in v0.0.11
+- **Queue Controls**: New "Cancel All" feature to instantly halt all active and pending tasks.
+- **Improved YT Extraction**: Better handling of private/unavailable videos in playlists.
+- **Progress Persistence**: Fixed polling bugs where playlist indices would disappear.
 
 ### 🚀 New in v0.0.4
 
@@ -192,8 +324,14 @@ For NVIDIA GPU acceleration:
 
 1. Download CUDA Toolkit: https://developer.nvidia.com/cuda-12-8-0-download-archive
 2. Install matching cuDNN for your CUDA version
-3. Install GPU 版 PyTorch:
+3. Use the provided shortcut (Windows) or install manually:
 
+**Windows Shortcut:**
+```bash
+"GPU Fix.bat"
+```
+
+**Manual Installation:**
 ```bash
 # First uninstall CPU version
 uv pip uninstall torch torchvision torchaudio
@@ -470,16 +608,24 @@ Edit `data/video.json` to customize output settings:
 
 ```
 backend/
-├── main.py              # FastAPI server, all API endpoints
+├── backend.py           # Main FastAPI server entry point
 ├── config.py            # Global state and shared settings
 ├── modules/             # AI core and processing logic
 │   ├── module_processor.py    # Main separation orchestrator
 │   ├── module_demucs.py       # Demucs AI model wrapper
 │   ├── module_spleeter.py     # Spleeter AI model wrapper
 │   ├── module_ffmpeg.py       # FFmpeg utilities
+│   ├── module_ffmpeg_shared.py # Shared DLL downloader
 │   ├── module_audio.py        # Audio alignment & mixing
-│   ├── module_cuda.py         # GPU detection
 │   └── module_ytdlp.py        # YouTube downloading
+├── services/            # Background services
+│   └── process_manager.py     # Child process tracking & cleanup
+├── routes/              # API Route definitions
+│   ├── diagnostics.py         # Health & diagnostic endpoints
+│   ├── separation.py          # Vocal removal routes
+│   └── library.py             # File management routes
+├── tools/               # Windows native utilities
+│   └── SpawnWithJob.exe       # Zombie process prevention
 data/                    # Persistent state and configuration
 ├── video.json           # Processing configuration
 ├── library.json         # Processed files database
@@ -503,7 +649,8 @@ frontend/
 │   │   ├── SeparationTab.jsx    # File upload & separation
 │   │   ├── DownloaderTab.jsx    # YouTube downloader
 │   │   ├── LibraryTab.jsx       # File library management
-│   │   └── NotificationBell.jsx # Notification system
+│   │   ├── NotificationBell.jsx # Notification system
+│   │   └── DiagnosticsPanel.jsx # System health dashboard
 │   └── contexts/
 │       └── NotificationContext.jsx  # Notification state
 ```
@@ -622,20 +769,25 @@ _Times include both Spleeter + Demucs processing with alignment_
 
 See [changelog.md](changelog.md) for detailed version history.
 
-### v0.0.5 (2026-03-02)
+### v0.0.13 (2026-03-16)
+- ✅ Emerald Green Theme visual overhaul
+- ✅ Data integrity & path mismatch diagnostics
+- ✅ Restricted notifications for cleaner UX
 
+### v0.0.12 (2026-03-07)
+- ✅ System Diagnostics Dashboard
+- ✅ Windows Job Object "Zombie" protection
+- ✅ Process Manager for child cleanup
+- ✅ FFmpeg Shared DLL auto-download
+
+### v0.0.11 (2026-03-03)
+- ✅ "Cancel All" queue management
+- ✅ Enhanced playlist extraction
+- ✅ Progress persistence fixes
+
+### v0.0.5 (2026-03-02)
 - ✅ Production-grade batch processing stability
 - ✅ UI follow-process auto-scrolling
-- ✅ Individual task polling (v0.0.5)
-- ✅ Data directory reorganization
-
-### v0.0.4 (2026-03-02)
-
-- ✅ Backend module relocation
-- ✅ UTF-8 subprocess encoding fixes
-- ✅ Documentation restrucutring
-
-### v0.0.3 (2026-03-01)
 
 ### v0.0.1 (2025-02-19)
 
