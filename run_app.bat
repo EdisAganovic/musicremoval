@@ -13,11 +13,13 @@ powershell -Command "$p = Get-NetTCPConnection -LocalPort 5170 -ErrorAction Sile
 
 :: 2. Launch Backend
 echo [2/3] Launching Backend...
-if exist ".venv\Scripts\activate.bat" (
-    REM We use start "" to launch in a new window
-    start "Demucs-Backend" cmd /k "call .venv\Scripts\activate.bat && python -m uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
+REM We call the .venv python directly to avoid Windows "Python not found" aliases.
+if exist ".venv\Scripts\python.exe" (
+    start "Demucs-Backend" cmd /k ".venv\Scripts\python.exe -m uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
 ) else (
-    echo [Error] Could not find .venv folder.
+    echo [Error] .venv not found. Running 'uv sync'...
+    uv sync
+    start "Demucs-Backend" cmd /k ".venv\Scripts\python.exe -m uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
 )
 
 :: 3. Launch Frontend

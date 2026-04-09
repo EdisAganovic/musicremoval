@@ -73,7 +73,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
     const [isPlaylist, setIsPlaylist] = useState(false);
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [selectedPlaylistVideos, setSelectedPlaylistVideos] = useState([]);
-    const [playlistSubfolder, setPlaylistSubfolder] = useState('');
+    const [subfolder, setSubfolder] = useState('');
 
     // Remember last selected format per video ID
     const [lastVideoId, setLastVideoId] = useState(() => {
@@ -272,6 +272,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 format,
                 format_id: selectedFormatId,
                 auto_separate: autoSeparate,
+                subfolder: subfolder.trim() || null,
                 title: videoInfo?.title || ''
             });
 
@@ -297,7 +298,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 format,
                 format_id: selectedFormatId,
                 auto_separate: autoSeparate,
-                subfolder: playlistSubfolder.trim() || null
+                subfolder: subfolder.trim() || null
             });
 
             setShowPlaylistConfirm(false);
@@ -305,7 +306,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
             setUrl('');
             setPlaylistVideos([]);
             setSelectedPlaylistVideos([]);
-            setPlaylistSubfolder('');
+            setSubfolder('');
             setIsPlaylist(false);
             fetchQueue();
         } catch (err) {
@@ -359,6 +360,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
         setPlaylistVideos([]);
         setSelectedPlaylistVideos([]);
         setIsPlaylist(false);
+        setSubfolder('');
 
         try {
             const response = await axios.post(`${BACKEND_URL}/api/yt-formats`, {
@@ -377,7 +379,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 const rawTitle = response.data.title || 'Playlist';
                 // Strip invalid filename chars AND leading @ (channel handles)
                 const safeTitle = rawTitle.replace(/[\\/:*?"<>|]/g, '_').replace(/^@+/, '').trim();
-                setPlaylistSubfolder(safeTitle);
+                setSubfolder(safeTitle);
             } else {
                 // Single video - filter formats
                 const allFormats = response.data.formats || [];
@@ -470,7 +472,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                 url,
                 format,
                 format_id: selectedFormatId,
-                subfolder: isPlaylist ? playlistSubfolder.trim() || null : null,
+                subfolder: subfolder.trim() || null,
                 auto_separate: autoSeparate
             });
 
@@ -616,32 +618,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                         </div>
                                     </div>
 
-                                    {/* Subfolder input */}
-                                    <div className="mb-4 bg-dark-900/60 rounded-xl p-3 border border-white/5">
-                                        <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black flex items-center space-x-1 mb-1.5">
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
-                                            <span>Save to subfolder inside <span className="text-gray-400">download/</span></span>
-                                        </label>
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-gray-600 text-xs font-mono flex-shrink-0">download /</span>
-                                            <input
-                                                type="text"
-                                                value={playlistSubfolder}
-                                                onChange={(e) => setPlaylistSubfolder(e.target.value)}
-                                                placeholder="playlist-name  (leave blank for no subfolder)"
-                                                className="flex-1 bg-dark-800 text-white text-sm border border-white/10 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500/50 placeholder-gray-600 transition-colors font-mono"
-                                            />
-                                            {playlistSubfolder && (
-                                                <button
-                                                    onClick={() => setPlaylistSubfolder('')}
-                                                    className="p-1.5 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all flex-shrink-0"
-                                                    title="Clear subfolder (save directly to download/)"
-                                                >
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
+                                    {/* Subfolder input (moved to common area below) */}
 
                                     {/* Select All / None */}
                                     <div className="flex items-center justify-between mb-3">
@@ -792,6 +769,35 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                     </div>
                                 </div>
                             )}
+                            
+                            {/* Subfolder input - common for both playlist and single */}
+                            <div className="px-4 pb-4">
+                                <div className="bg-dark-900/60 rounded-xl p-3 border border-white/5">
+                                    <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black flex items-center space-x-1 mb-1.5">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                                        <span>Save to subfolder inside <span className="text-gray-400">download/</span></span>
+                                    </label>
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-gray-600 text-xs font-mono flex-shrink-0">download /</span>
+                                        <input
+                                            type="text"
+                                            value={subfolder}
+                                            onChange={(e) => setSubfolder(e.target.value)}
+                                            placeholder="folder-name  (leave blank for no subfolder)"
+                                            className="flex-1 bg-dark-800 text-white text-sm border border-white/10 rounded-lg px-3 py-1.5 outline-none focus:border-blue-500/50 placeholder-gray-600 transition-colors font-mono"
+                                        />
+                                        {subfolder && (
+                                            <button
+                                                onClick={() => setSubfolder('')}
+                                                className="p-1.5 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-all flex-shrink-0"
+                                                title="Clear subfolder (save directly to download/)"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
