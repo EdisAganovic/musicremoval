@@ -18,6 +18,10 @@ dependencies = [
     "soundfile",
     "yt-dlp",
     "python-multipart",
+    "psutil",
+    "watchfiles",
+    "numpy<2.0.0",
+    "scipy<1.14.0",
 ]
 
 [project.scripts]
@@ -26,6 +30,15 @@ demucspleeter = "main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend", "main.py"]
+
+[tool.uv]
+required-environments = ["sys_platform == 'win32'"]
+override-dependencies = [
+    "tensorflow-io-gcs-filesystem==0.31.0; sys_platform == 'win32'",
+]
 
 [tool.uv.workspace]
 members = [

@@ -169,7 +169,13 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                     spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
                 
                 # tqdm.write(f"{Fore.MAGENTA}Processing segment {i+1} with {'Docker' if use_docker else 'Local Spleeter'}{Style.RESET_ALL}")
-                tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+                
+                # Set up environment for local spleeter to find models
+                env = os.environ.copy()
+                if not use_docker:
+                    env["MODEL_PATH"] = MODEL_DIRECTORY_HOST
+                
+                tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
                 
                 segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
                 return segment_vocal_path
@@ -221,7 +227,13 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, temp_audio_wav_path]
             
             print(f"{Fore.MAGENTA}Executing: {' '.join(spleeter_cmd)}{Style.RESET_ALL}\n")
-            tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            
+            # Set up environment for local spleeter to find models
+            env = os.environ.copy()
+            if not use_docker:
+                env["MODEL_PATH"] = MODEL_DIRECTORY_HOST
+            
+            tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
             spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
             print(f"{Fore.GREEN}Spleeter separation complete.{Style.RESET_ALL}")
         
@@ -231,6 +243,8 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
 
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error with spleeter separation: {e}{Style.RESET_ALL}")
+        if e.stderr:
+            print(f"{Fore.RED}Spleeter Error Output: {e.stderr}{Style.RESET_ALL}")
         spleeter_vocal_wav_path = None
     except Exception as e:
         print(f"{Fore.RED}An unexpected error occurred during Spleeter processing: {e}{Style.RESET_ALL}")
