@@ -13,14 +13,8 @@ powershell -Command "$p = Get-NetTCPConnection -LocalPort 5170 -ErrorAction Sile
 
 :: 2. Launch Backend
 echo [2/3] Launching Backend...
-REM We call the .venv python directly to avoid Windows "Python not found" aliases.
-if exist ".venv\Scripts\python.exe" (
-    start "Demucs-Backend" cmd /k ".venv\Scripts\python.exe -m uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
-) else (
-    echo [Error] .venv not found. Running 'uv sync'...
-    uv sync
-    start "Demucs-Backend" cmd /k ".venv\Scripts\python.exe -m uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
-)
+REM Using 'uv run' ensures the environment is synced and managed correctly.
+start "Demucs-Backend" cmd /k "uv run uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
 
 :: 3. Launch Frontend
 echo [3/3] Launching Frontend...

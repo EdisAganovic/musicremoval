@@ -76,7 +76,7 @@ def is_docker_available():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
-def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext):
+def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=None):
     """
     Separates vocals using Spleeter (2stems model) via subprocess.
     Handles long audio files by splitting them into chunks.
@@ -97,12 +97,17 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
 
         SPLEETER_SEGMENT_DURATION_SECONDS = 600  # 10 minutes
 
-        if audio_duration > SPLEETER_SEGMENT_DURATION_SECONDS:
+        # Check if we should use pre-split segments or split ourselves
+        if pre_split_segments:
+            print(f"{Fore.GREEN}Using {len(pre_split_segments)} pre-split segments for Spleeter.{Style.RESET_ALL}")
+            split_audio_paths = pre_split_segments
+            # No need to create a temp dir for splitting, but we might need it for concat_list.txt
+            temp_spleeter_segments_dir = tempfile.mkdtemp(dir="_temp")
+        elif audio_duration > SPLEETER_SEGMENT_DURATION_SECONDS:
             print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for Spleeter...{Style.RESET_ALL}\n")
             # Ensure _temp exists
             os.makedirs("_temp", exist_ok=True)
             temp_spleeter_segments_dir = tempfile.mkdtemp(dir="_temp")
-            spleeter_segment_vocal_paths = []
             split_audio_paths = []
 
             current_start_time = 0
@@ -128,7 +133,11 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 current_start_time += segment_duration
                 segment_index += 1
 
-            print(f"\n{Fore.GREEN}\N{check mark} Audio splitted into {len(split_audio_paths)} segments for Spleeter.{Style.RESET_ALL}")
+            print(f"\n{Fore.GREEN}[OK] Audio splitted into {len(split_audio_paths)} segments for Spleeter.{Style.RESET_ALL}")
+        
+        # If we have segments (either pre-split or just split)
+        if (pre_split_segments or (audio_duration > SPLEETER_SEGMENT_DURATION_SECONDS)):
+            spleeter_segment_vocal_paths = []
 
             use_docker = is_docker_available()
             if use_docker:
@@ -191,7 +200,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 ffmpeg_concat_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", concat_list_path, "-c", "copy", final_spleeter_vocals_temp_path]
                 tracked_run(ffmpeg_concat_cmd, check=True)
                 spleeter_vocal_wav_path = final_spleeter_vocals_temp_path
-                print(f"\n{Fore.GREEN}\N{check mark} All Spleeter vocal segments joined successfully.{Style.RESET_ALL}")
+                print(f"\n{Fore.GREEN}[OK] All Spleeter vocal segments joined successfully.{Style.RESET_ALL}")
         else:
             use_docker = is_docker_available()
             if use_docker:

@@ -246,6 +246,11 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
     temp_demucs_segments_dir = None
     demucs_vocal_wav_path = None
     combined_vocals_aac_path = None
+    
+    # Track directories for cleanup
+    temp_dirs_to_cleanup = []
+    shared_segments = None
+    shared_segments_dir = None
 
     try:
         file_type = "audio" if is_audio_only else "video"
@@ -320,6 +325,36 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         timings['extract'] = extract_end - extract_start
         print(f"{Fore.GREEN}Audio extraction took {timings['extract']:.2f}s{Style.RESET_ALL}")
 
+        # Shared segmentation logic to avoid double splitting (for files > 10 min)
+        SEGMENT_DURATION = 600
+        if original_duration and original_duration > SEGMENT_DURATION:
+            print(f"\n{Fore.YELLOW}Audio duration ({original_duration:.2f}s) exceeds 10 minutes. Splitting audio ONCE for all models...{Style.RESET_ALL}\n")
+            shared_segments_dir = tempfile.mkdtemp(dir=TEMP_DIR)
+            temp_dirs_to_cleanup.append(shared_segments_dir)
+            shared_segments = []
+            
+            curr_start = 0
+            seg_idx = 0
+            while curr_start < original_duration:
+                seg_dur = min(SEGMENT_DURATION, original_duration - curr_start)
+                seg_name = f"part_{seg_idx:03d}.wav"
+                seg_path = os.path.join(shared_segments_dir, seg_name)
+                
+                split_cmd = [
+                    FFMPEG_EXE, "-y", "-loglevel", "error",
+                    "-i", temp_audio_wav_path,
+                    "-ss", str(curr_start),
+                    "-t", str(seg_dur),
+                    seg_path
+                ]
+                print(f"- [Shared] Splitting audio: {seg_name} ({curr_start:.2f}s - {curr_start+seg_dur:.2f}s)")
+                tracked_run(split_cmd, check=True)
+                shared_segments.append(seg_path)
+                
+                curr_start += seg_dur
+                seg_idx += 1
+            print(f"\n{Fore.GREEN}[OK] Audio splitted into {len(shared_segments)} shared segments.{Style.RESET_ALL}")
+
         # Step 2 & 3: Run AI Source Separation Models
         settings = load_config('data/video.json')
         demucs_workers = settings.get('processing', {}).get('demucs_workers', 2)
@@ -329,7 +364,9 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
             s_start = time.time()
             update_progress("Running Spleeter", 20 if model == "both" else 15)
-            spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext)
+            spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
+                temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=shared_segments
+            )
             s_end = time.time()
             timings['spleeter'] = s_end - s_start
             print(f"{Fore.GREEN}Spleeter took {timings['spleeter']:.2f}s{Style.RESET_ALL}")
@@ -341,7 +378,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             d_start = time.time()
             update_progress("Running Demucs", 50 if model == "both" else 15)
             demucs_vocal_wav_path, temp_demucs_segments_dir = separate_with_demucs(
-                temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=demucs_workers
+                temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, 
+                max_workers=demucs_workers, pre_split_segments=shared_segments
             )
             d_end = time.time()
             timings['demucs'] = d_end - d_start
@@ -373,7 +411,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
             try:
                 shutil.copy2(spleeter_vocal_wav_path, vocal_mixture_wav_path)
-                print(f"{Fore.GREEN}✔ Spleeter vocals ready for mixing.{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}[OK] Spleeter vocals ready for mixing.{Style.RESET_ALL}")
             except Exception as e:
                 print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
                 return False, timings
@@ -395,7 +433,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, vocal_mixture_wav_path, volume1=0.5, volume2=0.5)
                     
                     if mixed_result:
-                        print(f"\n{Fore.GREEN}✔ Vocals combined successfully.{Style.RESET_ALL}")
+                        print(f"\n{Fore.GREEN}[OK] Vocals combined successfully.{Style.RESET_ALL}")
                     else:
                         print(f"{Fore.RED}Error: Mixing of aligned vocal tracks failed.{Style.RESET_ALL}")
                         return False, timings
@@ -483,7 +521,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 
                 os.remove(vocal_mixture_wav_path)
                 os.rename(adj_temp_path, vocal_mixture_wav_path)
-                print(f"{Fore.GREEN}✔ Final synchronization complete.{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}[OK] Final synchronization complete.{Style.RESET_ALL}")
                 sync_end = time.time()
                 timings['sync'] = sync_end - sync_start
                 print(f"{Fore.GREEN}Synchronization check took {timings['sync']:.2f}s{Style.RESET_ALL}")
@@ -568,7 +606,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 update_progress("Finalizing output", 95)
                 tracked_run(final_ffmpeg_cmd, check=True)
                 update_progress("Completed", 100)
-                print(f"\n{Fore.GREEN}✔ Successfully created {output_audio}{Style.RESET_ALL}")
+                print(f"\n{Fore.GREEN}[OK] Successfully created {output_audio}{Style.RESET_ALL}")
                 
                 # Get final audio duration and compare
                 final_duration = get_audio_duration(output_audio)
@@ -657,7 +695,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 update_progress("Finalizing output", 95)
                 tracked_run(final_ffmpeg_cmd, check=True)
                 update_progress("Completed", 100)
-                print(f"\n{Fore.GREEN}✔ Successfully created {output_video}{Style.RESET_ALL}")
+                print(f"\n{Fore.GREEN}[OK] Successfully created {output_video}{Style.RESET_ALL}")
 
                 # Get final audio duration and compare
                 final_duration = get_audio_duration(output_video)
@@ -701,6 +739,15 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     print(f"{Fore.BLUE}Removed temporary directory: {temp_demucs_segments_dir}{Style.RESET_ALL}")
                 except OSError as e:
                     print(f"{Fore.RED}Error removing temporary directory {temp_demucs_segments_dir}: {e}{Style.RESET_ALL}")
+
+            # Cleanup all tracked directories
+            for d_path in temp_dirs_to_cleanup:
+                if d_path and os.path.exists(d_path):
+                    try:
+                        shutil.rmtree(d_path)
+                        print(f"{Fore.BLUE}Removed temporary directory: {d_path}{Style.RESET_ALL}")
+                    except OSError as e:
+                        print(f"{Fore.RED}Error removing temporary directory {d_path}: {e}{Style.RESET_ALL}")
 
             # Cleanup the task-specific workspace
             if os.path.exists(task_workspace):

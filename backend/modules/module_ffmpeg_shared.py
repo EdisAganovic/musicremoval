@@ -81,11 +81,20 @@ def _find_shared_bin_dir() -> Optional[str]:
 
 
 def _add_to_path(directory: str):
-    """Add a directory to the current process PATH."""
+    """Add a directory to the current process PATH and DLL search path."""
+    # 1. Standard PATH for subprocesses
     current_path = os.environ.get("PATH", "")
     if directory.lower() not in current_path.lower():
         os.environ["PATH"] = directory + os.pathsep + current_path
         print(f"  {Fore.GREEN}Added to PATH: {directory}{Style.RESET_ALL}")
+    
+    # 2. DLL Directory for Python 3.8+ (required for ctypes/torchcodec)
+    if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+        try:
+            os.add_dll_directory(directory)
+            print(f"  {Fore.GREEN}Added to DLL search path: {directory}{Style.RESET_ALL}")
+        except Exception as e:
+            print(f"  {Fore.YELLOW}Warning: Could not add DLL directory: {e}{Style.RESET_ALL}")
 
 
 def check_shared_dlls_available() -> bool:
@@ -118,26 +127,36 @@ def ensure_ffmpeg_shared() -> bool:
 
     print(f"\n{Fore.CYAN}[FFmpeg Shared] Checking shared DLLs for torchcodec...{Style.RESET_ALL}")
 
-    # Step 1: Already on PATH?
-    if check_shared_dlls_available():
-        print(f"  {Fore.GREEN}✓ FFmpeg shared DLLs found on PATH{Style.RESET_ALL}")
-        return True
-
-    # Step 2: Check our local cache
+    # Step 1: Check our local cache FIRST (prioritize our known-good build)
     bin_dir = _find_shared_bin_dir()
     if bin_dir:
-        print(f"  {Fore.GREEN}✓ Found cached shared build: {bin_dir}{Style.RESET_ALL}")
+        print(f"  {Fore.GREEN}[OK] Found cached shared build: {bin_dir}{Style.RESET_ALL}")
         _add_to_path(bin_dir)
-        return True
+        # Verify if it actually works now
+        try:
+            import torchcodec
+            return True
+        except Exception:
+            print(f"  {Fore.YELLOW}[WARN] Cached build found but torchcodec still fails. Proceeding to re-verify...{Style.RESET_ALL}")
+
+    # Step 2: Check system PATH
+    if check_shared_dlls_available():
+        print(f"  {Fore.CYAN}  FFmpeg shared DLLs found on system PATH. Verifying compatibility...{Style.RESET_ALL}")
+        try:
+            import torchcodec
+            print(f"  {Fore.GREEN}[OK] System FFmpeg is compatible with torchcodec.{Style.RESET_ALL}")
+            return True
+        except Exception:
+            print(f"  {Fore.YELLOW}[WARN] System FFmpeg is INCOMPATIBLE with torchcodec.{Style.RESET_ALL}")
 
     # Step 3: Download
-    print(f"  {Fore.YELLOW}⚠ FFmpeg shared DLLs not found. Downloading...{Style.RESET_ALL}")
+    print(f"  {Fore.YELLOW}[WARN] FFmpeg shared DLLs not found or incompatible. Downloading...{Style.RESET_ALL}")
     print(f"  {Fore.CYAN}This is a one-time download (~90MB) required for Demucs/torchaudio.{Style.RESET_ALL}")
     print(f"  {Fore.CYAN}Your custom FFmpeg (with FDK-AAC) is NOT affected.{Style.RESET_ALL}")
     
     success = _download_and_extract_shared()
     if not success:
-        print(f"  {Fore.RED}✗ Failed to download FFmpeg shared build.{Style.RESET_ALL}")
+        print(f"  {Fore.RED}[ERROR] Failed to download FFmpeg shared build.{Style.RESET_ALL}")
         print(f"  {Fore.YELLOW}Manual fix: Download from {FFMPEG_SHARED_URL}{Style.RESET_ALL}")
         print(f"  {Fore.YELLOW}Extract to: {FFMPEG_SHARED_DIR}{Style.RESET_ALL}")
         return False
@@ -146,10 +165,10 @@ def ensure_ffmpeg_shared() -> bool:
     bin_dir = _find_shared_bin_dir()
     if bin_dir:
         _add_to_path(bin_dir)
-        print(f"  {Fore.GREEN}✓ FFmpeg shared DLLs installed and activated{Style.RESET_ALL}")
+        print(f"  {Fore.GREEN}[OK] FFmpeg shared DLLs installed and activated{Style.RESET_ALL}")
         return True
     else:
-        print(f"  {Fore.RED}✗ Downloaded but could not find bin/ directory{Style.RESET_ALL}")
+        print(f"  {Fore.RED}[ERROR] Downloaded but could not find bin/ directory{Style.RESET_ALL}")
         return False
 
 
@@ -210,7 +229,7 @@ def _download_and_extract_shared() -> bool:
         # Count DLLs for confirmation
         import glob
         dll_count = len(glob.glob(os.path.join(bin_dir, '*.dll')))
-        print(f"  {Fore.GREEN}✓ Extracted {dll_count} DLL files to {bin_dir}{Style.RESET_ALL}")
+        print(f"  {Fore.GREEN}[OK] Extracted {dll_count} DLL files to {bin_dir}{Style.RESET_ALL}")
         
         return True
         
