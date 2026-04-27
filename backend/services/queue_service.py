@@ -60,9 +60,14 @@ async def process_queue():
         if not state.queue_processing:
             break
 
-        delay = random.randint(3, 7)
-        print(f"{Fore.YELLOW}Waiting {delay} seconds before next download...{Style.RESET_ALL}")
-        await asyncio.sleep(delay)
+        # Random delay between downloads (anti-bot measure)
+        if state.random_delay_enabled:
+            delay = random.randint(8, 15)
+            print(f"{Fore.YELLOW}Waiting {delay} seconds (Random Delay Active) before next download...{Style.RESET_ALL}")
+            await asyncio.sleep(delay)
+        else:
+            # Minimal safety delay even if random is off
+            await asyncio.sleep(2)
 
     state.queue_processing = False
 

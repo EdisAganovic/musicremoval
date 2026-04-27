@@ -176,6 +176,29 @@ def is_video_file(file_path):
     """Check if the file is a video file."""
     return file_path.lower().endswith(VIDEO_EXTENSIONS)
 
+def is_file_processed(input_file):
+    """
+    Check if the input file has already been processed and the output exists in the 'nomusic' folder.
+    Returns the path to the existing output file if found, otherwise None.
+    """
+    output_folder = "nomusic"
+    if not os.path.exists(output_folder):
+        return None
+
+    # Strip UUID from input filename if present (36 chars uuid + 1 char underscore)
+    raw_name = os.path.basename(input_file)
+    if "_" in raw_name and len(raw_name.split("_")[0]) == 36:
+        clean_name_base = os.path.splitext("_".join(raw_name.split("_")[1:]))[0]
+    else:
+        clean_name_base = os.path.splitext(raw_name)[0]
+
+    # Search for files in nomusic folder that contain the clean_name_base
+    for f in os.listdir(output_folder):
+        if clean_name_base in f and f.startswith("nomusic_"):
+            return os.path.join(output_folder, f)
+            
+    return None
+
 def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None):
     """
     Process a video or audio file to separate vocals.

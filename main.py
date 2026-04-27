@@ -25,12 +25,13 @@ import argparse
 import sys
 from colorama import Fore, Back, Style, init, deinit
 
-# Add the 'modules' directory to the Python path to allow direct imports of module_* files
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'modules')))
+# Add the 'backend/modules' directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'backend', 'modules')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'backend')))
 
 from module_ffmpeg import download_ffmpeg
 from module_ytdlp import download_video
-from module_processor import process_file, VIDEO_EXTENSIONS, AUDIO_EXTENSIONS
+from module_processor import process_file, VIDEO_EXTENSIONS, AUDIO_EXTENSIONS, is_file_processed
 
 
 def main():
@@ -57,6 +58,7 @@ def main():
     group.add_argument("--file", help="Path to the input video or audio file.")
     group.add_argument("--folder", help="Path to the folder containing video/audio files.")
     process_parser.add_argument("--duration", type=int, help="Limit processing to the first N seconds (e.g., 120 for 2 minutes).")
+    process_parser.add_argument("--resume", action="store_true", help="Skip files that have already been processed.")
 
     # Subparser for the 'download' command
     download_parser = subparsers.add_parser("download", help="Download a video from a URL.")
@@ -115,6 +117,13 @@ def main():
                 
                 for media_file in media_files:
                     file_path = os.path.join(args.folder, media_file)
+                    
+                    if args.resume:
+                        existing_output = is_file_processed(file_path)
+                        if existing_output:
+                            print(f"\n{Fore.YELLOW}--- Skipping: {media_file} (Already processed: {os.path.basename(existing_output)}) ---{Style.RESET_ALL}")
+                            continue
+
                     print(f"\n{Back.BLUE}{Fore.WHITE}--- Starting processing for: {file_path} ---{Style.RESET_ALL}")
                     success = process_file(file_path, args.temp, args.duration)
                     if success:

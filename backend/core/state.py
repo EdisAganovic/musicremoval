@@ -23,3 +23,4 @@ console_logs_lock = asyncio.Lock()
 # Queue processing state
 queue_lock = asyncio.Lock()
 queue_processing = False
+random_delay_enabled = True # Enabled by default as per request

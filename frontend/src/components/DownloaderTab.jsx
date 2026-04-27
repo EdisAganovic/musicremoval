@@ -90,6 +90,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
     const [autoSeparate, setAutoSeparate] = useState(false);
     const [showQueue, setShowQueue] = useState(true);
     const [currentTaskId, setCurrentTaskId] = useState(null);
+    const [randomDelay, setRandomDelay] = useState(true);
 
     // Playlist confirmation modal
     const [showPlaylistConfirm, setShowPlaylistConfirm] = useState(false);
@@ -107,6 +108,13 @@ const DownloaderTab = ({ analyzingProgress }) => {
         } catch (err) {
             // Silent fail for polling
         }
+    };
+
+    const fetchSettings = async () => {
+        try {
+            const response = await axios.get(`${BACKEND_URL}/api/settings/random-delay`);
+            setRandomDelay(response.data.enabled);
+        } catch (err) { }
     };
 
 
@@ -196,6 +204,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
     // Queue polling effect
     useEffect(() => {
+        fetchSettings();
         let consecutiveErrors = 0;
         const MAX_CONSECUTIVE_ERRORS = 10;
 
@@ -348,6 +357,16 @@ const DownloaderTab = ({ analyzingProgress }) => {
             fetchQueue();
         } catch (err) {
             // Silent fail
+        }
+    };
+
+    const handleToggleRandomDelay = async (enabled) => {
+        setRandomDelay(enabled);
+        try {
+            await axios.post(`${BACKEND_URL}/api/settings/random-delay`, { enabled });
+        } catch (err) {
+            // Revert on fail
+            setRandomDelay(!enabled);
         }
     };
 
@@ -1201,6 +1220,19 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                 className="w-4 h-4 rounded border-gray-600 bg-dark-800 text-red-500 focus:ring-red-500"
                                             />
                                             <span className="text-xs text-gray-400 font-medium">Auto-separate after download</span>
+                                        </label>
+
+                                        <label className="flex items-center space-x-2 cursor-pointer ml-4 pl-4 border-l border-white/10">
+                                            <input
+                                                type="checkbox"
+                                                checked={randomDelay}
+                                                onChange={(e) => handleToggleRandomDelay(e.target.checked)}
+                                                className="w-4 h-4 rounded border-gray-600 bg-dark-800 text-amber-500 focus:ring-amber-500"
+                                            />
+                                            <div className="flex flex-col">
+                                                <span className="text-xs text-gray-400 font-medium">Random Delay (8-15s)</span>
+                                                <span className="text-[9px] text-gray-600">Anti-bot protection</span>
+                                            </div>
                                         </label>
                                     </div>
                                     <div className="flex items-center space-x-2">

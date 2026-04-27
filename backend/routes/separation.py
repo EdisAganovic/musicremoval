@@ -167,15 +167,22 @@ async def scan_folder(payload: FolderScanRequest):
             if f.lower().endswith(supported_extensions):
                 file_path = os.path.join(payload.folder_path, f)
                 try:
+                    from modules.module_processor import is_file_processed
                     metadata = get_file_metadata(file_path)
+                    existing_output = is_file_processed(file_path)
                     media_files.append({
                         "id": str(uuid.uuid4()),
                         "file_path": file_path,
                         "filename": f,
                         "metadata": metadata,
-                        "selected": True
+                        "selected": not bool(existing_output), # Auto-deselect if already processed
+                        "already_processed": bool(existing_output),
+                        "output_path": existing_output
                     })
-                    print(f"  Found: {f} ({metadata.get('duration', 'N/A')})")
+                    if existing_output:
+                        print(f"  Found (ALREADY PROCESSED): {f}")
+                    else:
+                        print(f"  Found: {f} ({metadata.get('duration', 'N/A')})")
                 except Exception as e:
                     print(f"{Fore.YELLOW}Error getting metadata for {f}: {e}{Style.RESET_ALL}")
                     media_files.append({

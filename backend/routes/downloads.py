@@ -53,6 +53,22 @@ def normalize_youtube_url(url: str) -> str:
 router = APIRouter(prefix="/api", tags=["downloads"])
 
 
+@router.get("/settings/random-delay")
+async def get_random_delay_setting():
+    """Get the current state of random delay setting."""
+    import core.state as state
+    return {"enabled": state.random_delay_enabled}
+
+
+@router.post("/settings/random-delay")
+async def update_random_delay_setting(payload: dict):
+    """Update the random delay setting."""
+    import core.state as state
+    enabled = payload.get("enabled", True)
+    state.random_delay_enabled = enabled
+    return {"status": "success", "enabled": state.random_delay_enabled}
+
+
 @router.get("/status/{task_id}")
 async def get_status(task_id: str):
     """Get task status by ID."""

@@ -39,6 +39,7 @@ from core.state import (
     console_logs_lock,
     queue_lock,
     queue_processing,
+    random_delay_enabled,
 )
 
 # Re-export from utils.file_ops
@@ -139,6 +140,7 @@ __all__ = [
     "console_logs_lock",
     "queue_lock",
     "queue_processing",
+    "random_delay_enabled",
     # file_ops
     "safe_remove",
     "safe_makedirs",

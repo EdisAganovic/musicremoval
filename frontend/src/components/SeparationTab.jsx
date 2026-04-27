@@ -665,12 +665,23 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                             />
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-white text-sm font-medium truncate max-w-[150px] sm:max-w-xs" title={fileInfo.file_path || fileInfo.file}>
-                              {fileInfo.filename || (fileInfo.file || '').split(/[\\/]/).pop()}
-                            </p>
+                            <div className="flex items-center space-x-2">
+                                <p className="text-white text-sm font-medium truncate max-w-[150px] sm:max-w-xs" title={fileInfo.file_path || fileInfo.file}>
+                                    {fileInfo.filename || (fileInfo.file || '').split(/[\\/]/).pop()}
+                                </p>
+                                {fileInfo.already_processed && status !== "processing" && (
+                                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-tighter border border-emerald-500/30 flex items-center gap-1">
+                                        <CheckCircle className="w-2.5 h-2.5" />
+                                        Already Processed
+                                    </span>
+                                )}
+                            </div>
                             {status !== "processing" && fileInfo.metadata?.duration && (
                               <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
                                 <span>{fileInfo.metadata.duration}</span>
+                                {fileInfo.already_processed && (
+                                    <span className="text-emerald-600/70 font-medium ml-1">Output exists in /nomusic/</span>
+                                )}
                                 {fileInfo.metadata?.resolution && (
                                   <>
                                     <span>•</span>
