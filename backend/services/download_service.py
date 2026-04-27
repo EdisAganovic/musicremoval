@@ -120,62 +120,86 @@ def run_yt_dlp(
             tasks[task_id]["current_step"] = progress_state["current_step"]
             log_console("Download finished, processing...", "info")
 
-    ydl_opts = {
-        'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
-        'progress_hooks': [progress_hook],
-        'quiet': False,
-        'no_warnings': True,
-        'ignoreerrors': True,
-        'noplaylist': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    }
+    def get_ydl_opts(use_impersonate=True):
+        opts = {
+            'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
+            'progress_hooks': [progress_hook],
+            'quiet': False,
+            'no_warnings': True,
+            'ignoreerrors': True,
+            'noplaylist': True,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        }
 
-    if yt_url:
-        # YouTube-specific: use advanced extractor args + impersonation + remote components
-        ydl_opts.update({
-            'remote_components': ['ejs:github'],
-            'impersonate': ImpersonateTarget(client='chrome'),
-            'extractor_args': {
-                'youtube': {
-                    'player_client': 'ios,web,mweb,android',
-                    'n_js_engine': 'javascript'
-                }
-            },
-        })
-    # For non-YouTube (Facebook, Instagram, TikTok, etc.) yt-dlp handles it natively
-
-    if format_type == 'audio':
-        ydl_opts.update({
-            'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '320',
-            }],
-        })
-        if format_id and format_id != 'best':
-            ydl_opts['format'] = f"{format_id}+bestaudio/bestaudio"
-    else:
-        if format_id:
-            ydl_opts['format'] = f"{format_id}+bestaudio/best"
+        if yt_url:
+            # YouTube-specific: use advanced extractor args + remote components
+            opts.update({
+                'remote_components': ['ejs:github'],
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': 'ios,web,mweb,android',
+                        'n_js_engine': 'javascript'
+                    }
+                },
+            })
+            if use_impersonate:
+                try:
+                    opts['impersonate'] = ImpersonateTarget(client='chrome')
+                except Exception:
+                    pass
+        
+        if format_type == 'audio':
+            opts.update({
+                'format': 'bestaudio/best',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '320',
+                }],
+            })
+            if format_id and format_id != 'best':
+                opts['format'] = f"{format_id}+bestaudio/bestaudio"
         else:
-            ydl_opts['format'] = 'bestvideo+bestaudio/best'
+            if format_id:
+                opts['format'] = f"{format_id}+bestaudio/best"
+            else:
+                opts['format'] = 'bestvideo+bestaudio/best'
 
-    if subtitles:
-        ydl_opts['writesubtitles'] = True
-        ydl_opts['subtitleslangs'] = [subtitles]
-        ydl_opts['writeautomaticsub'] = True
+        if subtitles:
+            opts['writesubtitles'] = True
+            opts['subtitleslangs'] = [subtitles]
+            opts['writeautomaticsub'] = True
+            
+        return opts
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            active_downloads[task_id]["ydl"] = ydl
-            
-            # Update status before extraction
-            tasks[task_id]["current_step"] = "Extracting video info..."
-            tasks[task_id]["progress"] = 10
-            log_console(f"Task {task_id}: Starting extraction, progress=10%", "info")
-            
-            info = ydl.extract_info(url, download=True)
+        # Try with impersonate first
+        ydl_opts = get_ydl_opts(use_impersonate=True)
+        
+        # We need to catch the specific error that happens during YoutubeDL initialization or extraction
+        # But wait, the error happens when calling ydl.extract_info or during __init__
+        
+        success = False
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                active_downloads[task_id]["ydl"] = ydl
+                tasks[task_id]["current_step"] = "Extracting video info..."
+                tasks[task_id]["progress"] = 10
+                info = ydl.extract_info(url, download=True)
+                success = True
+        except Exception as e:
+            if "impersonate" in str(e).lower() or "chrome" in str(e).lower():
+                log_console(f"Impersonate failed ({e}), falling back to standard extraction", "warning")
+                ydl_opts = get_ydl_opts(use_impersonate=False)
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    active_downloads[task_id]["ydl"] = ydl
+                    tasks[task_id]["current_step"] = "Extracting video info (fallback)..."
+                    tasks[task_id]["progress"] = 10
+                    info = ydl.extract_info(url, download=True)
+                    success = True
+            else:
+                raise e
+
             
             if active_downloads.get(task_id, {}).get("cancel_flag", False):
                 raise Exception("Download cancelled by user")
