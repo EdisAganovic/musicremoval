@@ -11,274 +11,72 @@ A professional AI-powered vocal separation tool with a modern web interface. Rem
 
 ---
 
-## 👋 First Time? Start Here!
 
-### Quick Setup (5 minutes)
 
-**1. Install Python & Node.js:**
 
-- Python 3.10+: https://www.python.org/downloads/
-- Node.js 18+: https://nodejs.org/ (LTS version)
 
-**2. Clone & Install:**
 
-```bash
-cd demucspleeter
-
-# Python dependencies
-uv venv --python 3.10
-.venv\Scripts\activate  # Windows
-source .venv/bin/activate  # Linux/macOS
-uv pip install -r requirements.txt
-
-# Frontend dependencies
-cd frontend
-npm install
-cd ..
-```
-
-**3. Run:**
-
-```bash
-run_app.bat  # Windows
-./run_app.sh  # Linux/macOS
-```
-
-**4. Open Browser:**
-
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:5170
-
----
-
-## 🍎 MacBook Installation Guide
-
-### Prerequisites for macOS
-
-Before installing the application on your MacBook, ensure you have the following:
-
-1. **macOS 10.15+** (Catalina or later recommended)
-2. **Xcode Command Line Tools**: Install with `xcode-select --install`
-3. **Homebrew Package Manager**: Install from https://brew.sh/
-4. **Python 3.10+** (with pip)
-5. **Node.js 18+** (with npm)
-
-### Step-by-Step Installation on MacBook
-
-#### 1. Install Prerequisites
-
-**Install Homebrew (if not already installed):**
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-```
-
-**Install Xcode Command Line Tools:**
-
-```bash
-xcode-select --install
-```
-
-**Install Python 3.10+ via Homebrew:**
-
-```bash
-brew install python@3.10
-```
-
-**Install Node.js 18+ via Homebrew:**
-
-```bash
-brew install node
-```
-
-**Verify installations:**
-
-```bash
-python3 --version    # Should show Python 3.10.x or higher
-node --version       # Should show v18.x.x or higher
-npm --version        # Should show 9.x.x or higher
-```
-
-#### 2. Install UV Package Manager
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-#### 3. Clone the Repository
-
-```bash
-# Clone the repository
-git clone https://github.com/your-repo/demucspleeter.git
-cd demucspleeter
-```
-
-#### 4. Set Up Python Environment
-
-```bash
-# Create virtual environment with Python 3.10
-uv venv --python 3.10
-
-# Activate virtual environment
-source .venv/bin/activate
-
-# Upgrade pip
-python -m pip install --upgrade pip
-```
-
-#### 5. Install Dependencies
-
-```bash
-# Install Python dependencies
-uv pip install -r requirements.txt
-
-# Navigate to frontend and install dependencies
-cd frontend
-npm install
-cd ..
-```
-
-#### 6. Configure for macOS
-
-**Create environment file for frontend:**
-
-```bash
-# In the frontend directory, create .env file
-echo "VITE_API_BASE_URL=http://localhost:5170/api" > frontend/.env
-```
-
-#### 7. Run the Application
-
-```bash
-# Make sure you're in the project root directory
-# Activate virtual environment if not already activated
-source .venv/bin/activate
-
-# Run the application
-./run_app.sh
-```
-
-The application should now be running:
-- **Backend API**: http://localhost:5170
-- **Frontend**: http://localhost:5173
-
-### MacBook-Specific Notes
-
-- **Apple Silicon (M1/M2/M3)**: The application is compatible with Apple Silicon MacBooks. If you encounter any issues with certain packages, you may need to install packages with the `--no-binary` flag or use Rosetta 2 translation layer.
-  
-- **Rosetta 2**: If you experience compatibility issues with certain Python packages, install Rosetta 2:
-  ```bash
-  softwareupdate --install-rosetta
-  ```
-
-- **Security Settings**: On newer macOS versions, you might need to allow the application to run after installation due to security settings.
-
-- **GPU Acceleration**: Note that CUDA GPU acceleration is only available on NVIDIA GPUs. On MacBook with Apple Silicon, the application will use the built-in Neural Engine and CPU for processing, which is still quite efficient.
-
----
 
 ## ✨ Key Features
 
-### 🎯 Core Functionality
+### 🎵 AI Vocal Separation
+- **Dual AI Models** — Runs Demucs (htdemucs) and Spleeter simultaneously, blends outputs for superior quality
+- **Model Selection** — Choose Spleeter, Demucs, or Both per job
+- **Batch Folder Processing** — Scan an entire folder of media files and process them in bulk
+- **Video & Audio Input** — Accepts MP4, MKV, MOV, AVI, WebM, MP3, FLAC, WAV, M4A and more
+- **Skip Video Encoding** — Fast mode copies original video stream without re-encoding
+- **Long Audio Segmentation** — Auto-splits files >10 minutes, processes in parallel, concatenates results
+- **Cross-Correlation Alignment** — Millisecond-level sync between original audio and separated output
+- **Audio Normalization** — EBU R128 loudnorm for consistent volume levels
+- **Smart Audio Track Selection** — Auto-selects best language track from multi-language videos
 
-- **Emerald Green Theme**: Modern, premium UI design with emerald green accents and glassmorphism.
-- **Dual AI Models**: Combines Demucs (htdemucs) and Spleeter for best-in-class separation
-- **Smart Audio Alignment**: Automatic cross-correlation alignment for perfect sync
-- **Long Audio Segmentation**: Auto-splits files >10 minutes for reliable processing
-- **Multi-Track Support**: Handles videos with multiple audio tracks (auto-select by language)
-- **GPU Acceleration**: Full CUDA support for 5-10x faster processing
+### 📥 YouTube & Web Downloader
+- **Multi-Platform** — Download from YouTube, Facebook, Instagram, TikTok, and 1000+ sites via yt-dlp
+- **Format Picker** — Browse available resolutions and codecs (H.264, VP9, AV1) with file size estimates
+- **Audio / Video Toggle** — One-click switch between MP3 and MP4 download
+- **Playlist & Channel Support** — Browse playlist videos with thumbnails, select individually
+- **Batch Queueing** — Add multiple videos to queue with one click
+- **Subfolder Organization** — Save downloads into named subfolders
+- **Auto-Separation** — Automatically run vocal extraction after download completes
+- **Subtitle Download** — Fetch subtitles and auto-generated captions
+- **Cookie Support** — Authenticated downloads for age-restricted content
+- **Duplicate Detection** — Prevents re-downloading the same URL
 
-### 🚀 New in v0.0.14
-- **Enhanced Bot Bypass**: Integrated `curl-cffi` for robust Chrome impersonation in `yt-dlp`.
-- **Fixed Extraction Warnings**: Resolved "Skipping unsupported client" warnings in YouTube extraction.
-- **Improved Downloader Stability**: Silenced noisy impersonation errors with graceful fallbacks.
+### 📊 Download Queue
+- **Persistent Queue** — Survives app restarts via JSON persistence
+- **Sequential Processing** — Downloads one at a time with auto-advance
+- **Anti-Bot Random Delay** — Optional 8-15s delay between downloads to avoid rate limiting
+- **Cancel All** — Halt all active and pending downloads instantly
 
-### 🚀 New in v0.0.13
-- **Emerald Green Theme**: Complete visual overhaul with premium emerald green accents and glassmorphism.
-- **Data Integrity Shield**: Automatic detection and reporting of library path mismatches.
-- **Notification Filtering**: Cleaner UI by showing only critical warnings and errors in-app.
+### 📚 Media Library
+- **Unified View** — All downloads and separated files in one searchable, sortable table
+- **Folder Filtering** — Toggle between download and nomusic folders with size info
+- **Bulk Operations** — Select multiple files for batch delete
+- **Right-Click Context Menu** — Play, Rename, Open Folder, Delete, Send to Separation
+- **Metadata Display** — Duration, resolution, codec info, and model badges
+- **Broken Entry Cleanup** — Auto-prunes entries for files no longer on disk
 
-### 🚀 New in v0.0.12
-- **Diagnostics Dashboard**: Comprehensive system health check (CUDA, FFmpeg, Torch, Disk, and AI Models).
-- **Zombie Process Protection**: Windows Job Object integration to ensure zero leftover processes on crash.
-- **Process Manager**: Intelligent tracking and graceful cleanup of all child subprocesses.
-- **FFmpeg Shared DLLs**: Automatic download of BtbN shared builds for enhanced `torchcodec` compatibility.
+### 🩺 Diagnostics & Monitoring
+- **Health Dashboard** — CUDA, FFmpeg, disk space, model files, package versions at a glance
+- **Live Demucs Test** — Generates a test tone and runs actual Demucs to verify end-to-end
+- **GPU / CPU Detection** — Alerts when CPU-only PyTorch is installed with step-by-step GPU fix
+- **Process Viewer** — List and kill tracked child processes (ffmpeg, demucs, spleeter)
+- **Copy Report** — Export diagnostics as markdown for sharing
 
-### 🚀 New in v0.0.11
-- **Queue Controls**: New "Cancel All" feature to instantly halt all active and pending tasks.
-- **Improved YT Extraction**: Better handling of private/unavailable videos in playlists.
-- **Progress Persistence**: Fixed polling bugs where playlist indices would disappear.
+### 🔔 Notifications & Console
+- **In-App Notifications** — Bell icon with unread count; color-coded by type
+- **Live Console Viewer** — Real-time backend logs in a floating panel with color-coded entries
+- **Auto-Refresh** — Polls for new notifications every 3 seconds
 
-### 🚀 New in v0.0.4
+### ⚙️ Infrastructure
+- **Auto FFmpeg Download** — Fetches FFmpeg binaries on first run
+- **yt-dlp Auto-Update** — Checks for yt-dlp updates before each download
+- **Process Management** — Kills all child processes on shutdown to prevent zombies
+- **Stale Process Cleanup** — Orphans from crashed runs are killed on startup
+- **Background Cleanup** — Hourly removal of temp files >24h old
+- **Docker Spleeter Support** — Optionally runs Spleeter via Docker for isolated execution
 
-#### Architecture & Organization
 
-- **Clean Structure**: Core logic moved to `backend/modules/` and state files to `data/`.
-- **Improved Git Shielding**: Recursive pattern matching to keep bytecode and temp files out of the repository.
-- **UTF-8 Subprocess Support**: Reliable handling of emojis and special characters in filenames on Windows.
-
-### 🚀 New in v0.0.3
-
-#### Playlist & Channel Download
-
-- **Playlist Support**: Download entire YouTube playlists
-  - Auto-detects playlist/channel URLs
-  - Shows all videos with thumbnails
-  - Select/deselect individual videos
-  - Confirmation modal before adding to queue
-- **Channel Support**: Download all videos from a channel
-- **Video ID Display**: Shows YouTube video ID for verification
-- **Remember Format**: Saves your format preference per video
-- **File Size Preview**: Shows estimated download size
-
-#### Library Improvements
-
-- **Folder Filter**: Filter by Download / NoMusic folders
-- **Open Folder Actions**: Quick access to folders
-- **Smart Separate Button**: Hides for already-separated files
-- **Compact Table Layout**: 2-3x more files visible
-
-#### Configuration
-
-- **Centralized Port Config**: Single `.env` file for backend port
-- **API Client Layer**: Centralized API communication
-- **No More Hardcoded URLs**: All calls through API client
-
-### 🚀 New in v0.0.2
-
-#### Queue System
-
-- **Download Queue**: Schedule multiple YouTube downloads
-- **Batch Folder Processing**: Process entire folders of media files
-- **Queue Management**: Start, pause, remove from queue
-- **Persistent Queue**: Survives app restarts
-
-#### Notifications
-
-- **In-App Notifications**: Real-time alerts for all operations
-- **Smart Notifications**: Download complete, separation done, errors
-- **Notification History**: View all past notifications with unread counter
-
-#### Reliability
-
-- **Auto-Retry Downloads**: 3 retry attempts with exponential backoff
-- **Auto-Cleanup**: Removes temp files older than 24 hours
-- **Duplicate Detection**: Warns before downloading duplicate content
-
-#### Quality & Control
-
-- **Output Configuration**: Customizable codec, bitrate, format
-- **Search & Filter**: Find files in library by name or duration
-- **Bulk Operations**: Multi-select and batch delete
-
-#### UI/UX
-
-- **Modern Dark Theme**: Beautiful glassmorphism design
-- **Responsive Layout**: Works on desktop and tablet
-- **Real-Time Progress**: Live progress bars and status updates
-- **Keyboard Shortcuts**: Quick actions with hotkeys
-
----
 
 ## 📦 Installation
 
