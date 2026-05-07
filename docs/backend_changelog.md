@@ -1,13 +1,40 @@
 # Backend Changelog
 
-## [0.0.14] - 2026-05-07 🚀
+## [0.0.16] - 2026-05-07 🎯
 
-### [Added]
-- **Graceful Fallbacks**: Improved impersonation error handling to fail silently and fallback to standard extraction without noisy error logs.
+### [Removed]
+- **All impersonation code**: Stripped `ImpersonateTarget`, `remote_components`, `extractor_args` (`player_client`, `n_js_engine`) from `download_service.py`, `downloads.py`, and `module_ytdlp.py`. yt-dlp now relies solely on `cookies.txt` for YouTube authentication.
+- **Unused imports**: Removed `is_youtube_url` import from `download_service.py` and `ImpersonateTarget` imports from all files.
 
 ### [Fixed]
-- **YouTube Extraction Warnings**: Fixed "Skipping unsupported client" warnings (e.g., "i", "o", "s") by correctly passing `player_client` as a list rather than a comma-separated string in the Python API.
-- **CLI Compatibility**: Synced `module_ytdlp.py` with updated extractor arguments for better reliability in CLI mode.
+- **yt-dlp impersonation crash**: Replaced failed `ImpersonateTarget(client='chrome')` approach with simple cookie-based auth — no impersonation needed.
+- **"Unsupported client" warnings**: Removed `player_client` string splicing bug. No more `"Skipping unsupported client"` spam.
+- **PO Token warnings**: Removed `mweb` client from extractor args, eliminating GVS PO Token requirement warnings.
+
+### [Changed]
+- **Cookies-only auth**: `download_service.py` now reads `data/cookies.txt` via `cookiefile` option instead of impersonation. No YouTube-specific overrides.
+- **Format fetching simplified**: `downloads.py` playlist and single-video info fetching now uses cookies only, no YouTube-specific extractor args.
+- **CLI module cleaned**: `module_ytdlp.py` subprocess commands no longer pass `--extractor-args` or `--remote-components`.
+
+---
+
+## [0.0.15] - 2026-04-27 🔧
+
+### [Added]
+- **Folder Batching Resume**: Added `is_file_processed()` check in `module_processor.py` — scans `nomusic/` for previously processed files and auto-deselects them in folder scan results. No redundant re-processing.
+- **Shared Audio Segmentation**: Files >10 minutes are now split once and reused across both Demucs and Spleeter passes, eliminating redundant FFmpeg splitting.
+- **Random Delay Toggle**: New `GET/POST /api/settings/random-delay` endpoints to enable/disable anti-bot delays between queue downloads. Configurable from frontend.
+- **Docker Spleeter Parallel**: Added `docker-compose.yml` with parallel Spleeter container support. Docker Spleeter can run alongside local Spleeter.
+
+### [Fixed]
+- **Impersonation Regression**: Rewrote `download_service.py` to consolidate impersonation inside a cleaner `get_ydl_opts()` helper with proper try/except. Removed nested try/except fallback pattern.
+- **Spleeter MODEL_PATH**: Removed `MODEL_PATH` environment variable injection from Spleeter commands — was causing path conflicts on some setups.
+- **Spleeter Error Noise**: Suppressed verbose stderr output from Spleeter `CalledProcessError` logging.
+
+### [Changed]
+- **Dependencies cleaned**: Removed `psutil`, `watchfiles`, `numpy<2.0.0`, `scipy<1.14.0` from `pyproject.toml`. Cleaned `requirements.txt` and `uv.lock`.
+- **Python version**: Updated `.python-version` for compatibility.
+- **Frontend subfolder fix**: Synced subfolder state handling in `DownloaderTab.jsx` to fix playlist subfolder bypassing custom input.
 
 ---
 
@@ -20,8 +47,6 @@
 
 ### [Improved]
 - **Library Scanning**: Provided instructions for manual library resets (`library.json` and `metadata_cache.json`) to recover from corrupted path data.
-
----
 
 ## [0.0.12] - 2026-03-07 🛡️
 

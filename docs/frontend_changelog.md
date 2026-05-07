@@ -1,5 +1,16 @@
 # Frontend Changelog
 
+## [0.1.4] - 2026-05-07 🎯
+
+### [Added]
+- **Resume Badge**: Folder scan results now show "(ALREADY PROCESSED)" for files that already have output in `nomusic/`. These files are auto-deselected.
+- **Random Delay Toggle**: New toggle switch in the downloader tab to enable/disable anti-bot random delays between queue downloads.
+
+### [Fixed]
+- **Subfolder State**: Fixed `playlistSubfolder` vs `subfolder` state variable — custom subfolder input is no longer bypassed when downloading from playlists.
+
+---
+
 ## [0.0.13] - 2026-03-07 🚀
 
 ### [Added]
