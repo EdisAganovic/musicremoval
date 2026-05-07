@@ -1,5 +1,16 @@
 # Backend Changelog
 
+## [0.0.14] - 2026-05-07 🚀
+
+### [Added]
+- **Graceful Fallbacks**: Improved impersonation error handling to fail silently and fallback to standard extraction without noisy error logs.
+
+### [Fixed]
+- **YouTube Extraction Warnings**: Fixed "Skipping unsupported client" warnings (e.g., "i", "o", "s") by correctly passing `player_client` as a list rather than a comma-separated string in the Python API.
+- **CLI Compatibility**: Synced `module_ytdlp.py` with updated extractor arguments for better reliability in CLI mode.
+
+---
+
 ## [0.0.13] - 2026-03-07 🛡️
 
 ### [Added]

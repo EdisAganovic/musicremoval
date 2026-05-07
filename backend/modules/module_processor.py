@@ -50,7 +50,7 @@ except ImportError:
     tracked_run = subprocess.run
 
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks
+from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks, get_file_metadata
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_audio import align_audio_tracks, mix_audio_tracks, calculate_audio_lag
@@ -211,6 +211,16 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             progress_callback(step, progress)
 
     is_audio_only = is_audio_file(input_file)
+    
+    # Check via ffprobe if it REALLY has video, regardless of extension
+    file_metadata = get_file_metadata(input_file)
+    has_video_stream = file_metadata.get("is_video", False)
+    
+    # If it's a video extension but has no video stream, treat as audio-only
+    if not has_video_stream and not is_audio_only:
+        print(f"{Fore.YELLOW}Warning: File has video extension but no video stream detected. Treating as audio-only.{Style.RESET_ALL}")
+        is_audio_only = True
+
     if not os.path.exists(input_file):
         print(f"{Fore.RED}Error: Input video file '{input_file}' not found.{Style.RESET_ALL}")
         return False, timings

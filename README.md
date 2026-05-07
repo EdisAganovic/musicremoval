@@ -1,10 +1,10 @@
 # Demucs & Spleeter Vocal Extractor
 
-**Version:** 0.0.13 | **Last Updated:** 2026-03-16
+**Version:** 0.0.14 | **Last Updated:** 2026-05-07
 
 A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.13-emerald)
+![Version](https://img.shields.io/badge/version-0.0.14-emerald)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.129+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
@@ -187,6 +187,11 @@ The application should now be running:
 - **Long Audio Segmentation**: Auto-splits files >10 minutes for reliable processing
 - **Multi-Track Support**: Handles videos with multiple audio tracks (auto-select by language)
 - **GPU Acceleration**: Full CUDA support for 5-10x faster processing
+
+### 🚀 New in v0.0.14
+- **Enhanced Bot Bypass**: Integrated `curl-cffi` for robust Chrome impersonation in `yt-dlp`.
+- **Fixed Extraction Warnings**: Resolved "Skipping unsupported client" warnings in YouTube extraction.
+- **Improved Downloader Stability**: Silenced noisy impersonation errors with graceful fallbacks.
 
 ### 🚀 New in v0.0.13
 - **Emerald Green Theme**: Complete visual overhaul with premium emerald green accents and glassmorphism.
@@ -768,6 +773,11 @@ _Times include both Spleeter + Demucs processing with alignment_
 ## 📝 Changelog
 
 See [changelog.md](changelog.md) for detailed version history.
+
+### v0.0.14 (2026-05-07)
+- ✅ `curl-cffi` integration for Chrome impersonation
+- ✅ Fixed `player_client` extraction warnings
+- ✅ Graceful impersonation fallbacks
 
 ### v0.0.13 (2026-03-16)
 - ✅ Emerald Green Theme visual overhaul

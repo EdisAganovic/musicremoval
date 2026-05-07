@@ -149,8 +149,6 @@ def download_video(url, filename=None, cookies_file=None):
             "--ignore-errors",
             "--fragment-retries", "infinite",
             "--retry-sleep", "fragment:exp=1:300",
-            "--extractor-args", "youtube:player_client=ios,web,mweb,android;n_js_engine=javascript",
-            "--remote-components", "ejs:github",
             "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "-o", output_template,
         ]
@@ -170,7 +168,7 @@ def download_video(url, filename=None, cookies_file=None):
             # --- List available formats on metadata error ---
             print(f"\n{Fore.CYAN}--- Listing available formats for {url} ---")
             list_formats_cmd = [
-                sys.executable, "-m", "yt_dlp", "-F", "--remote-components", "ejs:github", url
+                sys.executable, "-m", "yt_dlp", "-F", url
             ]
             if cookies_file and os.path.exists(cookies_file):
                 list_formats_cmd.extend(["--cookies", cookies_file])
@@ -207,8 +205,6 @@ def download_video(url, filename=None, cookies_file=None):
             "--ignore-errors",
             "--fragment-retries", "infinite",
             "--retry-sleep", "fragment:exp=1:300",
-            "--extractor-args", "youtube:player_client=ios,web,mweb,android;n_js_engine=javascript",
-            "--remote-components", "ejs:github",
             "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "-o", output_template,
         ]

@@ -11,7 +11,6 @@ from config import (
     log_console, download_queue, save_queue, get_full_library
 )
 from utils.helpers import format_duration
-from utils.validation import is_youtube_url
 
 
 def run_yt_dlp(
@@ -25,9 +24,6 @@ def run_yt_dlp(
 ):
     """Download video/audio from any yt-dlp supported platform."""
     import yt_dlp
-    from yt_dlp.networking.impersonate import ImpersonateTarget
-
-    yt_url = is_youtube_url(url)
 
     tasks[task_id] = {
         "task_id": task_id,
@@ -120,7 +116,8 @@ def run_yt_dlp(
             tasks[task_id]["current_step"] = progress_state["current_step"]
             log_console("Download finished, processing...", "info")
 
-    def get_ydl_opts(use_impersonate=True):
+    def get_ydl_opts():
+        cookies_path = os.path.join("data", "cookies.txt")
         opts = {
             'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_hook],
@@ -131,23 +128,9 @@ def run_yt_dlp(
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         }
 
-        if yt_url:
-            # YouTube-specific: use advanced extractor args + remote components
-            opts.update({
-                'remote_components': ['ejs:github'],
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': 'ios,web,mweb,android',
-                        'n_js_engine': 'javascript'
-                    }
-                },
-            })
-            if use_impersonate:
-                try:
-                    opts['impersonate'] = ImpersonateTarget(client='chrome')
-                except Exception:
-                    pass
-        
+        if os.path.exists(cookies_path):
+            opts['cookiefile'] = cookies_path
+
         if format_type == 'audio':
             opts.update({
                 'format': 'bestaudio/best',
@@ -173,32 +156,14 @@ def run_yt_dlp(
         return opts
 
     try:
-        # Try with impersonate first
-        ydl_opts = get_ydl_opts(use_impersonate=True)
-        
-        # We need to catch the specific error that happens during YoutubeDL initialization or extraction
-        # But wait, the error happens when calling ydl.extract_info or during __init__
-        
+        ydl_opts = get_ydl_opts()
         success = False
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                active_downloads[task_id]["ydl"] = ydl
-                tasks[task_id]["current_step"] = "Extracting video info..."
-                tasks[task_id]["progress"] = 10
-                info = ydl.extract_info(url, download=True)
-                success = True
-        except Exception as e:
-            if "impersonate" in str(e).lower() or "chrome" in str(e).lower():
-                log_console(f"Impersonate failed ({e}), falling back to standard extraction", "warning")
-                ydl_opts = get_ydl_opts(use_impersonate=False)
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    active_downloads[task_id]["ydl"] = ydl
-                    tasks[task_id]["current_step"] = "Extracting video info (fallback)..."
-                    tasks[task_id]["progress"] = 10
-                    info = ydl.extract_info(url, download=True)
-                    success = True
-            else:
-                raise e
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            active_downloads[task_id]["ydl"] = ydl
+            tasks[task_id]["current_step"] = "Extracting video info..."
+            tasks[task_id]["progress"] = 10
+            info = ydl.extract_info(url, download=True)
+            success = True
 
             
             if active_downloads.get(task_id, {}).get("cancel_flag", False):

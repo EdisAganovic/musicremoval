@@ -34,3 +34,6 @@ data/video.json
 ffmpeg.exe
 ffprobe.exe
 log.txt
+cookies.txt
+data/cookies.txt
+**/cookies.txt

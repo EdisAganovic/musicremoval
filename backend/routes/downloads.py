@@ -95,7 +95,6 @@ async def get_all_downloads():
 async def get_yt_formats(payload: dict):
     """Fetches available formats for any URL supported by yt-dlp (YouTube, Facebook, etc)."""
     import yt_dlp
-    from yt_dlp.networking.impersonate import ImpersonateTarget
 
     url = normalize_youtube_url(payload.get("url"))
     check_playlist = payload.get("check_playlist", False)
@@ -135,8 +134,11 @@ async def get_yt_formats(payload: dict):
                     'ignoreerrors': True,
                     'noplaylist': False,
                     'extract_flat': 'in_playlist',
-                    'remote_components': ['ejs:github'],
                 }
+                import os
+                cookies_path = os.path.join("data", "cookies.txt")
+                if os.path.exists(cookies_path):
+                    ydl_opts['cookiefile'] = cookies_path
 
                 def get_playlist_info():
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -169,36 +171,20 @@ async def get_yt_formats(payload: dict):
                 }
 
         # ── Single video / non-YouTube URL ───────────────────────────────────
-        def get_video_info(use_impersonate=True):
+        def get_video_info():
             opts = {
                 'quiet': True,
                 'noplaylist': True,
             }
-            if yt_url:
-                # YouTube-specific enhancements
-                opts['remote_components'] = ['ejs:github']
-                opts['extractor_args'] = {
-                    'youtube': {
-                        'player_client': 'ios,web,mweb,android',
-                        'n_js_engine': 'javascript'
-                    }
-                }
-                if use_impersonate:
-                    opts['impersonate'] = ImpersonateTarget(client='chrome')
-            # For non-YouTube, just let yt-dlp handle it natively
+            import os
+            cookies_path = os.path.join("data", "cookies.txt")
+            if os.path.exists(cookies_path):
+                opts['cookiefile'] = cookies_path
 
             with yt_dlp.YoutubeDL(opts) as ydl:
                 return ydl.extract_info(url, download=False)
 
-        try:
-            info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=True))
-        except Exception as e:
-            if yt_url:
-                log_console(f"Impersonate failed ({e}), falling back to standard extraction", "warning")
-                info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=False))
-            else:
-                # Non-YouTube: just retry without any special args
-                info = await asyncio.to_thread(lambda: get_video_info(use_impersonate=False))
+        info = await asyncio.to_thread(get_video_info)
 
         if info is None:
             raise Exception("Video is unavailable or yt-dlp could not fetch metadata.")
