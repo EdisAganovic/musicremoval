@@ -31,6 +31,7 @@ DOWNLOAD SOURCE:
 """
 import subprocess
 import json
+import tempfile
 from colorama import Fore, Style, Back
 import os
 import sys
@@ -169,6 +170,51 @@ def get_audio_duration(file_path):
     except Exception as e:
         print(f"{Fore.RED}An unexpected error occurred while getting audio duration for {file_path}: {e}{Style.RESET_ALL}")
         return None
+
+def split_audio_into_segments(temp_audio_wav_path, audio_duration, segment_duration_seconds, temp_dir_parent="_temp"):
+    """
+    Splits a WAV file into sequential segments of `segment_duration_seconds` using ffmpeg.
+    Shared by module_demucs.py and module_spleeter.py, which both need to chop long
+    audio into chunks before parallel/sequential model processing.
+
+    Args:
+        temp_audio_wav_path: Path to the source WAV file.
+        audio_duration: Total duration of the source file in seconds (from get_audio_duration).
+        segment_duration_seconds: Max length of each segment.
+        temp_dir_parent: Parent directory the segments temp dir is created under.
+
+    Returns:
+        tuple: (segments_dir, [segment_path, ...]) in chronological order.
+    """
+    os.makedirs(temp_dir_parent, exist_ok=True)
+    segments_dir = tempfile.mkdtemp(dir=temp_dir_parent)
+    segment_paths = []
+
+    current_start_time = 0
+    segment_index = 0
+
+    while current_start_time < audio_duration:
+        segment_duration = min(segment_duration_seconds, audio_duration - current_start_time)
+        segment_filename = f"part_{segment_index:03d}.wav"
+        segment_output_path = os.path.join(segments_dir, segment_filename)
+
+        ffmpeg_split_cmd = [
+            FFMPEG_EXE, "-y",
+            "-loglevel", "error",
+            "-i", temp_audio_wav_path,
+            "-ss", str(current_start_time),
+            "-t", str(segment_duration),
+            segment_output_path
+        ]
+        print(f"- Splitting audio: {segment_filename} from {current_start_time:.2f}s for {segment_duration:.2f}s...")
+        tracked_run(ffmpeg_split_cmd, check=True)
+        segment_paths.append(segment_output_path)
+
+        current_start_time += segment_duration
+        segment_index += 1
+
+    return segments_dir, segment_paths
+
 
 def get_video_resolution(file_path):
     """

@@ -48,7 +48,7 @@ def run_yt_dlp(
     os.makedirs(output_dir, exist_ok=True)
     log_console(f"Output directory: {os.path.abspath(output_dir)}", "info")
 
-    progress_state = {"progress": 5, "current_step": "Fetching video info..."}
+    progress_state = {"progress": 5, "current_step": "Fetching video info...", "last_saved_threshold": 0}
 
     def progress_hook(d):
         if active_downloads.get(task_id, {}).get("cancel_flag", False):
@@ -105,8 +105,10 @@ def run_yt_dlp(
                     "playlist_count": playlist_count,
                     "filename": clean_filename
                 }
-                # Periodically save (every 20%)
-                if int(progress) % 20 == 0:
+                # Periodically save (roughly every 20% crossed, not just exact multiples)
+                threshold = (int(progress) // 20) * 20
+                if threshold > progress_state["last_saved_threshold"]:
+                    progress_state["last_saved_threshold"] = threshold
                     from services.persistence import save_tasks_sync
                     save_tasks_sync()
         elif d.get('status') == 'finished':
@@ -126,6 +128,9 @@ def run_yt_dlp(
             'ignoreerrors': True,
             'noplaylist': True,
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            # Download DASH/HLS fragments (common for higher-res YouTube video) in
+            # parallel instead of one at a time - same video/CDN, just faster.
+            'concurrent_fragment_downloads': 4,
         }
 
         if os.path.exists(cookies_path):
@@ -265,7 +270,7 @@ def run_yt_dlp(
                     from modules.module_ffmpeg import download_ffmpeg
 
                     if download_ffmpeg():
-                        success, _ = process_file(filename, keep_temp=False)
+                        success, _, _ = process_file(filename, keep_temp=False)
                         log_console(f"Auto-separation completed for {filename}", "success")
                         tasks[task_id]["progress"] = 100
                         tasks[task_id]["current_step"] = "Separation complete"

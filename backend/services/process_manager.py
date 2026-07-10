@@ -262,12 +262,24 @@ def kill_stale_processes():
                 if pid in (my_pid, my_parent_pid):
                     continue
 
-                # Only kill if it's related to our project (demucs, spleeter, or our modules)
-                if any(marker in cmd_line for marker in [
+                # Script-specific markers: unambiguously identify a process as
+                # belonging to this app, regardless of where it happens to run from.
+                has_specific_marker = any(marker in cmd_line for marker in [
                     "demucs", "spleeter", "module_processor",
                     "module_demucs", "module_spleeter",
-                    cwd_lower,
-                ]):
+                ])
+
+                # A bare cwd substring match is too weak on its own for python.exe -
+                # unrelated Python processes (other projects, tools, IDE helpers)
+                # can legitimately have this directory (or a parent of it) somewhere
+                # in their command line. Only fall back to the cwd check for
+                # ffmpeg/ffprobe, which don't run long-lived for unrelated purposes
+                # from inside this project folder.
+                is_stale_match = has_specific_marker or (
+                    cwd_lower in cmd_line and target in ("ffmpeg.exe", "ffprobe.exe")
+                )
+
+                if is_stale_match:
                     try:
                         subprocess.run(
                             ["taskkill", "/F", "/PID", str(pid)],

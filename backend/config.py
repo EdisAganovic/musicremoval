@@ -1,15 +1,13 @@
 """
 Configuration and shared state for the backend.
 
-This module re-exports all items from the new modular structure for backward compatibility.
-New code should import directly from the specialized modules:
-- backend.core.constants: File paths and settings
-- backend.core.state: Global state variables and locks
-- backend.utils.file_ops: Safe file operations
-- backend.utils.validation: Path/URL validation
-- backend.utils.async_tools: Async helpers
-- backend.services.persistence: Data loading/saving
-- backend.services.cleanup: Background cleanup tasks
+This module is the single import surface every route/service in this backend
+actually uses (`from config import ...`) - the implementation lives in
+core.constants / core.state / utils.* / services.persistence / services.cleanup,
+and this file just re-exports it in one place. Add new re-exports here when you
+add a new shared helper in one of those modules; don't import from the
+specialized modules directly, since nothing else in the codebase does that and
+it would just fragment the import style.
 """
 
 # Re-export from core.constants

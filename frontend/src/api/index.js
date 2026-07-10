@@ -62,6 +62,8 @@ export const separationAPI = {
   status: (taskId) => api.get(`/status/${taskId}`),
   scanFolder: (folderPath) =>
     api.post("/folder/scan", { folder_path: folderPath }),
+  scanFileList: (filePaths) =>
+    api.post("/folder/scan-files", { file_paths: filePaths }),
   processBatch: (queueId, model) =>
     api.post("/folder-queue/process", { queue_id: queueId, model }),
   removeFromQueue: (queueId, fileId) =>
@@ -108,7 +110,6 @@ export const queueAPI = {
 // Library API endpoints
 export const libraryAPI = {
   get: () => api.get("/library"),
-  delete: (taskId) => api.post("/delete-file", { task_id: taskId }),
   openFile: (path) => api.post("/open-file", { path }),
   openFolder: (folderName) => {
     // Convert folder name to full path

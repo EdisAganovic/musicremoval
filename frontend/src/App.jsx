@@ -42,6 +42,7 @@ import { Toaster } from 'react-hot-toast';
 function AppContent() {
   const [activeTab, setActiveTab] = useState('separation');
   const [libraryFileToSeparate, setLibraryFileToSeparate] = useState(null);
+  const [bulkSeparateBatchId, setBulkSeparateBatchId] = useState(null);
   const [showConsole, setShowConsole] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [consoleLogs, setConsoleLogs] = useState([]);
@@ -234,7 +235,12 @@ function AppContent() {
             style={{ display: activeTab === 'separation' ? 'block' : 'none' }}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
-            <SeparationTab libraryFile={libraryFileToSeparate} onFileCleared={() => setLibraryFileToSeparate(null)} />
+            <SeparationTab
+              libraryFile={libraryFileToSeparate}
+              onFileCleared={() => setLibraryFileToSeparate(null)}
+              externalBatchId={bulkSeparateBatchId}
+              onExternalBatchConsumed={() => setBulkSeparateBatchId(null)}
+            />
           </motion.div>
 
           {/* Downloader Tab */}
@@ -262,6 +268,10 @@ function AppContent() {
               isActive={activeTab === 'library'}
               onSeparate={(filePath) => {
                 setLibraryFileToSeparate(filePath);
+                setActiveTab('separation');
+              }}
+              onBulkSeparate={(batchId) => {
+                setBulkSeparateBatchId(batchId);
                 setActiveTab('separation');
               }}
             />
@@ -390,7 +400,7 @@ function AppContent() {
                     </button>
                     {/* Copy Button */}
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
                         if (!systemInfo) return;
                         const markdown = `## System Information
 
@@ -427,7 +437,7 @@ ${Object.entries(systemInfo.packages)
 `;
                         navigator.clipboard.writeText(markdown);
                         // Show brief success feedback
-                        const btn = event.currentTarget;
+                        const btn = e.currentTarget;
                         btn.classList.add('text-emerald-400');
                         setTimeout(() => btn.classList.remove('text-emerald-400'), 1000);
                       }}

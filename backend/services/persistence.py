@@ -109,21 +109,36 @@ async def load_tasks_async():
         # If file doesn't exist, we just start with empty tasks (already initialized)
 
 
+def _persistable_tasks(tasks_copy: dict) -> dict:
+    """
+    Filter out ephemeral diagnostic-test entries (task_id starting with
+    "diag-", created by routes/diagnostics.py) so they don't pollute the
+    real download/separation task history in tasks.json.
+    """
+    return {k: v for k, v in tasks_copy.items() if not k.startswith("diag-")}
+
+
 async def save_tasks_async():
     """Save tasks to disk."""
     async with tasks_lock:
         try:
+            # Copy to avoid "dictionary changed size during iteration" if another
+            # thread/task mutates `tasks` while json.dump is iterating it.
+            tasks_copy = _persistable_tasks(dict(tasks))
             with open(TASKS_FILE, "w", encoding="utf-8") as f:
-                json.dump(tasks, f, indent=4)
+                json.dump(tasks_copy, f, indent=4)
         except (OSError, IOError, TypeError) as e:
             print(f"Error saving tasks: {e}")
 
 
 def save_tasks_sync():
-    """Save tasks to disk (sync version)."""
+    """Save tasks to disk (sync version, called from background threads)."""
     try:
+        # Copy first: this runs from worker threads (asyncio.to_thread) while the
+        # event loop can concurrently add/update entries in `tasks`.
+        tasks_copy = _persistable_tasks(dict(tasks))
         with open(TASKS_FILE, "w", encoding="utf-8") as f:
-            json.dump(tasks, f, indent=4)
+            json.dump(tasks_copy, f, indent=4)
     except (OSError, IOError, TypeError) as e:
         print(f"Error saving tasks: {e}")
 
@@ -159,10 +174,8 @@ async def update_task_async(task_id: str, updates: dict):
 async def _save_tasks_internal():
     """Save tasks to disk - internal helper without lock (assumes caller has it)."""
     try:
-        # Create a copy to avoid mutation during save
-        tasks_copy = dict(tasks)
-        # Filter to only save persistent-worthy tasks (exclude very transient data if needed)
-        # But for now, save all.
+        # Create a copy to avoid mutation during save, and drop diag-* entries
+        tasks_copy = _persistable_tasks(dict(tasks))
         with open(TASKS_FILE, "w", encoding="utf-8") as f:
             json.dump(tasks_copy, f, indent=4)
     except (OSError, IOError, TypeError) as e:

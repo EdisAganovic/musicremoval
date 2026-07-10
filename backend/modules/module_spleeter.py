@@ -36,7 +36,7 @@ import tempfile
 import concurrent.futures
 from colorama import Fore, Style
 from tqdm import tqdm
-from module_ffmpeg import get_audio_duration, FFMPEG_EXE
+from module_ffmpeg import get_audio_duration, FFMPEG_EXE, split_audio_into_segments
 
 # Use tracked subprocess to prevent zombie processes on app exit
 try:
@@ -76,16 +76,21 @@ def is_docker_available():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
-def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=None):
+def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=None, want_instrumental=False):
     """
     Separates vocals using Spleeter (2stems model) via subprocess.
     Handles long audio files by splitting them into chunks.
-    
+
+    Spleeter's 2stems mode always produces an accompaniment.wav alongside
+    vocals.wav (no extra flag/compute needed) - want_instrumental just controls
+    whether we bother tracking/concatenating it into a usable instrumental track.
+
     Returns:
-        tuple: (path_to_final_vocal_wav, temp_segments_dir)
+        tuple: (path_to_final_vocal_wav, path_to_final_instrumental_wav_or_None, temp_segments_dir)
     """
     print(f"{Fore.CYAN}2. Separating with Spleeter...{Style.RESET_ALL}")
     spleeter_vocal_wav_path = None
+    spleeter_instrumental_wav_path = None
     temp_spleeter_segments_dir = None
     try:
         os.makedirs(spleeter_out_path, exist_ok=True)
@@ -93,7 +98,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
         audio_duration = get_audio_duration(temp_audio_wav_path)
         if audio_duration is None:
             print(f"{Fore.RED}Failed to get audio duration, cannot proceed with Spleeter separation.{Style.RESET_ALL}")
-            return None, None
+            return None, None, None
 
         SPLEETER_SEGMENT_DURATION_SECONDS = 600  # 10 minutes
 
@@ -105,39 +110,15 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
             temp_spleeter_segments_dir = tempfile.mkdtemp(dir="_temp")
         elif audio_duration > SPLEETER_SEGMENT_DURATION_SECONDS:
             print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for Spleeter...{Style.RESET_ALL}\n")
-            # Ensure _temp exists
-            os.makedirs("_temp", exist_ok=True)
-            temp_spleeter_segments_dir = tempfile.mkdtemp(dir="_temp")
-            split_audio_paths = []
-
-            current_start_time = 0
-            segment_index = 0
-
-            while current_start_time < audio_duration:
-                segment_duration = min(SPLEETER_SEGMENT_DURATION_SECONDS, audio_duration - current_start_time)
-                segment_filename = f"part_{segment_index:03d}.wav"
-                segment_output_path = os.path.join(temp_spleeter_segments_dir, segment_filename)
-
-                ffmpeg_split_cmd = [
-                    FFMPEG_EXE, "-y", 
-                    "-loglevel", "error",
-                    "-i", temp_audio_wav_path,
-                    "-ss", str(current_start_time),
-                    "-t", str(segment_duration),
-                    segment_output_path
-                ]
-                print(f"- Splitting audio: {segment_filename} from {current_start_time:.2f}s for {segment_duration:.2f}s...")
-                tracked_run(ffmpeg_split_cmd, check=True)
-                split_audio_paths.append(segment_output_path)
-
-                current_start_time += segment_duration
-                segment_index += 1
-
+            temp_spleeter_segments_dir, split_audio_paths = split_audio_into_segments(
+                temp_audio_wav_path, audio_duration, SPLEETER_SEGMENT_DURATION_SECONDS
+            )
             print(f"\n{Fore.GREEN}[OK] Audio splitted into {len(split_audio_paths)} segments for Spleeter.{Style.RESET_ALL}")
         
         # If we have segments (either pre-split or just split)
         if (pre_split_segments or (audio_duration > SPLEETER_SEGMENT_DURATION_SECONDS)):
             spleeter_segment_vocal_paths = []
+            spleeter_segment_no_vocals_map = {}
 
             use_docker = is_docker_available()
             if use_docker:
@@ -176,26 +157,29 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                     env["MODEL_PATH"] = MODEL_DIRECTORY_HOST
                 
                 tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
-                
+
                 segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
-                return segment_vocal_path
+                segment_no_vocals_path = os.path.join(spleeter_out_path, segment_base_name, "accompaniment.wav")
+                return segment_vocal_path, segment_no_vocals_path
 
             # Use ThreadPoolExecutor for parallel processing
             with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                 future_to_segment = {executor.submit(process_segment, i, path): path for i, path in enumerate(split_audio_paths)}
                 for future in tqdm(concurrent.futures.as_completed(future_to_segment), total=len(split_audio_paths), desc="Spleeter segments", unit="seg"):
-                    segment_vocal_path = future.result()
+                    segment_vocal_path, segment_no_vocals_path = future.result()
                     if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
                         spleeter_segment_vocal_paths.append(segment_vocal_path)
+                        if want_instrumental and os.path.exists(segment_no_vocals_path) and os.path.getsize(segment_no_vocals_path) > 0:
+                            spleeter_segment_no_vocals_map[segment_vocal_path] = segment_no_vocals_path
                     else:
                         print(f"{Fore.YELLOW}Warning: Spleeter vocals for segment not found or empty. Skipping.{Style.RESET_ALL}")
 
             # Re-sort paths to match original order (crucial for concatenation)
-            spleeter_segment_vocal_paths.sort() 
+            spleeter_segment_vocal_paths.sort()
 
             if not spleeter_segment_vocal_paths:
                 print(f"{Fore.RED}Error: No Spleeter vocal segments generated.{Style.RESET_ALL}")
-                return None, temp_spleeter_segments_dir
+                return None, None, temp_spleeter_segments_dir
             else:
                 concat_list_path = os.path.join(temp_spleeter_segments_dir, "concat_list.txt")
                 with open(concat_list_path, "w") as f:
@@ -207,6 +191,22 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 tracked_run(ffmpeg_concat_cmd, check=True)
                 spleeter_vocal_wav_path = final_spleeter_vocals_temp_path
                 print(f"\n{Fore.GREEN}[OK] All Spleeter vocal segments joined successfully.{Style.RESET_ALL}")
+
+                # Same concatenation for the instrumental/accompaniment segments, in the same order
+                if want_instrumental and len(spleeter_segment_no_vocals_map) == len(spleeter_segment_vocal_paths):
+                    no_vocals_concat_list_path = os.path.join(temp_spleeter_segments_dir, "concat_list_accompaniment.txt")
+                    with open(no_vocals_concat_list_path, "w") as f:
+                        for vocal_p in spleeter_segment_vocal_paths:
+                            f.write(f"file '{os.path.abspath(spleeter_segment_no_vocals_map[vocal_p])}'\n")
+
+                    final_spleeter_no_vocals_temp_path = os.path.join(temp_spleeter_segments_dir, "concatenated_spleeter_accompaniment.wav")
+                    ffmpeg_concat_no_vocals_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", no_vocals_concat_list_path, "-c", "copy", final_spleeter_no_vocals_temp_path]
+                    try:
+                        tracked_run(ffmpeg_concat_no_vocals_cmd, check=True)
+                        spleeter_instrumental_wav_path = final_spleeter_no_vocals_temp_path
+                        print(f"{Fore.GREEN}[OK] All Spleeter instrumental segments joined successfully.{Style.RESET_ALL}")
+                    except subprocess.CalledProcessError as e:
+                        print(f"{Fore.YELLOW}Warning: Failed to join Spleeter instrumental segments, skipping instrumental output: {e}{Style.RESET_ALL}")
         else:
             use_docker = is_docker_available()
             if use_docker:
@@ -235,8 +235,12 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
             
             tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
             spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
+            if want_instrumental:
+                candidate_accompaniment = os.path.join(spleeter_out_path, base_audio_name_no_ext, "accompaniment.wav")
+                if os.path.exists(candidate_accompaniment) and os.path.getsize(candidate_accompaniment) > 0:
+                    spleeter_instrumental_wav_path = candidate_accompaniment
             print(f"{Fore.GREEN}Spleeter separation complete.{Style.RESET_ALL}")
-        
+
         if spleeter_vocal_wav_path and not (os.path.exists(spleeter_vocal_wav_path) and os.path.getsize(spleeter_vocal_wav_path) > 0):
             print(f"{Fore.YELLOW}Warning: Final Spleeter vocals not found or empty at {spleeter_vocal_wav_path}. This might be expected if Spleeter failed.{Style.RESET_ALL}")
             spleeter_vocal_wav_path = None
@@ -246,8 +250,10 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
         if e.stderr:
             print(f"{Fore.RED}Spleeter Error Output: {e.stderr}{Style.RESET_ALL}")
         spleeter_vocal_wav_path = None
+        spleeter_instrumental_wav_path = None
     except Exception as e:
         print(f"{Fore.RED}An unexpected error occurred during Spleeter processing: {e}{Style.RESET_ALL}")
         spleeter_vocal_wav_path = None
-    
-    return spleeter_vocal_wav_path, temp_spleeter_segments_dir
+        spleeter_instrumental_wav_path = None
+
+    return spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir

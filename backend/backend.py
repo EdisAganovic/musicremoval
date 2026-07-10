@@ -7,6 +7,7 @@ The actual business logic is in the services/ and routes/ modules.
 import os
 import sys
 import signal
+import asyncio
 
 # Add backend directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -102,9 +103,9 @@ async def startup_event():
     load_metadata_cache()
     await load_tasks_async()
 
-    # Cleanup old data
-    cleanup_metadata_cache()
-    cleanup_temp_files()
+    # Cleanup old data (blocking os.walk work, run off the event loop)
+    await asyncio.to_thread(cleanup_metadata_cache)
+    await asyncio.to_thread(cleanup_temp_files)
 
     # Start background cleanup scheduler (runs every hour)
     await start_cleanup_scheduler(interval_seconds=3600)

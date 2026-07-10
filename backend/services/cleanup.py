@@ -6,7 +6,6 @@ import time
 import asyncio
 from colorama import Fore, Style
 
-from core.constants import TASKS_FILE
 from core.state import tasks, tasks_lock, metadata_cache, metadata_cache_lock
 from utils.file_ops import safe_remove
 from services.persistence import save_metadata_cache
@@ -103,13 +102,10 @@ async def cleanup_completed_tasks():
 
         if stale_ids:
             print(f"{Fore.CYAN}Cleaned up {len(stale_ids)} completed tasks{Style.RESET_ALL}")
-            # Save after cleanup
-            import json
-            try:
-                with open(TASKS_FILE, "w", encoding="utf-8") as f:
-                    json.dump(tasks, f, indent=4)
-            except (OSError, IOError, TypeError):
-                pass
+            # Reuse the shared save helper (handles the copy-before-dump race
+            # mitigation and diag-* task filtering consistently in one place)
+            from services.persistence import save_tasks_sync
+            save_tasks_sync()
 
 
 # ============== Background Cleanup Scheduler ==============
@@ -129,11 +125,12 @@ async def periodic_cleanup():
 
             print(f"\n{Fore.CYAN}=== Running periodic cleanup ==={Style.RESET_ALL}")
 
-            # Clean temp files older than 24 hours
-            cleanup_temp_files()
+            # Clean temp files older than 24 hours (blocking os.walk/getmtime work,
+            # run off the event loop so it doesn't stall other requests)
+            await asyncio.to_thread(cleanup_temp_files)
 
             # Clean metadata cache
-            cleanup_metadata_cache()
+            await asyncio.to_thread(cleanup_metadata_cache)
 
             # Clean completed tasks older than 24 hours
             await cleanup_completed_tasks()

@@ -1,5 +1,21 @@
 # Frontend Changelog
 
+## [0.0.17] - 2026-07-10 🛠️
+
+### [Added]
+- **Instrumental/Karaoke toggle**: New "Also Export Instrumental" switch in the Separation tab. When the backend finishes, a "Play instrumental" button appears alongside the existing Play/Open Folder actions if a karaoke track was produced.
+- **Quick Preview mode**: New toggle + seconds input (single-file mode only) lets you process just the first N seconds of a file to A/B Spleeter vs Demucs vs Both before committing to the full run.
+- **Bulk "Separate Selected"**: Library tab multi-select now has a "Separate N" button next to bulk delete. It builds a batch via the new `/api/folder/scan-files` + `/api/folder-queue/process` endpoints and hands the running batch off to the Separation tab for progress tracking.
+- **Library pagination**: New page-size selector (25/50/100/250) with prev/next controls under the file table, so large libraries don't render every row at once.
+
+### [Fixed]
+- **Duplicate API method**: Removed a dead duplicate `libraryAPI.delete` definition in `api/index.js` that silently shadowed the real one.
+- **Fragile global `event` reference**: The "Copy as Markdown" button in the System Info modal read the deprecated global `event` object instead of its own handler argument.
+- **Cancelled downloads showing as failed**: Queue items now render a distinct "CANCELLED" badge/icon instead of falling into the "FAILED" state.
+- **Idle polling overhead**: `DownloaderTab`'s three always-on polling intervals (200ms/1s/2s for download status, active downloads, and queue) now skip their network call while the tab/document is hidden, matching the pattern already used for notifications and console logs.
+
+---
+
 ## [0.1.4] - 2026-05-07 🎯
 
 ### [Added]

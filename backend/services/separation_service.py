@@ -6,16 +6,17 @@ import time
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 
 
-def run_separation(task_id: str, file_path: str, duration=None, model="both", skip_video_encoding=False):
+def run_separation(task_id: str, file_path: str, duration=None, model="both", skip_video_encoding=False, export_instrumental=False):
     """
     Run vocal separation on a file.
-    
+
     Args:
         task_id: Unique task identifier
         file_path: Path to the file to process
         duration: Optional duration limit in seconds
         model: Separation model to use (spleeter, demucs, both)
-    
+        export_instrumental: Also produce an instrumental/karaoke track alongside vocals
+
     Returns:
         None (updates tasks dict with results)
     """
@@ -59,9 +60,9 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
                         file_item["current_step"] = step
 
         filename = os.path.basename(file_path)
-        success_result, phase_timings = process_file(
-            file_path, keep_temp=False, duration=duration, progress_callback=on_progress, 
-            model=model, skip_video_encoding=skip_video_encoding
+        success_result, phase_timings, instrumental_path = process_file(
+            file_path, keep_temp=False, duration=duration, progress_callback=on_progress,
+            model=model, skip_video_encoding=skip_video_encoding, export_instrumental=export_instrumental
         )
 
         if success_result:
@@ -110,6 +111,10 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
                 result_files = [success_result]
 
             tasks[task_id]["result_files"] = result_files
+            if instrumental_path:
+                # Also picked up by the directory scan above (shares the same base
+                # filename), but kept explicit too so the UI can distinguish it.
+                tasks[task_id]["instrumental_file"] = instrumental_path
 
             # Save to library
             from services.persistence import get_file_metadata_cached
@@ -118,6 +123,7 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
                 "url": "",
                 "title": filename,
                 "result_files": result_files,
+                "instrumental_file": instrumental_path,
                 "status": "completed",
                 "format": "separation",
                 "source_file": file_path,

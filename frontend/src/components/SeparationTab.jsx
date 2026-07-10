@@ -70,7 +70,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
-const SeparationTab = ({ libraryFile, onFileCleared }) => {
+const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternalBatchConsumed }) => {
   const [file, setFile] = useState(null);
   const [libraryFilePath, setLibraryFilePath] = useState(null);
   const [folderPath, setFolderPath] = useState(null);
@@ -91,6 +91,10 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
   const [processingTime, setProcessingTime] = useState(null);
   const [detailedTimings, setDetailedTimings] = useState(null);
   const [skipVideoEncoding, setSkipVideoEncoding] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewSeconds, setPreviewSeconds] = useState(30);
+  const [exportInstrumental, setExportInstrumental] = useState(false);
+  const [instrumentalFile, setInstrumentalFile] = useState(null);
 
   const fileInputRef = useRef(null);
   const batchListRef = useRef(null);
@@ -125,6 +129,22 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     }
   }, [libraryFile]);
 
+  // Handle an already-running batch handed off from Library's bulk "Separate Selected"
+  // action: jump straight into folder/batch mode and let the existing batch-status
+  // polling effect (keyed on batchId + processingMode) pick it up.
+  useEffect(() => {
+    if (externalBatchId) {
+      setProcessingMode("folder");
+      setQueueId(null);
+      setBatchFiles([]);
+      setError(null);
+      setProgress(0);
+      setStatus("processing");
+      setBatchId(externalBatchId);
+      onExternalBatchConsumed?.();
+    }
+  }, [externalBatchId]);
+
   const handleReset = () => {
     setFile(null);
     setLibraryFilePath(null);
@@ -139,6 +159,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
     setResultFiles([]);
     setMetadata(null);
     setSkipVideoEncoding(false);
+    setInstrumentalFile(null);
   };
 
   // Keyboard Shortcuts
@@ -183,6 +204,7 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
             setResultFiles(data.result_files || data.resultFiles || []);
             setProcessingTime(data.processing_time || data.processingTime);
             setDetailedTimings(data.timings);
+            setInstrumentalFile(data.instrumental_file || null);
             clearInterval(interval);
           } else if (data.status === "failed" || data.status === "error") {
             setError("Process failed: Check backend logs.");
@@ -364,7 +386,8 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         queue_id: queueId,
         selected_files: selectedFiles,
         model,
-        skip_video_encoding: skipVideoEncoding
+        skip_video_encoding: skipVideoEncoding,
+        export_instrumental: exportInstrumental
       });
 
       setBatchId(response.data.batch_id);
@@ -392,7 +415,9 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         const response = await axios.post(`${BACKEND_URL}/api/separate-file`, {
           file_path: libraryFilePath,
           model,
-          skip_video_encoding: skipVideoEncoding
+          skip_video_encoding: skipVideoEncoding,
+          duration: previewMode ? previewSeconds : null,
+          export_instrumental: exportInstrumental
         });
         setTaskId(response.data.task_id);
       } else {
@@ -401,6 +426,10 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
         formData.append("file", file);
         formData.append("model", model);
         formData.append("skip_video_encoding", skipVideoEncoding);
+        formData.append("export_instrumental", exportInstrumental);
+        if (previewMode) {
+          formData.append("duration", previewSeconds);
+        }
 
         setStatus("uploading");
         setCurrentStep("Transferring file...");
@@ -514,6 +543,66 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
           </div>
         </label>
       </div>
+
+      {/* Export Instrumental/Karaoke Toggle */}
+      <div className="flex justify-center mb-6">
+        <label className="flex items-center space-x-3 cursor-pointer group">
+          <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${exportInstrumental ? 'bg-accent-500' : 'bg-dark-700'}`}>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={exportInstrumental}
+              onChange={() => setExportInstrumental(!exportInstrumental)}
+            />
+            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${exportInstrumental ? 'translate-x-6' : ''}`} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
+              <AudioLines className="w-4 h-4 text-accent-400" />
+              Also Export Instrumental
+            </span>
+            <span className="text-[10px] text-gray-500">Karaoke track from the same separation, no extra AI pass</span>
+          </div>
+        </label>
+      </div>
+
+      {/* Preview Mode Toggle - single file only, lets you A/B models on a short clip first */}
+      {processingMode === "single" && (
+        <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
+          <label className="flex items-center space-x-3 cursor-pointer group">
+            <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${previewMode ? 'bg-primary-600' : 'bg-dark-700'}`}>
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={previewMode}
+                onChange={() => setPreviewMode(!previewMode)}
+              />
+              <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${previewMode ? 'translate-x-6' : ''}`} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-primary-400" />
+                Quick Preview
+              </span>
+              <span className="text-[10px] text-gray-500">Only process the first few seconds to compare models fast</span>
+            </div>
+          </label>
+          {previewMode && (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="5"
+                max="300"
+                value={previewSeconds}
+                onChange={(e) => setPreviewSeconds(Math.max(5, Math.min(300, Number(e.target.value) || 30)))}
+                className="w-20 bg-dark-800 text-white text-sm text-center border border-white/10 rounded-lg px-2 py-1.5 outline-none focus:border-primary-500/50 transition-colors"
+              />
+              <span className="text-xs text-gray-500">seconds</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {processingMode === "folder" && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1113,6 +1202,24 @@ const SeparationTab = ({ libraryFile, onFileCleared }) => {
                   <FolderOpen className="w-4 h-4" />
                   <span>Open folder</span>
                 </button>
+                {instrumentalFile && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await axios.post(`${BACKEND_URL}/api/open-file`, {
+                          path: instrumentalFile,
+                        });
+                      } catch (err) {
+                        toast.error("Cannot open instrumental file.");
+                      }
+                    }}
+                    className="px-6 py-3 bg-accent-600/20 hover:bg-accent-600/30 text-accent-400 hover:text-accent-300 rounded-xl text-sm font-bold transition-all border border-accent-500/30 active:scale-95 flex items-center space-x-2"
+                    title="Play the instrumental/karaoke track"
+                  >
+                    <AudioLines className="w-4 h-4" />
+                    <span>Play instrumental</span>
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>

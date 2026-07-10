@@ -1,10 +1,10 @@
 # Demucs & Spleeter Vocal Extractor
 
-**Version:** 0.0.16 | **Last Updated:** 2026-05-07
+**Version:** 0.0.17 | **Last Updated:** 2026-07-10
 
 A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.16-emerald)
+![Version](https://img.shields.io/badge/version-0.0.17-emerald)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.129+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
@@ -20,12 +20,16 @@ A professional AI-powered vocal separation tool with a modern web interface. Rem
 ## ✨ Key Features
 
 ### 🎵 AI Vocal Separation
-- **Dual AI Models** — Runs Demucs (htdemucs) and Spleeter simultaneously, blends outputs for superior quality
+- **Dual AI Models** — Runs Demucs (htdemucs) and Spleeter, blends outputs for superior quality
 - **Model Selection** — Choose Spleeter, Demucs, or Both per job
+- **Instrumental / Karaoke Output** — Optionally export the instrumental track alongside vocals, at no extra AI cost (reuses Demucs's `no_vocals`/Spleeter's `accompaniment` stem)
+- **Quick Preview Mode** — Process just the first N seconds to compare model quality before running the full file
 - **Batch Folder Processing** — Scan an entire folder of media files and process them in bulk
+- **Bulk Separate from Library** — Multi-select files in the Library tab and separate them all in one batch
 - **Video & Audio Input** — Accepts MP4, MKV, MOV, AVI, WebM, MP3, FLAC, WAV, M4A and more
 - **Skip Video Encoding** — Fast mode copies original video stream without re-encoding
 - **Long Audio Segmentation** — Auto-splits files >10 minutes, processes in parallel, concatenates results
+- **GPU-Aware Worker Scaling** — Automatically avoids contending parallel Demucs workers on the same GPU
 - **Cross-Correlation Alignment** — Millisecond-level sync between original audio and separated output
 - **Audio Normalization** — EBU R128 loudnorm for consistent volume levels
 - **Smart Audio Track Selection** — Auto-selects best language track from multi-language videos
@@ -50,8 +54,9 @@ A professional AI-powered vocal separation tool with a modern web interface. Rem
 
 ### 📚 Media Library
 - **Unified View** — All downloads and separated files in one searchable, sortable table
+- **Pagination** — Configurable page size (25/50/100/250) keeps large libraries fast to browse
 - **Folder Filtering** — Toggle between download and nomusic folders with size info
-- **Bulk Operations** — Select multiple files for batch delete
+- **Bulk Operations** — Select multiple files for batch delete or batch vocal separation
 - **Right-Click Context Menu** — Play, Rename, Open Folder, Delete, Send to Separation
 - **Metadata Display** — Duration, resolution, codec info, and model badges
 - **Broken Entry Cleanup** — Auto-prunes entries for files no longer on disk
@@ -322,9 +327,11 @@ python main.py separate --file "video.mp4" --temp
 1. Go to **Separation** tab
 2. Drag & drop file or click to upload
 3. Select model: Spleeter, Demucs, or Both (recommended)
-4. Click **Start Separation**
-5. Wait for processing (progress shown in real-time)
-6. Download or play result from Library
+4. Optional: enable **Also Export Instrumental** for a karaoke track alongside vocals
+5. Optional: enable **Quick Preview** to process only the first N seconds first
+6. Click **Start Separation**
+7. Wait for processing (progress shown in real-time)
+8. Download or play result from Library
 
 #### 2. Folder Batch Processing
 
@@ -360,11 +367,13 @@ python main.py separate --file "video.mp4" --temp
 1. Go to **Library** tab
 2. **Search**: Type in search bar to filter files
 3. **Sort**: Use dropdown to sort by date or duration
-4. **Select**: Click checkboxes for bulk operations
-5. **Delete**: Select multiple files and click **Delete X**
-6. **Play**: Click file icon or name to open with default player
-7. **Open Folder**: Click folder icon to open in Explorer
-8. **Separate**: Click Layers icon to separate vocals
+4. **Paginate**: Use the page-size selector and prev/next controls for large libraries
+5. **Select**: Click checkboxes for bulk operations
+6. **Delete**: Select multiple files and click **Delete X**
+7. **Bulk Separate**: Select multiple files and click **Separate X** to batch-process them
+8. **Play**: Click file icon or name to open with default player
+9. **Open Folder**: Click folder icon to open in Explorer
+10. **Separate**: Click Layers icon to separate vocals for a single file
 
 #### 6. Notifications
 
@@ -436,8 +445,8 @@ data/                    # Persistent state and configuration
 ├── notifications.json   # User alerts
 └── metadata_cache.json  # File metadata cache
 docs/                    # Documentation and roadmap
-├── README.md            # This file
-├── changelog.md         # Detailed version history
+├── backend_changelog.md # Backend version history
+├── frontend_changelog.md # Frontend version history
 ├── TODO.MD              # Development roadmap
 └── ARCHITECTURE.md      # System design
 ```
@@ -469,9 +478,10 @@ frontend/
 
 **Separation:**
 
-- `POST /api/separate` - Upload file for separation
-- `POST /api/separate-file` - Separate existing file
+- `POST /api/separate` - Upload file for separation (supports `export_instrumental`, `duration` preview)
+- `POST /api/separate-file` - Separate existing file (supports `export_instrumental`, `duration` preview)
 - `POST /api/folder/scan` - Scan folder for batch processing
+- `POST /api/folder/scan-files` - Build a batch queue directly from an explicit file list (used by Library bulk-separate)
 - `POST /api/folder-queue/process` - Start batch processing
 
 **Library:**
@@ -570,7 +580,15 @@ _Times include both Spleeter + Demucs processing with alignment_
 
 ## 📝 Changelog
 
-See [changelog.md](changelog.md) for detailed version history.
+See [docs/backend_changelog.md](docs/backend_changelog.md) and [docs/frontend_changelog.md](docs/frontend_changelog.md) for detailed version history.
+
+### v0.0.17 (2026-07-10)
+- ✅ Instrumental/karaoke output option (no extra AI cost)
+- ✅ Quick Preview mode for fast model A/B comparison
+- ✅ Bulk "Separate Selected" from the Library tab
+- ✅ Library pagination
+- ✅ GPU-aware Demucs worker scaling + concurrent yt-dlp fragment downloads
+- ✅ Fixed persistence race, wrong monotonic timestamps, progress auto-save threshold, cancelled-download mislabeling, stale rename state, over-broad stale-process killing, blocking cleanup on the event loop, and a leaked temp file
 
 ### v0.0.14 (2026-05-07)
 - ✅ `curl-cffi` integration for Chrome impersonation

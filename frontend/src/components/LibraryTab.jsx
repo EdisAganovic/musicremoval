@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { libraryAPI } from '../api/index.js';
+import { libraryAPI, separationAPI } from '../api/index.js';
 import { BACKEND_URL } from '../config';
-import { Video, Music, FolderOpen, Trash2, AudioLines, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3 } from 'lucide-react';
+import { Video, Music, FolderOpen, Trash2, AudioLines, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3, ChevronLeft, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const LibraryTab = ({ onSeparate, isActive }) => {
+const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
     const [items, setItems] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
@@ -16,6 +16,10 @@ const LibraryTab = ({ onSeparate, isActive }) => {
     const [folderSizes, setFolderSizes] = useState({ download: '0 MB', nomusic: '0 MB' });
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
 
     // Modal state for delete confirmations
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { type: 'single' | 'bulk', id?: string, path?: string, count?: number }
@@ -189,6 +193,41 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         setDeleteConfirm({ type: 'bulk', count: selectedItems.length });
     };
 
+    const [isBulkSeparating, setIsBulkSeparating] = useState(false);
+
+    const handleBulkSeparate = async () => {
+        if (selectedItems.length === 0 || isBulkSeparating) return;
+
+        const filePaths = items
+            .filter(item => selectedItems.includes(item.task_id))
+            .map(item => item.result_files?.[0])
+            .filter(path => path && !path.toLowerCase().includes('nomusic'));
+
+        if (filePaths.length === 0) {
+            toast.error("No eligible files in selection (already-separated files are skipped)");
+            return;
+        }
+
+        setIsBulkSeparating(true);
+        const loadingToast = toast.loading(`Queuing ${filePaths.length} file${filePaths.length !== 1 ? 's' : ''} for separation...`);
+        try {
+            const scanResponse = await separationAPI.scanFileList(filePaths);
+            const { queue_id } = scanResponse.data;
+
+            const batchResponse = await separationAPI.processBatch(queue_id, "both");
+            const { batch_id } = batchResponse.data;
+
+            toast.success(`Started separating ${filePaths.length} file${filePaths.length !== 1 ? 's' : ''}`, { id: loadingToast });
+            setSelectedItems([]);
+            onBulkSeparate?.(batch_id);
+        } catch (err) {
+            console.error("Failed to start bulk separation", err);
+            toast.error(err.response?.data?.detail || "Failed to start bulk separation", { id: loadingToast });
+        } finally {
+            setIsBulkSeparating(false);
+        }
+    };
+
     const handleRename = (item) => {
         const currentName = item.result_files?.[0]?.split(/[\\/]/).pop() || '';
         const nameWithoutExt = currentName.substring(0, currentName.lastIndexOf('.')) || currentName;
@@ -279,6 +318,22 @@ const LibraryTab = ({ onSeparate, isActive }) => {
         }
         return 0;
     });
+
+    const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
+    const paginatedItems = filteredItems.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    // Reset to page 1 whenever the filtered set changes shape (new search/filter/sort,
+    // or the underlying library changed) so the user isn't stuck on a now-empty page.
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, folderFilter, sortBy, pageSize]);
+
+    // Clamp current page if items were deleted and it now overshoots the page count
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [totalPages, currentPage]);
 
     // Re-fetch when tab becomes active
     useEffect(() => {
@@ -403,7 +458,10 @@ const LibraryTab = ({ onSeparate, isActive }) => {
             <div className="flex gap-3 flex-wrap items-center">
                 {/* File Count Display */}
                 <div className="text-sm text-gray-400">
-                    Showing <span className="text-white font-bold">{filteredItems.length}</span> of <span className="text-white font-bold">{items.length}</span> files
+                    Showing <span className="text-white font-bold">{paginatedItems.length}</span> of <span className="text-white font-bold">{filteredItems.length}</span> files
+                    {items.length !== filteredItems.length && (
+                        <span> (filtered from {items.length})</span>
+                    )}
                 </div>
 
                 {/* Search Input */}
@@ -440,6 +498,23 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                         <Square className="w-4 h-4" />
                     )}
                 </button>
+
+                {/* Bulk Separate */}
+                {selectedItems.length > 0 && (
+                    <button
+                        onClick={handleBulkSeparate}
+                        disabled={isBulkSeparating}
+                        className="px-3 py-2 bg-emerald-600/10 hover:bg-emerald-600/20 disabled:opacity-50 disabled:cursor-not-allowed text-emerald-400 hover:text-emerald-300 text-sm font-bold rounded-lg transition-all border border-emerald-500/20 flex items-center gap-2"
+                        title="Separate vocals for all selected files (already-separated files are skipped)"
+                    >
+                        {isBulkSeparating ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <AudioLines className="w-4 h-4" />
+                        )}
+                        <span>Separate {selectedItems.length}</span>
+                    </button>
+                )}
 
                 {/* Bulk Delete */}
                 {selectedItems.length > 0 && (
@@ -508,7 +583,7 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {filteredItems.map((item) => (
+                            {paginatedItems.map((item) => (
                                 <tr
                                     key={item.task_id}
                                     className={`transition-all ${selectedItems.includes(item.task_id)
@@ -613,6 +688,46 @@ const LibraryTab = ({ onSeparate, isActive }) => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* Pagination Controls */}
+            {filteredItems.length > 0 && (
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span>Page</span>
+                        <span className="text-white font-bold">{currentPage}</span>
+                        <span>of {totalPages}</span>
+                        <select
+                            value={pageSize}
+                            onChange={(e) => setPageSize(Number(e.target.value))}
+                            className="ml-3 bg-dark-800 text-white text-xs border border-white/10 rounded-lg px-2 py-1 outline-none focus:border-primary-500/50 transition-colors cursor-pointer"
+                        >
+                            <option value={25}>25 / page</option>
+                            <option value={50}>50 / page</option>
+                            <option value={100}>100 / page</option>
+                            <option value={250}>250 / page</option>
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage <= 1}
+                            className="p-2 bg-dark-800 hover:bg-dark-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-400 hover:text-white rounded-lg transition-all border border-white/10"
+                            title="Previous page"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage >= totalPages}
+                            className="p-2 bg-dark-800 hover:bg-dark-700 disabled:opacity-40 disabled:cursor-not-allowed text-gray-400 hover:text-white rounded-lg transition-all border border-white/10"
+                            title="Next page"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             )}
 

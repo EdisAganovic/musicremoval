@@ -2,40 +2,34 @@
 Separation API Routes - handles vocal separation using Demucs/Spleeter.
 """
 import os
+import time
 import uuid
 import asyncio
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Form
 from typing import List
 
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
-from models import SeparateRequest, FolderScanRequest, FolderQueueProcessRequest
+from models import SeparateRequest, FolderScanRequest, FileListScanRequest, FolderQueueProcessRequest
 from services.separation_service import run_separation
 
 router = APIRouter(prefix="/api", tags=["separation"])
 
 
-@router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), skip_video_encoding: bool = Form(False)):
-    """Upload and separate vocals from an audio file."""
-    from modules.module_ffmpeg import get_file_metadata
+def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, filename: str,
+                             metadata: dict, model: str, skip_video_encoding: bool, current_step: str,
+                             duration: int = None, export_instrumental: bool = False):
+    """
+    Shared bookkeeping for starting a single-file separation: creates the
+    batch-parent task (for consistent UI polling across single/batch runs),
+    the individual task entry, persists them, and schedules run_separation.
+    Used by both /separate (upload) and /separate-file (existing file).
+    """
     from colorama import Fore, Style
+    from services.persistence import save_tasks_sync
 
     task_id = str(uuid.uuid4())
     batch_id = str(uuid.uuid4())
 
-    upload_dir = "uploads"
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, f"{task_id}_{file.filename}")
-
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
-
-    metadata = await asyncio.to_thread(get_file_metadata, file_path)
-
-    print(f"\n{Fore.CYAN}=== File Upload Separation ==={Style.RESET_ALL}")
-    print(f"File: {file_path}")
-
-    # Create batch parent task for consistent UI polling
     tasks[batch_id] = {
         "batch": True,
         "batch_id": batch_id,
@@ -46,35 +40,65 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         "files": []
     }
 
-    import time
     tasks[task_id] = {
         "task_id": task_id,
         "batch_id": batch_id,
         "status": "pending",
         "progress": 0,
-        "current_step": "File uploaded",
+        "current_step": current_step,
         "result_files": [],
         "metadata": metadata,
         "file_path": file_path,
         "type": "separation",
         "created_at": time.time()
     }
-    from services.persistence import save_tasks_sync
     save_tasks_sync()
 
-    batch_tasks_data = {
+    tasks[batch_id]["files"] = [{
         "task_id": task_id,
         "file": file_path,
-        "filename": file.filename,
+        "filename": filename,
         "status": "pending"
-    }
-    tasks[batch_id]["files"] = [batch_tasks_data]
+    }]
 
     print(f"Task ID: {task_id}")
     print(f"Batch ID: {batch_id}")
     print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
 
-    background_tasks.add_task(run_separation, task_id, file_path, model=model, skip_video_encoding=skip_video_encoding)
+    background_tasks.add_task(
+        run_separation, task_id, file_path, duration=duration, model=model,
+        skip_video_encoding=skip_video_encoding, export_instrumental=export_instrumental
+    )
+
+    return task_id, batch_id
+
+
+@router.post("/separate")
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), skip_video_encoding: bool = Form(False), duration: int = Form(None), export_instrumental: bool = Form(False)):
+    """Upload and separate vocals from an audio file."""
+    from modules.module_ffmpeg import get_file_metadata
+    from colorama import Fore, Style
+
+    upload_dir = "uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+    # Filename gets its own uuid prefix (independent of the task_id created below)
+    # to keep uploaded files unique on disk even before a task exists.
+    file_path = os.path.join(upload_dir, f"{uuid.uuid4()}_{file.filename}")
+
+    with open(file_path, "wb") as buffer:
+        buffer.write(await file.read())
+
+    metadata = await asyncio.to_thread(get_file_metadata, file_path)
+
+    print(f"\n{Fore.CYAN}=== File Upload Separation ==={Style.RESET_ALL}")
+    print(f"File: {file_path}")
+    if duration:
+        print(f"{Fore.YELLOW}Preview mode: limiting to first {duration}s{Style.RESET_ALL}")
+
+    task_id, batch_id = _create_separation_task(
+        background_tasks, file_path, file.filename, metadata,
+        model, skip_video_encoding, "File uploaded", duration=duration, export_instrumental=export_instrumental
+    )
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
@@ -88,57 +112,23 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
     file_path = payload.file_path
     model = payload.model
     skip_video_encoding = payload.skip_video_encoding
+    duration = payload.duration
+    export_instrumental = payload.export_instrumental
 
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
     print(f"\n{Fore.CYAN}=== Single File Separation ==={Style.RESET_ALL}")
     print(f"File: {file_path}")
+    if duration:
+        print(f"{Fore.YELLOW}Preview mode: limiting to first {duration}s{Style.RESET_ALL}")
 
-    task_id = str(uuid.uuid4())
-    batch_id = str(uuid.uuid4())
     metadata = await asyncio.to_thread(get_file_metadata, file_path)
 
-    # Create batch parent task for consistent UI polling
-    tasks[batch_id] = {
-        "batch": True,
-        "batch_id": batch_id,
-        "total_files": 1,
-        "processed": 0,
-        "success": 0,
-        "failed": 0,
-        "files": []
-    }
-
-    import time
-    tasks[task_id] = {
-        "task_id": task_id,
-        "batch_id": batch_id,
-        "status": "pending",
-        "progress": 0,
-        "current_step": "File queued for separation",
-        "result_files": [],
-        "metadata": metadata,
-        "file_path": file_path,
-        "type": "separation",
-        "created_at": time.time()
-    }
-    from services.persistence import save_tasks_sync
-    save_tasks_sync()
-
-    batch_tasks_data = {
-        "task_id": task_id,
-        "file": file_path,
-        "filename": os.path.basename(file_path),
-        "status": "pending"
-    }
-    tasks[batch_id]["files"] = [batch_tasks_data]
-
-    print(f"Task ID: {task_id}")
-    print(f"Batch ID: {batch_id}")
-    print(f"{Fore.GREEN}✓ Separation started{Style.RESET_ALL}\n")
-
-    background_tasks.add_task(run_separation, task_id, file_path, model=model, skip_video_encoding=skip_video_encoding)
+    task_id, batch_id = _create_separation_task(
+        background_tasks, file_path, os.path.basename(file_path), metadata,
+        model, skip_video_encoding, "File queued for separation", duration=duration, export_instrumental=export_instrumental
+    )
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
 
@@ -210,7 +200,7 @@ async def scan_folder(payload: FolderScanRequest):
         "queue": True,
         "folder": payload.folder_path,
         "files": media_files,
-        "created_at": asyncio.get_event_loop().time()
+        "created_at": time.time()
     }
 
     print(f"Queue ID: {queue_id}")
@@ -219,6 +209,69 @@ async def scan_folder(payload: FolderScanRequest):
     return {
         "queue_id": queue_id,
         "folder": payload.folder_path,
+        "files": media_files,
+        "total_files": len(media_files)
+    }
+
+
+@router.post("/folder/scan-files")
+async def scan_file_list(payload: FileListScanRequest):
+    """
+    Build a folder-queue entry directly from an explicit list of file paths
+    (e.g. a multi-select in the Library tab), skipping the directory-scan step.
+    Reuses the same queue/batch machinery as /folder/scan + /folder-queue/process
+    so bulk separation gets the same progress tracking as folder batch processing.
+    """
+    from colorama import Fore, Style
+    from modules.module_ffmpeg import get_file_metadata
+    from modules.module_processor import is_file_processed
+
+    def build_media_files():
+        media_files = []
+        for file_path in payload.file_paths:
+            if not file_path or not os.path.isfile(file_path):
+                print(f"{Fore.YELLOW}Skipping missing file: {file_path}{Style.RESET_ALL}")
+                continue
+            try:
+                metadata = get_file_metadata(file_path)
+                existing_output = is_file_processed(file_path)
+                media_files.append({
+                    "id": str(uuid.uuid4()),
+                    "file_path": file_path,
+                    "filename": os.path.basename(file_path),
+                    "metadata": metadata,
+                    "selected": True,
+                    "already_processed": bool(existing_output),
+                    "output_path": existing_output
+                })
+            except Exception as e:
+                print(f"{Fore.YELLOW}Error getting metadata for {file_path}: {e}{Style.RESET_ALL}")
+                media_files.append({
+                    "id": str(uuid.uuid4()),
+                    "file_path": file_path,
+                    "filename": os.path.basename(file_path),
+                    "metadata": {"duration": "N/A", "resolution": "N/A"},
+                    "selected": True
+                })
+        return media_files
+
+    media_files = await asyncio.to_thread(build_media_files)
+
+    if not media_files:
+        raise HTTPException(status_code=400, detail="None of the selected files could be found")
+
+    queue_id = str(uuid.uuid4())
+    tasks[queue_id] = {
+        "queue": True,
+        "folder": None,
+        "files": media_files,
+        "created_at": time.time()
+    }
+
+    print(f"{Fore.GREEN}✓ Built queue {queue_id} from {len(media_files)} selected library file(s){Style.RESET_ALL}")
+
+    return {
+        "queue_id": queue_id,
         "files": media_files,
         "total_files": len(media_files)
     }
@@ -318,12 +371,13 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
         })
 
         background_tasks.add_task(
-            run_separation, 
-            task_id, 
-            file_path, 
-            payload.duration if hasattr(payload, 'duration') else None, 
+            run_separation,
+            task_id,
+            file_path,
+            payload.duration if hasattr(payload, 'duration') else None,
             model=payload.model,
-            skip_video_encoding=payload.skip_video_encoding
+            skip_video_encoding=payload.skip_video_encoding,
+            export_instrumental=payload.export_instrumental
         )
 
     print(f"{Fore.GREEN}✓ Batch processing started with {len(selected_files)} files{Style.RESET_ALL}\n")

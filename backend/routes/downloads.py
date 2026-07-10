@@ -1,6 +1,8 @@
 """
 Download and Queue API Routes.
 """
+import os
+import time
 import uuid
 import asyncio
 import urllib.parse
@@ -297,10 +299,10 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
         item_url = item.get("url")
         if item_url and (item_url == url or item_url.strip('/') == url.strip('/')):
             res_files = item.get("result_files", [])
-            if res_files and all(__import__('os').path.exists(f) for f in res_files):
+            if res_files and all(os.path.exists(f) for f in res_files):
                 return {
                     "status": "duplicate",
-                    "message": f"URL already in library: {__import__('os').path.basename(res_files[0])}",
+                    "message": f"URL already in library: {os.path.basename(res_files[0])}",
                     "existing_file": res_files[0],
                     "task_id": item.get("task_id")
                 }
@@ -412,7 +414,7 @@ async def add_to_queue(background_tasks: BackgroundTasks, payload: QueueAddReque
         "subfolder": payload.subfolder,
         "status": "pending",
         "task_id": None,
-        "added_at": asyncio.get_event_loop().time()
+        "added_at": time.time()
     }
 
     download_queue.append(queue_item)
@@ -442,7 +444,7 @@ async def add_to_queue_batch(background_tasks: BackgroundTasks, payload: QueueBa
                 "subfolder": payload.subfolder,
                 "status": "pending",
                 "task_id": None,
-                "added_at": asyncio.get_event_loop().time(),
+                "added_at": time.time(),
                 "title": video.get("title", "Unknown")
             }
             download_queue.append(queue_item)

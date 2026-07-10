@@ -49,8 +49,11 @@ async def process_queue():
         )
 
         task_status = tasks.get(task_id, {})
-        if task_status.get("status") == "completed":
+        final_status = task_status.get("status")
+        if final_status == "completed":
             pending_item["status"] = "completed"
+        elif final_status == "cancelled":
+            pending_item["status"] = "cancelled"
         else:
             pending_item["status"] = "failed"
 

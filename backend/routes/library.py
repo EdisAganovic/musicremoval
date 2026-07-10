@@ -334,18 +334,29 @@ async def rename_file(payload: dict):
         
         # Update library entry
         new_task_id = hashlib.md5(new_path.encode()).hexdigest()
-        
+
         # We need to update library.json to reflect the change
         # Update target_item (which is already a reference to an item in 'library' list)
         target_item["task_id"] = new_task_id
         target_item["result_files"] = [new_path]
         target_item["filename"] = os.path.basename(new_path)
-        
+
         # Update library.json
         if os.path.exists(LIBRARY_FILE):
              with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
                 json.dump(library, f, indent=4)
-            
+
+        # Keep the in-memory tasks dict in sync so any task referencing the
+        # old task_id/path (e.g. still-open UI state) doesn't go stale.
+        old_task = tasks.pop(task_id, None)
+        if old_task is not None:
+            old_task["task_id"] = new_task_id
+            old_task["result_files"] = [new_path]
+            old_task["filename"] = os.path.basename(new_path)
+            tasks[new_task_id] = old_task
+            from services.persistence import save_tasks_sync
+            save_tasks_sync()
+
         # Update metadata cache
         old_cache_key = None
         for key in list(metadata_cache.keys()):

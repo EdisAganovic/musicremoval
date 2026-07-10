@@ -14,7 +14,7 @@ powershell -Command "$p = Get-NetTCPConnection -LocalPort 5170 -ErrorAction Sile
 :: 2. Launch Backend
 echo [2/3] Launching Backend...
 REM Using 'uv run' ensures the environment is synced and managed correctly.
-start "Demucs-Backend" cmd /k "uv run uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --log-level warning"
+start "Demucs-Backend" cmd /k "uv run uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-exclude data --reload-exclude download --reload-exclude downloads --reload-exclude nomusic --reload-exclude uploads --reload-exclude _temp --reload-exclude _processing_intermediates --reload-exclude log.txt --reload-exclude .venv --log-level warning"
 
 :: 3. Launch Frontend
 echo [3/3] Launching Frontend...

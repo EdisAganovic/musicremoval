@@ -1,5 +1,32 @@
 # Backend Changelog
 
+## [0.0.17] - 2026-07-10 🛠️
+
+### [Added]
+- **Instrumental/Karaoke output**: New `export_instrumental` option on `/separate`, `/separate-file`, and `/folder-queue/process`. Demucs now runs with `--two-stems vocals` (producing `no_vocals.wav` at no extra compute cost) and Spleeter's existing `accompaniment.wav` is tracked; `module_processor.py` prefers Demucs's instrumental, falls back to Spleeter's, and encodes it as a second output file alongside vocals. Segmented/parallel processing paths concatenate instrumental segments the same way vocal segments are joined.
+- **Preview/quick-test mode**: `/separate` and `/separate-file` now accept a `duration` field (already existed on `FolderQueueProcessRequest`, now on `SeparateRequest` too and wired into the upload route), letting a short clip be processed to compare models before running the full file.
+- **Bulk separate from Library**: New `POST /api/folder/scan-files` endpoint builds a folder-queue entry directly from an explicit list of file paths (skipping the directory-scan step), reusing the existing `/folder-queue/process` batch machinery so multi-selected library files get the same batch progress tracking as folder processing.
+- **Concurrent yt-dlp fragment downloads**: Added `concurrent_fragment_downloads: 4` to yt-dlp options, speeding up DASH/HLS-fragmented formats (common for higher-res YouTube video).
+- **GPU-aware Demucs worker count**: `module_processor.py` now forces Demucs segment processing down to 1 worker at a time when CUDA is available (parallel GPU subprocesses were contending for the same VRAM instead of speeding anything up); CPU-only mode keeps the configured worker count.
+
+### [Fixed]
+- **Persistence race**: `tasks` dict is now copied before every `json.dump` in `services/persistence.py`, avoiding a possible `RuntimeError: dictionary changed size during iteration` when a background thread mutates `tasks` mid-save. Diagnostic (`diag-*`) test tasks are also now filtered out of persisted `tasks.json` so they stop mixing into real task history.
+- **Wrong timestamp clock**: `added_at`/`created_at` fields in `downloads.py` and `separation.py` used `asyncio.get_event_loop().time()` (a monotonic clock) instead of `time.time()` — replaced everywhere this pattern appeared.
+- **Progress auto-save**: download progress persistence used to require hitting an *exact* multiple of 20% (`int(progress) % 20 == 0`), which rarely happened with real float progress values; now saves on crossing each 20% threshold.
+- **Cancelled downloads mislabeled as failed**: the download queue only checked for `status == "completed"`, so a user-cancelled download fell through to "failed" — now explicitly recognizes `"cancelled"`.
+- **Rename didn't update in-memory tasks**: `/rename-file` updated `library.json` and the metadata cache but left the `tasks` dict pointing at the old path/task_id; now updates and re-persists it too.
+- **`kill_stale_processes` too broad**: previously killed any `python.exe` whose command line merely contained the app's working-directory substring — could self-kill or kill unrelated Python processes sharing a parent folder. Now requires a specific app marker (demucs/spleeter/module_*); the bare cwd-substring check is restricted to ffmpeg/ffprobe only.
+- **Blocking cleanup on the event loop**: `cleanup_temp_files`/`cleanup_metadata_cache` now run via `asyncio.to_thread` from both startup and the periodic scheduler instead of blocking the loop.
+- **Leaked temp file**: the mixed-vocals temp WAV in `module_processor.py` is now created inside `_temp/` and added to the tracked cleanup list, instead of leaking into the OS temp folder if the process exits early.
+
+### [Changed]
+- **Deduplicated audio-splitting logic**: the identical "split into 600s segments via ffmpeg" code in `module_demucs.py` and `module_spleeter.py` was extracted into `module_ffmpeg.py::split_audio_into_segments`.
+- **Deduplicated separation task bookkeeping**: `separate_audio` and `separate_file` in `routes/separation.py` now share one `_create_separation_task` helper instead of two near-identical copies.
+- **`process_file` return signature**: now returns `(primary_output_path_or_False, timings, instrumental_output_path_or_None)` instead of a 2-tuple; all callers (`separation_service.py`, `download_service.py`) updated accordingly.
+- **Locking documentation**: `core/state.py` now documents the actual scope of its `asyncio.Lock`s (async-only, not cross-thread) instead of implying stronger guarantees than they provide.
+
+---
+
 ## [0.0.16] - 2026-05-07 🎯
 
 ### [Removed]

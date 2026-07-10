@@ -199,10 +199,111 @@ def is_file_processed(input_file):
             
     return None
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None):
+
+def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file, output_folder,
+                                 base_filename, settings, skip_video_encoding, original_duration):
+    """
+    Encode the instrumental/karaoke track into a final output file, mirroring the
+    audio/video finalization in process_file's Step 5 (same codec/format settings)
+    but for the instrumental source instead of the vocal mixture. Kept as a
+    separate, simpler helper rather than folding into Step 5's delicate
+    audio+video muxing logic, since this is a secondary/optional output and
+    failure here should never take down the primary vocals output.
+
+    Returns the output path on success, or None on failure (logged, not raised).
+    """
+    try:
+        temp_instrumental_aac_file = tempfile.NamedTemporaryFile(suffix="_instrumental.aac", delete=False, dir=TEMP_DIR)
+        instrumental_aac_path = temp_instrumental_aac_file.name
+        temp_instrumental_aac_file.close()
+
+        try:
+            if not convert_audio_with_ffmpeg(instrumental_wav_path, instrumental_aac_path, normalize_audio=True):
+                print(f"{Fore.YELLOW}Warning: Failed to finalize instrumental audio format, skipping instrumental output.{Style.RESET_ALL}")
+                return None
+
+            video_settings = settings.get('video', {})
+            audio_settings = settings.get('audio', {})
+            output_settings = settings.get('output', {})
+            audio_codec = audio_settings.get('codec', 'aac')
+            audio_bitrate = audio_settings.get('bitrate')
+
+            if is_audio_only:
+                audio_output_format = "mp3"
+                if input_file.lower().endswith('.flac'):
+                    audio_output_format = "flac"
+                elif input_file.lower().endswith('.wav'):
+                    audio_output_format = "wav"
+                elif input_file.lower().endswith('.m4a'):
+                    audio_output_format = "m4a"
+
+                output_instrumental = os.path.join(output_folder, f"{base_filename}_instrumental.{audio_output_format}")
+                final_ffmpeg_cmd = [FFMPEG_EXE, "-loglevel", "error", "-y", "-i", instrumental_aac_path]
+                if audio_output_format == "flac":
+                    final_ffmpeg_cmd.extend(["-c:a", "flac"])
+                elif audio_output_format == "wav":
+                    final_ffmpeg_cmd.extend(["-c:a", "pcm_s16le"])
+                else:
+                    final_ffmpeg_cmd.extend(["-c:a", audio_codec])
+                    if audio_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+                final_ffmpeg_cmd.append(output_instrumental)
+
+                print(f"{Fore.MAGENTA}Executing (instrumental): {' '.join(final_ffmpeg_cmd)}{Style.RESET_ALL}")
+                tracked_run(final_ffmpeg_cmd, check=True)
+                print(f"{Fore.GREEN}[OK] Successfully created instrumental output: {output_instrumental}{Style.RESET_ALL}")
+                return output_instrumental
+            else:
+                video_codec = video_settings.get('codec', 'copy')
+                output_format = output_settings.get('format', 'mp4')
+                output_instrumental = os.path.join(output_folder, f"{base_filename}_instrumental.{output_format}")
+
+                final_ffmpeg_cmd = [
+                    FFMPEG_EXE, "-loglevel", "error", "-y",
+                    "-i", input_file,
+                    "-i", instrumental_aac_path,
+                ]
+                if skip_video_encoding or video_codec == "copy":
+                    final_ffmpeg_cmd.extend(["-c:v", "copy"])
+                else:
+                    final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080,format=yuv420p", "-c:v", video_codec])
+                    video_bitrate = video_settings.get('bitrate')
+                    if video_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
+
+                final_ffmpeg_cmd.extend(["-c:a", audio_codec])
+                if audio_bitrate:
+                    final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+
+                final_ffmpeg_cmd.extend(["-map", "0:v:0", "-map", "1:a:0", "-shortest"])
+                if output_format == "mp4":
+                    final_ffmpeg_cmd.extend(["-f", "mp4"])
+                elif output_format == "mkv":
+                    final_ffmpeg_cmd.extend(["-f", "matroska"])
+                final_ffmpeg_cmd.append(output_instrumental)
+
+                print(f"{Fore.MAGENTA}Executing (instrumental): {' '.join(final_ffmpeg_cmd)}{Style.RESET_ALL}")
+                tracked_run(final_ffmpeg_cmd, check=True)
+                print(f"{Fore.GREEN}[OK] Successfully created instrumental output: {output_instrumental}{Style.RESET_ALL}")
+                return output_instrumental
+        finally:
+            if os.path.exists(instrumental_aac_path):
+                try:
+                    os.remove(instrumental_aac_path)
+                except OSError:
+                    pass
+    except Exception as e:
+        print(f"{Fore.YELLOW}Warning: Failed to create instrumental output: {e}{Style.RESET_ALL}")
+        return None
+
+
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None, export_instrumental=False):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
+
+    Returns:
+        tuple: (primary_output_path_or_False, timings, instrumental_output_path_or_None)
     """
     total_start = time.time()
     timings = {}
@@ -223,7 +324,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
     if not os.path.exists(input_file):
         print(f"{Fore.RED}Error: Input video file '{input_file}' not found.{Style.RESET_ALL}")
-        return False, timings
+        return False, timings, None
 
     # Ensure local temp directory exists
     os.makedirs(TEMP_DIR, exist_ok=True)
@@ -276,9 +377,12 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
     temp_spleeter_segments_dir = None
     spleeter_vocal_wav_path = None
+    spleeter_instrumental_wav_path = None
     temp_demucs_segments_dir = None
     demucs_vocal_wav_path = None
+    demucs_instrumental_wav_path = None
     combined_vocals_aac_path = None
+    instrumental_output_path = None
     
     # Track directories for cleanup
     temp_dirs_to_cleanup = []
@@ -299,7 +403,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         if not audio_tracks:
             update_progress("Error: No audio tracks found", 0)
             print(f"{Fore.RED}Error: No audio tracks found in '{input_file}'. Aborting.{Style.RESET_ALL}")
-            return False, timings
+            return False, timings, None
 
         if not is_audio_only:
             # Language priorities for automatic selection
@@ -352,7 +456,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.RED}Error extracting audio: {e}{Style.RESET_ALL}")
             if e.stderr:
                 print(f"{Fore.RED}FFmpeg error output: {e.stderr[:500]}{Style.RESET_ALL}")
-            return False, timings
+            return False, timings, None
         
         extract_end = time.time()
         timings['extract'] = extract_end - extract_start
@@ -392,13 +496,22 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         settings = load_config('data/video.json')
         demucs_workers = settings.get('processing', {}).get('demucs_workers', 2)
 
-        # Both models return (path_to_wav, temp_segments_dir)
+        # Parallel segment workers only help on CPU (more cores = more throughput).
+        # On GPU, N parallel Demucs subprocesses each load the model into the same
+        # GPU and compete for VRAM/compute, which tends to slow things down or risk
+        # OOM rather than speed anything up - so force single-segment-at-a-time.
+        if cuda_is_available and demucs_workers > 1:
+            print(f"{Fore.YELLOW}GPU detected: running Demucs segments one at a time instead of {demucs_workers} in parallel (avoids VRAM contention).{Style.RESET_ALL}")
+            demucs_workers = 1
+
+        # Both models return (path_to_vocal_wav, path_to_instrumental_wav_or_None, temp_segments_dir)
         if model == "spleeter" or model == "both":
             print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
             s_start = time.time()
             update_progress("Running Spleeter", 20 if model == "both" else 15)
-            spleeter_vocal_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
-                temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=shared_segments
+            spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
+                temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
+                pre_split_segments=shared_segments, want_instrumental=export_instrumental
             )
             s_end = time.time()
             timings['spleeter'] = s_end - s_start
@@ -410,9 +523,9 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.CYAN}Starting Demucs separation...{Style.RESET_ALL}")
             d_start = time.time()
             update_progress("Running Demucs", 50 if model == "both" else 15)
-            demucs_vocal_wav_path, temp_demucs_segments_dir = separate_with_demucs(
-                temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, 
-                max_workers=demucs_workers, pre_split_segments=shared_segments
+            demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir = separate_with_demucs(
+                temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext,
+                max_workers=demucs_workers, pre_split_segments=shared_segments, want_instrumental=export_instrumental
             )
             d_end = time.time()
             timings['demucs'] = d_end - d_start
@@ -428,7 +541,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
         if not spleeter_input_exists and not demucs_input_exists:
             print(f"{Fore.RED}Error: Neither Spleeter nor Demucs vocal files were successfully generated.{Style.RESET_ALL}")
-            return False, timings
+            return False, timings, None
         
         # Branching logic for when only one model succeeds
         elif not spleeter_input_exists:
@@ -439,7 +552,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 print(f"{Fore.GREEN}Demucs vocals ready for mixing.{Style.RESET_ALL}")
             except Exception as e:
                 print(f"{Fore.RED}Error copying Demucs vocals: {e}{Style.RESET_ALL}")
-                return False, timings
+                return False, timings, None
         elif not demucs_input_exists:
             print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
             try:
@@ -447,7 +560,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 print(f"{Fore.GREEN}[OK] Spleeter vocals ready for mixing.{Style.RESET_ALL}")
             except Exception as e:
                 print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
-                return False, timings
+                return False, timings, None
         else:
             # When both exist, perform cross-correlation alignment to fix any millisecond offsets
             print(f"{Fore.CYAN}Starting alignment and mixing...{Style.RESET_ALL}")
@@ -457,9 +570,10 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
             if aligned_spleeter and aligned_demucs:
                 # Mix both aligned tracks into a temporary file
-                temp_mixed_wav_path = tempfile.NamedTemporaryFile(suffix="_mixed.wav", delete=False)
+                temp_mixed_wav_path = tempfile.NamedTemporaryFile(suffix="_mixed.wav", delete=False, dir=TEMP_DIR)
                 temp_mixed_wav_path.close()
-                
+                temp_files_to_cleanup.append(temp_mixed_wav_path.name)
+
                 try:
                     # Equal weight mix (0.5 each)
                     update_progress("Mixing vocals", 90)
@@ -469,10 +583,10 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                         print(f"\n{Fore.GREEN}[OK] Vocals combined successfully.{Style.RESET_ALL}")
                     else:
                         print(f"{Fore.RED}Error: Mixing of aligned vocal tracks failed.{Style.RESET_ALL}")
-                        return False, timings
+                        return False, timings, None
                 except subprocess.CalledProcessError as e:
                     print(f"{Fore.RED}Error with mixed audio conversion: {e}{Style.RESET_ALL}")
-                    return False, timings
+                    return False, timings, None
                 finally:
                     if os.path.exists(temp_mixed_wav_path.name):
                         try:
@@ -481,11 +595,25 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                             pass
             else:
                 print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
-                return False, timings
+                return False, timings, None
             
             mix_end = time.time()
             timings['mixing'] = mix_end - mix_start
             print(f"{Fore.GREEN}Alignment and mixing took {timings['mixing']:.2f}s{Style.RESET_ALL}")
+
+        # Pick the instrumental/karaoke source, if requested. Unlike vocals (which
+        # get cross-correlation-aligned and blended when both models ran), we don't
+        # blend two instrumental tracks - we just prefer Demucs's (4-stem separation
+        # is generally cleaner) and fall back to Spleeter's accompaniment.wav if
+        # Demucs didn't run or didn't produce one.
+        instrumental_source_wav_path = None
+        if export_instrumental:
+            if demucs_instrumental_wav_path and os.path.exists(demucs_instrumental_wav_path) and os.path.getsize(demucs_instrumental_wav_path) > 0:
+                instrumental_source_wav_path = demucs_instrumental_wav_path
+            elif spleeter_instrumental_wav_path and os.path.exists(spleeter_instrumental_wav_path) and os.path.getsize(spleeter_instrumental_wav_path) > 0:
+                instrumental_source_wav_path = spleeter_instrumental_wav_path
+            else:
+                print(f"{Fore.YELLOW}Warning: Instrumental output requested but no instrumental track was produced.{Style.RESET_ALL}")
 
         # Smarter synchronization: Only pad the start based on detected lag, then pad the end.
         original_audio_duration = get_audio_duration(temp_audio_wav_path)
@@ -573,7 +701,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         success = convert_audio_with_ffmpeg(vocal_mixture_wav_path, final_mixture_aac_path, normalize_audio=True)
         if not success:
             print(f"{Fore.RED}Error finalizing output audio format.{Style.RESET_ALL}")
-            return False, timings
+            return False, timings, None
             
         combined_vocals_aac_path = final_mixture_aac_path
 
@@ -653,7 +781,15 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 
                 output_end = time.time()
                 timings['output'] = output_end - output_start
-                return output_audio, timings
+
+                if instrumental_source_wav_path:
+                    update_progress("Finalizing instrumental output", 98)
+                    instrumental_output_path = _encode_instrumental_output(
+                        instrumental_source_wav_path, is_audio_only, input_file, output_folder,
+                        base_filename, settings, skip_video_encoding, original_duration
+                    )
+
+                return output_audio, timings, instrumental_output_path
             else:
                 # For video files, create new video with vocals
                 print(f"\n{Fore.CYAN}5. Creating final video...{Style.RESET_ALL}")
@@ -742,10 +878,18 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
                 output_end = time.time()
                 timings['output'] = output_end - output_start
-                return output_video, timings
+
+                if instrumental_source_wav_path:
+                    update_progress("Finalizing instrumental output", 98)
+                    instrumental_output_path = _encode_instrumental_output(
+                        instrumental_source_wav_path, is_audio_only, input_file, output_folder,
+                        base_filename, settings, skip_video_encoding, original_duration
+                    )
+
+                return output_video, timings, instrumental_output_path
         except subprocess.CalledProcessError as e:
             print(f"{Fore.RED}✖Error creating final output: {e}{Style.RESET_ALL}")
-            return False, timings
+            return False, timings, None
 
     finally:
         # FIX: Use tracked list for guaranteed cleanup of all temp files

@@ -148,6 +148,9 @@ const DownloaderTab = ({ analyzingProgress }) => {
                     return;
                 }
 
+                // Skip while tab is hidden to save resources; next visible tick catches up
+                if (document.hidden) return;
+
                 try {
                     const response = await axios.get(
                         `${BACKEND_URL}/api/status/${taskId}`,
@@ -209,6 +212,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
         const MAX_CONSECUTIVE_ERRORS = 10;
 
         const queueInterval = setInterval(async () => {
+            if (document.hidden) return;
             try {
                 await fetchQueue();
                 consecutiveErrors = 0; // Reset on success
@@ -240,6 +244,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
         const MAX_CONSECUTIVE_ERRORS = 10;
 
         const downloadsInterval = setInterval(async () => {
+            if (document.hidden) return;
             try {
                 await fetchActiveDownloads();
                 consecutiveErrors = 0;
@@ -1280,7 +1285,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${item.status === 'downloading' ? 'bg-red-600/20' :
                                                             item.status === 'completed' ? 'bg-emerald-600/20' :
                                                                 item.status === 'failed' ? 'bg-red-900/20' :
-                                                                    'bg-dark-800'
+                                                                    item.status === 'cancelled' ? 'bg-dark-700' :
+                                                                        'bg-dark-800'
                                                             }`}>
                                                             {item.status === 'downloading' ? (
                                                                 <Loader2 className="w-4 h-4 text-red-400 animate-spin" />
@@ -1288,6 +1294,8 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                                 <CheckCircle className="w-4 h-4 text-emerald-400" />
                                                             ) : item.status === 'failed' ? (
                                                                 <AlertCircle className="w-4 h-4 text-red-400" />
+                                                            ) : item.status === 'cancelled' ? (
+                                                                <X className="w-4 h-4 text-gray-400" />
                                                             ) : (
                                                                 <span className="text-xs text-gray-500 font-bold">{idx + 1}</span>
                                                             )}
@@ -1315,11 +1323,13 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                         <span className={`text-xs font-bold px-2 py-1 rounded ${item.status === 'downloading' ? 'bg-red-600/20 text-red-400' :
                                                             item.status === 'completed' ? 'bg-emerald-600/20 text-emerald-400' :
                                                                 item.status === 'failed' ? 'bg-red-900/20 text-red-400' :
-                                                                    'bg-dark-800 text-gray-500'
+                                                                    item.status === 'cancelled' ? 'bg-dark-700 text-gray-400' :
+                                                                        'bg-dark-800 text-gray-500'
                                                             }`}>
                                                             {item.status === 'downloading' ? 'DOWNLOADING' :
                                                                 item.status === 'completed' ? 'DONE' :
-                                                                    item.status === 'failed' ? 'FAILED' : 'PENDING'}
+                                                                    item.status === 'failed' ? 'FAILED' :
+                                                                        item.status === 'cancelled' ? 'CANCELLED' : 'PENDING'}
                                                         </span>
                                                         {item.status === 'pending' && (
                                                             <button
