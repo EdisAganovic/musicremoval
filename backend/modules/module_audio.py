@@ -307,3 +307,153 @@ def mix_audio_tracks(track1_path, track2_path, output_mixed_path, volume1=0.5, v
     except Exception as e:
         print(f"{Fore.RED}An error occurred during audio mixing: {e}{Style.RESET_ALL}")
         return None
+
+
+def remove_audio_silence(
+    input_wav_path: str,
+    output_wav_path: str = None,
+    silence_threshold_db: float = -42.0,
+    min_silence_len: float = 2.0,
+    pad_seconds: float = 1.0,
+    fade_duration: float = 0.03
+):
+    """
+    Detects active vocal/audio segments and removes silence longer than 2*pad_seconds,
+    keeping `pad_seconds` (default 1.0s) of lead-in and lead-out around every active segment.
+    Applies smooth micro-fades at cut points to prevent audio clicks and preserve natural flow.
+
+    Returns:
+        tuple: (output_wav_path, original_duration, trimmed_duration, removed_duration)
+    """
+    if output_wav_path is None:
+        output_wav_path = input_wav_path
+
+    try:
+        data, sr = sf.read(input_wav_path)
+        total_samples = len(data)
+        total_duration = total_samples / sr
+
+        if total_samples == 0:
+            return output_wav_path, 0.0, 0.0, 0.0
+
+        # Convert to mono for energy detection
+        if data.ndim > 1:
+            mono = np.mean(data, axis=1)
+        else:
+            mono = data
+
+        # Frame-based RMS calculation (50ms window, 25ms hop)
+        frame_len = max(1, int(sr * 0.05))
+        hop_len = max(1, int(sr * 0.025))
+
+        num_frames = (len(mono) - frame_len) // hop_len + 1
+        if num_frames <= 0:
+            return output_wav_path, total_duration, total_duration, 0.0
+
+        # Vectorized frame RMS
+        shape = (num_frames, frame_len)
+        strides = (mono.strides[0] * hop_len, mono.strides[0])
+        frames = np.lib.stride_tricks.as_strided(mono, shape=shape, strides=strides)
+
+        frame_rms = np.sqrt(np.mean(frames ** 2, axis=1) + 1e-12)
+        frame_db = 20 * np.log10(frame_rms + 1e-12)
+
+        peak_db = 20 * np.log10(np.max(np.abs(mono)) + 1e-12)
+        effective_thresh = min(silence_threshold_db, peak_db - 15.0)
+
+        active_frames = frame_db > effective_thresh
+
+        # Find contiguous active regions in frames
+        active_regions = []
+        in_active = False
+        start_frame = 0
+
+        for i, active in enumerate(active_frames):
+            if active and not in_active:
+                in_active = True
+                start_frame = i
+            elif not active and in_active:
+                in_active = False
+                active_regions.append((start_frame, i))
+        if in_active:
+            active_regions.append((start_frame, len(active_frames)))
+
+        # If no audio detected or whole audio is active
+        if not active_regions:
+            if output_wav_path != input_wav_path:
+                sf.write(output_wav_path, data, sr)
+            return output_wav_path, total_duration, total_duration, 0.0
+
+        # Convert frame indices to seconds
+        raw_segments = []
+        for start_f, end_f in active_regions:
+            start_sec = (start_f * hop_len) / sr
+            end_sec = min(total_duration, (end_f * hop_len + frame_len) / sr)
+            raw_segments.append((start_sec, end_sec))
+
+        # Pad each segment by pad_seconds (1.0s) and merge overlapping
+        padded_segments = []
+        for start_sec, end_sec in raw_segments:
+            p_start = max(0.0, start_sec - pad_seconds)
+            p_end = min(total_duration, end_sec + pad_seconds)
+
+            if not padded_segments:
+                padded_segments.append([p_start, p_end])
+            else:
+                prev = padded_segments[-1]
+                if p_start <= prev[1]:  # Overlaps or touches
+                    prev[1] = max(prev[1], p_end)
+                else:
+                    padded_segments.append([p_start, p_end])
+
+        # If the padded segments cover essentially the entire audio (>= 98%)
+        total_trimmed_len = sum(end - start for start, end in padded_segments)
+        if len(padded_segments) == 1 and (padded_segments[0][0] <= 0.05 and padded_segments[0][1] >= total_duration - 0.05):
+            if output_wav_path != input_wav_path:
+                sf.write(output_wav_path, data, sr)
+            return output_wav_path, total_duration, total_duration, 0.0
+
+        # Extract slices with micro fade-in / fade-out at cut points
+        fade_samples = int(sr * fade_duration)
+        fade_in_curve = np.linspace(0.0, 1.0, fade_samples)
+        fade_out_curve = np.linspace(1.0, 0.0, fade_samples)
+
+        if data.ndim > 1:
+            fade_in_curve = fade_in_curve[:, np.newaxis]
+            fade_out_curve = fade_out_curve[:, np.newaxis]
+
+        processed_chunks = []
+        for seg_idx, (start_sec, end_sec) in enumerate(padded_segments):
+            start_samp = int(start_sec * sr)
+            end_samp = int(end_sec * sr)
+            chunk = data[start_samp:end_samp].copy()
+
+            if len(chunk) == 0:
+                continue
+
+            # Apply fade-in if this cut is NOT at the very start of the original file
+            if start_sec > 0.0 and len(chunk) >= fade_samples:
+                chunk[:fade_samples] = chunk[:fade_samples] * fade_in_curve
+
+            # Apply fade-out if this cut is NOT at the very end of the original file
+            if end_sec < total_duration and len(chunk) >= fade_samples:
+                chunk[-fade_samples:] = chunk[-fade_samples:] * fade_out_curve
+
+            processed_chunks.append(chunk)
+
+        if not processed_chunks:
+            if output_wav_path != input_wav_path:
+                sf.write(output_wav_path, data, sr)
+            return output_wav_path, total_duration, total_duration, 0.0
+
+        result_data = np.concatenate(processed_chunks, axis=0)
+        trimmed_duration = len(result_data) / sr
+        removed_duration = total_duration - trimmed_duration
+
+        # Write output
+        sf.write(output_wav_path, result_data, sr)
+        return output_wav_path, total_duration, trimmed_duration, removed_duration
+    except Exception as e:
+        print(f"{Fore.RED}Error during silence removal: {e}{Style.RESET_ALL}")
+        return output_wav_path, total_duration if 'total_duration' in locals() else 0.0, total_duration if 'total_duration' in locals() else 0.0, 0.0
+

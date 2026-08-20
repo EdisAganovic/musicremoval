@@ -6,7 +6,7 @@ import time
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 
 
-def run_separation(task_id: str, file_path: str, duration=None, model="both", skip_video_encoding=False, export_instrumental=False):
+def run_separation(task_id: str, file_path: str, duration=None, model="both", skip_video_encoding=False, export_instrumental=False, remove_silence=False):
     """
     Run vocal separation on a file.
 
@@ -16,6 +16,7 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
         duration: Optional duration limit in seconds
         model: Separation model to use (spleeter, demucs, both)
         export_instrumental: Also produce an instrumental/karaoke track alongside vocals
+        remove_silence: Remove silence gaps from output vocal track (keeps 1.0s lead-in/out)
 
     Returns:
         None (updates tasks dict with results)
@@ -62,7 +63,8 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
         filename = os.path.basename(file_path)
         success_result, phase_timings, instrumental_path = process_file(
             file_path, keep_temp=False, duration=duration, progress_callback=on_progress,
-            model=model, skip_video_encoding=skip_video_encoding, export_instrumental=export_instrumental
+            model=model, skip_video_encoding=skip_video_encoding, export_instrumental=export_instrumental,
+            remove_silence=remove_silence
         )
 
         if success_result:

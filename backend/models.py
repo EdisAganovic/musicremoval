@@ -78,6 +78,7 @@ class SeparateRequest(BaseModel):
     skip_video_encoding: bool = False
     duration: Optional[int] = None
     export_instrumental: bool = False
+    remove_silence: bool = False
 
 
 class FolderScanRequest(BaseModel):
@@ -106,6 +107,7 @@ class FolderQueueProcessRequest(BaseModel):
     duration: Optional[int] = None
     skip_video_encoding: bool = False
     export_instrumental: bool = False
+    remove_silence: bool = False
 
 
 class DeleteFileRequest(BaseModel):

@@ -65,7 +65,8 @@ import {
   Files,
   Trash2,
   Video,
-  AudioLines
+  AudioLines,
+  Scissors
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
@@ -95,6 +96,7 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
   const [previewSeconds, setPreviewSeconds] = useState(30);
   const [exportInstrumental, setExportInstrumental] = useState(false);
   const [instrumentalFile, setInstrumentalFile] = useState(null);
+  const [removeSilence, setRemoveSilence] = useState(false);
 
   const fileInputRef = useRef(null);
   const batchListRef = useRef(null);
@@ -160,6 +162,7 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
     setMetadata(null);
     setSkipVideoEncoding(false);
     setInstrumentalFile(null);
+    setRemoveSilence(false);
   };
 
   // Keyboard Shortcuts
@@ -387,7 +390,8 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         selected_files: selectedFiles,
         model,
         skip_video_encoding: skipVideoEncoding,
-        export_instrumental: exportInstrumental
+        export_instrumental: exportInstrumental,
+        remove_silence: removeSilence
       });
 
       setBatchId(response.data.batch_id);
@@ -417,7 +421,8 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
           model,
           skip_video_encoding: skipVideoEncoding,
           duration: previewMode ? previewSeconds : null,
-          export_instrumental: exportInstrumental
+          export_instrumental: exportInstrumental,
+          remove_silence: removeSilence
         });
         setTaskId(response.data.task_id);
       } else {
@@ -427,6 +432,7 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         formData.append("model", model);
         formData.append("skip_video_encoding", skipVideoEncoding);
         formData.append("export_instrumental", exportInstrumental);
+        formData.append("remove_silence", removeSilence);
         if (previewMode) {
           formData.append("duration", previewSeconds);
         }
@@ -562,6 +568,28 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
               Also Export Instrumental
             </span>
             <span className="text-[10px] text-gray-500">Karaoke track from the same separation, no extra AI pass</span>
+          </div>
+        </label>
+      </div>
+
+      {/* Remove Silence Toggle */}
+      <div className="flex justify-center mb-6">
+        <label className="flex items-center space-x-3 cursor-pointer group">
+          <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${removeSilence ? 'bg-cyan-600' : 'bg-dark-700'}`}>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={removeSilence}
+              onChange={() => setRemoveSilence(!removeSilence)}
+            />
+            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${removeSilence ? 'translate-x-6' : ''}`} />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
+              <Scissors className="w-4 h-4 text-cyan-400" />
+              Remove Silence (1s Padding)
+            </span>
+            <span className="text-[10px] text-gray-500">Cuts silence gaps while preserving 1s before & after vocal parts</span>
           </div>
         </label>
       </div>

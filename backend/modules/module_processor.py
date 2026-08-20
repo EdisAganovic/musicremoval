@@ -243,6 +243,14 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
                     final_ffmpeg_cmd.extend(["-c:a", "flac"])
                 elif audio_output_format == "wav":
                     final_ffmpeg_cmd.extend(["-c:a", "pcm_s16le"])
+                elif audio_output_format == "mp3":
+                    final_ffmpeg_cmd.extend(["-c:a", "libmp3lame"])
+                    if audio_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+                elif audio_output_format == "m4a":
+                    final_ffmpeg_cmd.extend(["-c:a", audio_codec if audio_codec != "libmp3lame" else "aac"])
+                    if audio_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
                 else:
                     final_ffmpeg_cmd.extend(["-c:a", audio_codec])
                     if audio_bitrate:
@@ -297,7 +305,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
         return None
 
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None, export_instrumental=False):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None, export_instrumental=False, remove_silence=False):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -692,6 +700,20 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         else:
             print(f"{Fore.YELLOW}Could not verify audio durations for final sync.{Style.RESET_ALL}")
 
+        # Optional silence removal for vocals (preserving 1.0s lead-in and lead-out)
+        if remove_silence:
+            print(f"\n{Fore.CYAN}Applying silence removal (1.0s padding before & after vocal segments)...{Style.RESET_ALL}")
+            update_progress("Removing silence", 93)
+            try:
+                from modules.module_audio import remove_audio_silence
+                _, orig_dur, trim_dur, rem_dur = remove_audio_silence(
+                    vocal_mixture_wav_path, vocal_mixture_wav_path,
+                    pad_seconds=1.0, min_silence_len=2.0
+                )
+                print(f"{Fore.GREEN}[OK] Silence removed: {rem_dur:.2f}s trimmed (Original: {orig_dur:.2f}s -> Trimmed: {trim_dur:.2f}s){Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}Warning: Silence removal encountered an error: {e}. Continuing with original audio.{Style.RESET_ALL}")
+
         # Step 5: Convert final mixture to ultimate output format
         temp_combined_vocals_aac_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False, dir=TEMP_DIR)
         final_mixture_aac_path = temp_combined_vocals_aac_file.name
@@ -756,6 +778,14 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     final_ffmpeg_cmd.extend(["-c:a", "flac"])
                 elif audio_output_format == "wav":
                     final_ffmpeg_cmd.extend(["-c:a", "pcm_s16le"])
+                elif audio_output_format == "mp3":
+                    final_ffmpeg_cmd.extend(["-c:a", "libmp3lame"])
+                    if audio_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+                elif audio_output_format == "m4a":
+                    final_ffmpeg_cmd.extend(["-c:a", audio_codec if audio_codec != "libmp3lame" else "aac"])
+                    if audio_bitrate:
+                        final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
                 else:
                     final_ffmpeg_cmd.extend(["-c:a", audio_codec])
                     if audio_bitrate:
