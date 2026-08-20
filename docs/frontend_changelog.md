@@ -1,5 +1,12 @@
 # Frontend Changelog
 
+## [0.0.18] - 2026-08-20 ⚡
+
+### [Added]
+- **Remove Silence (1s Padding) Toggle**: Added toggle switch to the Separation tab to automatically trim silence gaps from separated vocals while preserving a 1.0s margin before and after vocal phrases for smooth, natural listening flow. Supported in single-file upload, library file selection, and batch folder queues.
+
+---
+
 ## [0.0.17] - 2026-07-10 🛠️
 
 ### [Added]

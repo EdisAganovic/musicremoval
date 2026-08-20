@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.0.18] - 2026-08-20 ⚡
+
+### [Fixed]
+- **MP3 Output Codec Mismatch**: Fixed invalid audio stream error (`[mp3 @ ...] Invalid audio stream. Exactly one MP3 audio stream is required.`) when exporting separated vocals/instrumentals to MP3. The pipeline now explicitly specifies `-c:a libmp3lame` for MP3 containers rather than passing AAC codec parameters.
+
+### [Added]
+- **Silence Removal with Flow Padding**: Added `remove_silence` parameter on separation endpoints (`/separate`, `/separate-file`, `/folder-queue/process`). When active, detects voice/audio energy and trims long silence gaps, keeping a generous 1.0s buffer before and after vocal phrases along with 30ms micro-fades at cut junctions for natural entry and exit.
+
+---
+
 ## [0.0.17] - 2026-07-10 🛠️
 
 ### [Added]
