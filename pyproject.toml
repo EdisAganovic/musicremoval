@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart",
     "psutil",
     "watchfiles",
+    "websockets<14.0.0",
     "numpy<2.0.0",
     "scipy<1.14.0",
 ]
@@ -39,6 +40,16 @@ required-environments = ["sys_platform == 'win32'"]
 override-dependencies = [
     "tensorflow-io-gcs-filesystem==0.31.0; sys_platform == 'win32'",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
 
 [tool.uv.workspace]
 members = [

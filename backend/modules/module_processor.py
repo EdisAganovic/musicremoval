@@ -274,7 +274,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
                 if skip_video_encoding or video_codec == "copy":
                     final_ffmpeg_cmd.extend(["-c:v", "copy"])
                 else:
-                    final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080,format=yuv420p", "-c:v", video_codec])
+                    final_ffmpeg_cmd.extend(["-pix_fmt", "yuv420p", "-c:v", video_codec])
                     video_bitrate = video_settings.get('bitrate')
                     if video_bitrate:
                         final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
@@ -857,10 +857,9 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 # If skip_video_encoding is True OR settings specify copy, we copy the original video stream
                 if skip_video_encoding or video_codec == "copy":
                     final_ffmpeg_cmd.extend(["-c:v", "copy"])
-                    # If we skip re-encoding, we should NOT apply scaling or pixel format conversion (filtering)
                 elif video_codec != "copy":
-                    # Force yuv420p for h264 compatibility
-                    final_ffmpeg_cmd.extend(["-vf", "scale=1920:1080,format=yuv420p", "-c:v", video_codec])
+                    # Force yuv420p for h264 compatibility while preserving original resolution and aspect ratio
+                    final_ffmpeg_cmd.extend(["-pix_fmt", "yuv420p", "-c:v", video_codec])
                     if video_bitrate:
                         final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
                 else:
