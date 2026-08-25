@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import { BACKEND_URL } from '../config';
 
 const AudioPlayerContext = createContext(null);
 
@@ -17,6 +18,8 @@ export const AudioPlayerProvider = ({ children }) => {
   // Initialize audio element
   useEffect(() => {
     const audio = new Audio();
+    audio.crossOrigin = "anonymous";
+    audio.preload = "auto";
     audioRef.current = audio;
 
     const handleTimeUpdate = () => {
@@ -44,7 +47,7 @@ export const AudioPlayerProvider = ({ children }) => {
     };
 
     const handleError = (e) => {
-      console.error("Audio playback error:", e);
+      console.warn("Audio playback error event:", e);
       setIsLoading(false);
       setIsPlaying(false);
     };
@@ -69,25 +72,39 @@ export const AudioPlayerProvider = ({ children }) => {
 
   // Play a track
   const playTrack = (track) => {
-    if (!audioRef.current) return;
+    if (!audioRef.current || !track) return;
     const audio = audioRef.current;
 
+    // Resolve URL cleanly
+    let streamUrl = track.url;
+    if (!streamUrl && track.path) {
+      const cleanP = track.path.replace(/^file:\/\/\/?/, '');
+      streamUrl = `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(cleanP)}`;
+    }
+
+    const fullTrack = {
+      ...track,
+      url: streamUrl,
+    };
+
     // If same track, toggle play/pause
-    if (currentTrack && currentTrack.url === track.url) {
+    if (currentTrack && (currentTrack.url === streamUrl || (currentTrack.path && currentTrack.path === track.path))) {
       if (isPlaying) {
         audio.pause();
         setIsPlaying(false);
       } else {
-        audio.play().then(() => setIsPlaying(true)).catch(console.error);
+        audio.play().then(() => setIsPlaying(true)).catch((err) => {
+          console.warn("Playback resume notice:", err);
+        });
       }
       return;
     }
 
     // New track
-    setCurrentTrack(track);
+    setCurrentTrack(fullTrack);
     setIsLoading(true);
     setCurrentTime(0);
-    audio.src = track.url;
+    audio.src = streamUrl;
     audio.playbackRate = playbackRate;
     audio.loop = isLooping;
     audio.volume = isMuted ? 0 : volume;
@@ -98,7 +115,7 @@ export const AudioPlayerProvider = ({ children }) => {
         setIsLoading(false);
       })
       .catch((err) => {
-        console.error("Failed to auto-play track:", err);
+        console.warn("Auto-play notice:", err);
         setIsLoading(false);
         setIsPlaying(false);
       });

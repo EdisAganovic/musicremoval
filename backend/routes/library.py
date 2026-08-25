@@ -236,13 +236,28 @@ async def delete_file(payload: dict):
 @router.get("/stream-audio")
 async def stream_media(path: str):
     """Stream audio or video files directly to the browser for in-app playback with HTTP Range support."""
+    import urllib.parse
+
     if not path:
         raise HTTPException(status_code=400, detail="Path parameter is required")
 
-    clean_path = os.path.abspath(os.path.normpath(path))
+    # Clean up and normalize path (handle file:// prefix, urlencoded strings, etc.)
+    path_str = urllib.parse.unquote(path).strip().strip('"').strip("'")
+    if path_str.startswith("file:///"):
+        path_str = path_str[8:]
+    elif path_str.startswith("file://"):
+        path_str = path_str[7:]
 
+    clean_path = os.path.abspath(os.path.normpath(path_str))
+
+    # If file doesn't exist directly, check relative to project root or nomusic/download
     if not os.path.exists(clean_path) or not os.path.isfile(clean_path):
-        raise HTTPException(status_code=404, detail=f"File not found: {clean_path}")
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        rel_path = os.path.abspath(os.path.join(project_root, path_str))
+        if os.path.exists(rel_path) and os.path.isfile(rel_path):
+            clean_path = rel_path
+        else:
+            raise HTTPException(status_code=404, detail=f"Media file not found: {clean_path}")
 
     ext = os.path.splitext(clean_path)[1].lower()
     media_types = {
@@ -257,16 +272,20 @@ async def stream_media(path: str):
         '.mp4': 'video/mp4',
         '.mkv': 'video/x-matroska',
     }
-    media_type = media_types.get(ext, 'application/octet-stream')
+    media_type = media_types.get(ext, 'audio/mpeg')
     filename = os.path.basename(clean_path)
+    encoded_filename = urllib.parse.quote(filename)
 
     return FileResponse(
         path=clean_path,
         media_type=media_type,
-        filename=filename,
         headers={
             "Accept-Ranges": "bytes",
-            "Content-Disposition": f'inline; filename="{filename}"'
+            "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, Content-Type",
         }
     )
 
