@@ -254,7 +254,13 @@ function AppContent() {
             style={{ display: activeTab === 'downloader' ? 'block' : 'none' }}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
-            <DownloaderTab analyzingProgress={analyzingProgress} />
+            <DownloaderTab
+              analyzingProgress={analyzingProgress}
+              onSeparate={(filePath) => {
+                setLibraryFileToSeparate(filePath);
+                setActiveTab('separation');
+              }}
+            />
           </motion.div>
 
           {/* Library Tab */}

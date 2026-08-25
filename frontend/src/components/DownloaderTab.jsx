@@ -50,10 +50,11 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
-import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X } from 'lucide-react';
+import { useAudioPlayer } from '../contexts/AudioPlayerContext';
+import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X, AudioLines } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const DownloaderTab = ({ analyzingProgress }) => {
+const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
     const [url, setUrl] = useState('');
     const [taskId, setTaskId] = useState(null);
     const [status, setStatus] = useState(null);
@@ -91,6 +92,9 @@ const DownloaderTab = ({ analyzingProgress }) => {
     const [showQueue, setShowQueue] = useState(true);
     const [currentTaskId, setCurrentTaskId] = useState(null);
     const [randomDelay, setRandomDelay] = useState(true);
+    const [lastCompletedFile, setLastCompletedFile] = useState(null);
+
+    const { playTrack } = useAudioPlayer();
 
     // Playlist confirmation modal
     const [showPlaylistConfirm, setShowPlaylistConfirm] = useState(false);
@@ -176,6 +180,15 @@ const DownloaderTab = ({ analyzingProgress }) => {
 
                     if (data.status === 'completed' || data.status === 'failed' || data.status === 'error') {
                         setTaskId(null);
+                        if (data.status === 'completed') {
+                            const completedPath = data.result_files?.[0] || data.download_info?.filename || null;
+                            if (completedPath) {
+                                setLastCompletedFile(completedPath);
+                                if (autoSeparate) {
+                                    onSeparate?.(completedPath);
+                                }
+                            }
+                        }
                     }
                 } catch (err) {
                     consecutiveErrors++;
@@ -1161,19 +1174,57 @@ const DownloaderTab = ({ analyzingProgress }) => {
             <AnimatePresence>
                 {status === 'completed' && (
                     <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
+                        initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        className="bg-emerald-500/20 text-emerald-300 p-4 rounded-xl flex items-center justify-center space-x-3 backdrop-blur-md border border-emerald-500/20 shadow-lg shadow-emerald-500/10"
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-emerald-500/15 text-emerald-300 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-xl border border-emerald-500/30 shadow-2xl shadow-emerald-500/10"
                     >
-                        <CheckCircle className="w-5 h-5 text-emerald-400" />
-                        <span className="font-bold">Download Completed! Check Library.</span>
-                        <button
-                            onClick={() => setStatus(null)}
-                            className="ml-4 p-1 hover:bg-white/10 rounded"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center space-x-3 w-full sm:w-auto">
+                            <div className="p-2 bg-emerald-500/20 rounded-xl">
+                                <CheckCircle className="w-6 h-6 text-emerald-400" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h4 className="font-bold text-white text-base">Download Completed!</h4>
+                                <p className="text-xs text-emerald-400/80 truncate max-w-xs sm:max-w-md">{downloadingTitle || 'Saved to downloads folder'}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-wrap gap-2">
+                            {lastCompletedFile && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            const fn = lastCompletedFile.split(/[\\/]/).pop();
+                                            playTrack({
+                                                url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(lastCompletedFile)}`,
+                                                title: fn,
+                                                path: lastCompletedFile,
+                                                type: 'audio',
+                                                badge: 'DOWNLOAD'
+                                            });
+                                        }}
+                                        className="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-xl text-xs font-bold transition-all border border-emerald-500/30 flex items-center space-x-1.5"
+                                    >
+                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                        <span>Play in Browser</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => onSeparate?.(lastCompletedFile)}
+                                        className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-dark-950 rounded-xl text-xs font-black transition-all shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 active:scale-95"
+                                    >
+                                        <AudioLines className="w-4 h-4" />
+                                        <span>Open in Separation Tab</span>
+                                    </button>
+                                </>
+                            )}
+                            <button
+                                onClick={() => setStatus(null)}
+                                className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -1222,9 +1273,9 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                 type="checkbox"
                                                 checked={autoSeparate}
                                                 onChange={(e) => setAutoSeparate(e.target.checked)}
-                                                className="w-4 h-4 rounded border-gray-600 bg-dark-800 text-red-500 focus:ring-red-500"
+                                                className="w-4 h-4 rounded border-gray-600 bg-dark-800 text-emerald-500 focus:ring-emerald-500"
                                             />
-                                            <span className="text-xs text-gray-400 font-medium">Auto-separate after download</span>
+                                            <span className="text-xs text-gray-300 font-medium">Add to Separation Tab after download</span>
                                         </label>
 
                                         <label className="flex items-center space-x-2 cursor-pointer ml-4 pl-4 border-l border-white/10">
@@ -1305,7 +1356,7 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                             <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
                                                                 <span className="capitalize">{item.format_type}</span>
                                                                 {item.auto_separate && (
-                                                                    <span className="px-1.5 py-0.5 bg-red-600/20 text-red-400 rounded text-[10px] font-bold">SEPARATE</span>
+                                                                    <span className="px-1.5 py-0.5 bg-emerald-600/20 text-emerald-400 rounded text-[10px] font-bold">SEND TO SEPARATION</span>
                                                                 )}
                                                             </div>
                                                             {item.status === 'downloading' && (
@@ -1320,6 +1371,16 @@ const DownloaderTab = ({ analyzingProgress }) => {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center space-x-2">
+                                                        {item.status === 'completed' && item.result_files?.[0] && (
+                                                            <button
+                                                                onClick={() => onSeparate?.(item.result_files[0])}
+                                                                className="p-1.5 bg-emerald-600/10 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-all flex items-center space-x-1 text-xs font-bold"
+                                                                title="Open in Separation Tab"
+                                                            >
+                                                                <AudioLines className="w-3.5 h-3.5" />
+                                                                <span className="hidden sm:inline">Separate</span>
+                                                            </button>
+                                                        )}
                                                         <span className={`text-xs font-bold px-2 py-1 rounded ${item.status === 'downloading' ? 'bg-red-600/20 text-red-400' :
                                                             item.status === 'completed' ? 'bg-emerald-600/20 text-emerald-400' :
                                                                 item.status === 'failed' ? 'bg-red-900/20 text-red-400' :
