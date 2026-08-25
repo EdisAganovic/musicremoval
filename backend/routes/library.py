@@ -6,6 +6,7 @@ import hashlib
 import json
 import subprocess
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from typing import List
 
 from config import (
@@ -229,6 +230,45 @@ async def delete_file(payload: dict):
         pass
 
     return {"status": "deleted", "files": deleted}
+
+
+@router.get("/media/stream")
+@router.get("/stream-audio")
+async def stream_media(path: str):
+    """Stream audio or video files directly to the browser for in-app playback with HTTP Range support."""
+    if not path:
+        raise HTTPException(status_code=400, detail="Path parameter is required")
+
+    clean_path = os.path.abspath(os.path.normpath(path))
+
+    if not os.path.exists(clean_path) or not os.path.isfile(clean_path):
+        raise HTTPException(status_code=404, detail=f"File not found: {clean_path}")
+
+    ext = os.path.splitext(clean_path)[1].lower()
+    media_types = {
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.m4a': 'audio/mp4',
+        '.aac': 'audio/aac',
+        '.ogg': 'audio/ogg',
+        '.opus': 'audio/opus',
+        '.flac': 'audio/flac',
+        '.webm': 'audio/webm',
+        '.mp4': 'video/mp4',
+        '.mkv': 'video/x-matroska',
+    }
+    media_type = media_types.get(ext, 'application/octet-stream')
+    filename = os.path.basename(clean_path)
+
+    return FileResponse(
+        path=clean_path,
+        media_type=media_type,
+        filename=filename,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Disposition": f'inline; filename="{filename}"'
+        }
+    )
 
 
 @router.post("/open-file")

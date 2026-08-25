@@ -51,6 +51,7 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { BACKEND_URL } from '../config';
+import { useAudioPlayer } from '../contexts/AudioPlayerContext';
 import {
   UploadCloud,
   CheckCircle,
@@ -66,7 +67,10 @@ import {
   Trash2,
   Video,
   AudioLines,
-  Scissors
+  Scissors,
+  Play,
+  Music,
+  ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
@@ -94,9 +98,40 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
   const [skipVideoEncoding, setSkipVideoEncoding] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [previewSeconds, setPreviewSeconds] = useState(30);
-  const [exportInstrumental, setExportInstrumental] = useState(false);
   const [instrumentalFile, setInstrumentalFile] = useState(null);
+  const [exportInstrumental, setExportInstrumental] = useState(false);
   const [removeSilence, setRemoveSilence] = useState(false);
+
+  // In-browser Audio Player
+  const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
+
+  const handlePlayVocalsInBrowser = () => {
+    if (!resultFiles || !resultFiles[0]) return;
+    const filePath = resultFiles[0];
+    const fileName = filePath.split(/[\\/]/).pop();
+    const ext = filePath.split('.').pop()?.toLowerCase() || 'mp3';
+    playTrack({
+      url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(filePath)}`,
+      title: fileName,
+      path: filePath,
+      type: 'vocal',
+      badge: 'VOCALS'
+    });
+    toast.success(`Playing vocals in browser: ${fileName}`);
+  };
+
+  const handlePlayInstrumentalInBrowser = () => {
+    if (!instrumentalFile) return;
+    const fileName = instrumentalFile.split(/[\\/]/).pop();
+    playTrack({
+      url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(instrumentalFile)}`,
+      title: fileName,
+      path: instrumentalFile,
+      type: 'instrumental',
+      badge: 'INSTRUMENTAL'
+    });
+    toast.success(`Playing instrumental in browser: ${fileName}`);
+  };
 
   const fileInputRef = useRef(null);
   const batchListRef = useRef(null);
@@ -1198,56 +1233,65 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
               )}
             </div>
             <div className="flex flex-col items-center space-y-4 pt-2">
-              <div className="flex justify-center space-x-3">
+              <div className="flex flex-wrap justify-center gap-3">
+                {/* Play in Browser (Main / Vocals) */}
+                <button
+                  onClick={handlePlayVocalsInBrowser}
+                  className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-dark-950 rounded-xl text-sm sm:text-base font-black transition-all shadow-xl shadow-emerald-500/25 active:scale-95 flex items-center space-x-2.5 group"
+                  title="Play vocal track in browser"
+                >
+                  <Play className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" />
+                  <span>Play Vocals in Browser</span>
+                </button>
+
+                {/* Play Instrumental in Browser (if exists) */}
+                {instrumentalFile && (
+                  <button
+                    onClick={handlePlayInstrumentalInBrowser}
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-sm sm:text-base font-bold transition-all shadow-xl shadow-purple-500/25 active:scale-95 flex items-center space-x-2.5 group"
+                    title="Play instrumental/karaoke track in browser"
+                  >
+                    <AudioLines className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <span>Play Instrumental</span>
+                  </button>
+                )}
+
+                {/* Open in Desktop App */}
                 <button
                   onClick={async () => {
                     try {
-                      await axios.post("http://localhost:5170/api/open-file", {
+                      await axios.post(`${BACKEND_URL}/api/open-file`, {
                         path: resultFiles[0],
                       });
                     } catch (err) {
-                      toast.error("Cannot open file.");
+                      toast.error("Cannot open file in desktop player.");
                     }
                   }}
-                  className="px-8 py-3 bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-500 hover:to-accent-500 text-white rounded-xl text-lg font-black transition-all shadow-xl shadow-primary-500/25 active:scale-95 flex items-center space-x-3 group"
+                  className="px-5 py-3 bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white rounded-xl text-sm font-bold transition-all border border-white/10 active:scale-95 flex items-center space-x-2"
+                  title="Open file in external media player"
                 >
-                  <PlayCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                  <span>Play video</span>
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Desktop App</span>
                 </button>
+
+                {/* Open Folder */}
                 <button
                   onClick={async () => {
                     try {
                       await axios.post(
-                        "http://localhost:5170/api/open-folder",
+                        `${BACKEND_URL}/api/open-folder`,
                         { path: resultFiles[0] },
                       );
                     } catch (err) {
                       toast.error("Cannot open folder.");
                     }
                   }}
-                  className="px-6 py-3 bg-dark-800 hover:bg-dark-700 text-white rounded-xl text-sm font-bold transition-all border border-white/5 active:scale-95 flex items-center space-x-2"
+                  className="px-5 py-3 bg-dark-800 hover:bg-dark-700 text-gray-300 hover:text-white rounded-xl text-sm font-bold transition-all border border-white/10 active:scale-95 flex items-center space-x-2"
+                  title="Open folder containing result files"
                 >
                   <FolderOpen className="w-4 h-4" />
-                  <span>Open folder</span>
+                  <span>Folder</span>
                 </button>
-                {instrumentalFile && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        await axios.post(`${BACKEND_URL}/api/open-file`, {
-                          path: instrumentalFile,
-                        });
-                      } catch (err) {
-                        toast.error("Cannot open instrumental file.");
-                      }
-                    }}
-                    className="px-6 py-3 bg-accent-600/20 hover:bg-accent-600/30 text-accent-400 hover:text-accent-300 rounded-xl text-sm font-bold transition-all border border-accent-500/30 active:scale-95 flex items-center space-x-2"
-                    title="Play the instrumental/karaoke track"
-                  >
-                    <AudioLines className="w-4 h-4" />
-                    <span>Play instrumental</span>
-                  </button>
-                )}
               </div>
             </div>
           </motion.div>

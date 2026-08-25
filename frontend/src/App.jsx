@@ -33,6 +33,8 @@ import LibraryTab from './components/LibraryTab';
 import NotificationBell from './components/NotificationBell';
 import DiagnosticsPanel from './components/DiagnosticsPanel';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { AudioPlayerProvider } from './contexts/AudioPlayerContext';
+import AudioPlayer from './components/AudioPlayer';
 import { APP_VERSION, APP_NAME, BACKEND_URL } from './config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle, Activity } from 'lucide-react';
@@ -645,6 +647,9 @@ ${Object.entries(systemInfo.packages)
             <DiagnosticsPanel onClose={() => setShowDiagnostics(false)} />
           )}
         </AnimatePresence>
+
+        {/* In-Browser Floating Audio Player */}
+        <AudioPlayer />
       </div>
     </div>
   );
@@ -653,7 +658,9 @@ ${Object.entries(systemInfo.packages)
 function App() {
   return (
     <NotificationProvider>
-      <AppContent />
+      <AudioPlayerProvider>
+        <AppContent />
+      </AudioPlayerProvider>
     </NotificationProvider>
   );
 }

@@ -237,7 +237,7 @@ def run_yt_dlp(
                 from services.persistence import save_tasks_sync
                 save_tasks_sync()
 
-                # Save to library with actual file metadata
+                # Save initial download to library with file metadata
                 library_entry = {
                     "task_id": task_id,
                     "url": url,
@@ -250,32 +250,108 @@ def run_yt_dlp(
                     "model": "both" if auto_separate else None
                 }
                 save_to_library(library_entry)
-
-                # Refresh library to ensure UI gets updated data
                 get_full_library()
 
-                add_notification(
-                    "success",
-                    "Download Complete",
-                    f"{info.get('title', 'Unknown')} downloaded successfully",
-                    {"task_id": task_id, "file": filename}
-                )
-
-                # Auto-separate if requested
-                if auto_separate:
+                if not auto_separate:
+                    add_notification(
+                        "success",
+                        "Download Complete",
+                        f"{info.get('title', 'Unknown')} downloaded successfully",
+                        {"task_id": task_id, "file": filename}
+                    )
+                else:
+                    # Auto-separate if requested
                     log_console(f"Starting auto-separation for {filename}", "info")
+                    tasks[task_id]["status"] = "processing"
                     tasks[task_id]["current_step"] = "Starting vocal separation..."
                     tasks[task_id]["progress"] = 50
+                    from services.persistence import save_tasks_sync
+                    save_tasks_sync()
+
                     from modules.module_processor import process_file
                     from modules.module_ffmpeg import download_ffmpeg
 
-                    if download_ffmpeg():
-                        success, _, _ = process_file(filename, keep_temp=False)
-                        log_console(f"Auto-separation completed for {filename}", "success")
-                        tasks[task_id]["progress"] = 100
-                        tasks[task_id]["current_step"] = "Separation complete"
-                    else:
+                    if not download_ffmpeg():
                         log_console("FFmpeg not available, skipping auto-separation", "warning")
+                        tasks[task_id]["current_step"] = "Download complete (FFmpeg not available for separation)"
+                        tasks[task_id]["status"] = "completed"
+                        tasks[task_id]["progress"] = 100
+                        save_tasks_sync()
+                        add_notification(
+                            "warning",
+                            "Download Complete (Separation Skipped)",
+                            f"{info.get('title', 'Unknown')} downloaded, but FFmpeg is not available.",
+                            {"task_id": task_id, "file": filename}
+                        )
+                    else:
+                        def on_sep_progress(step, progress):
+                            if task_id in tasks:
+                                # Map separation progress (0-100) to overall task progress (50-100)
+                                overall_progress = 50 + int(progress * 0.5)
+                                tasks[task_id]["current_step"] = f"Separating: {step}"
+                                tasks[task_id]["progress"] = overall_progress
+                                if int(overall_progress) % 10 == 0:
+                                    save_tasks_sync()
+
+                        success_result, phase_timings, instrumental_path = process_file(
+                            filename,
+                            keep_temp=False,
+                            progress_callback=on_sep_progress,
+                            model="both"
+                        )
+
+                        if success_result:
+                            log_console(f"Auto-separation completed for {filename}", "success")
+                            tasks[task_id]["status"] = "completed"
+                            tasks[task_id]["progress"] = 100
+                            tasks[task_id]["current_step"] = "Separation complete"
+                            tasks[task_id]["timings"] = phase_timings
+
+                            # Discover generated separated files in nomusic/ folder
+                            output_dir = os.path.abspath('nomusic')
+                            raw_name = os.path.basename(filename)
+                            clean_name_base = os.path.splitext(raw_name)[0]
+
+                            result_files = []
+                            if os.path.exists(output_dir):
+                                for f in os.listdir(output_dir):
+                                    if clean_name_base in f and f != raw_name:
+                                        result_files.append(os.path.join(output_dir, f))
+
+                            if not result_files and isinstance(success_result, str):
+                                result_files = [success_result]
+
+                            tasks[task_id]["result_files"] = result_files
+                            if instrumental_path:
+                                tasks[task_id]["instrumental_file"] = instrumental_path
+
+                            # Update library entry with separated outputs
+                            library_entry["result_files"] = result_files
+                            if result_files:
+                                from config import get_file_metadata_cached
+                                library_entry["metadata"] = get_file_metadata_cached(result_files[0])
+                            save_to_library(library_entry)
+                            get_full_library()
+
+                            add_notification(
+                                "success",
+                                "Auto-Separation Complete",
+                                f"{info.get('title', 'Unknown')} vocals separated successfully",
+                                {"task_id": task_id, "files": result_files}
+                            )
+                            save_tasks_sync()
+                        else:
+                            log_console(f"Auto-separation failed for {filename}", "error")
+                            tasks[task_id]["current_step"] = "Separation failed (download succeeded)"
+                            tasks[task_id]["status"] = "completed"
+                            tasks[task_id]["progress"] = 100
+                            save_tasks_sync()
+                            add_notification(
+                                "error",
+                                "Auto-Separation Failed",
+                                f"Download finished, but separation encountered an error for {info.get('title', 'Unknown')}",
+                                {"task_id": task_id, "file": filename}
+                            )
             else:
                 tasks[task_id]["status"] = "failed"
                 tasks[task_id]["current_step"] = "Download failed - file not found"

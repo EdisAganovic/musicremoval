@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { libraryAPI, separationAPI } from '../api/index.js';
 import { BACKEND_URL } from '../config';
-import { Video, Music, FolderOpen, Trash2, AudioLines, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAudioPlayer } from '../contexts/AudioPlayerContext';
+import { Video, Music, FolderOpen, Trash2, AudioLines, Search, CheckSquare, Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3, ChevronLeft, ChevronRight, Play, ExternalLink } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,6 +35,31 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
     const abortControllerRef = useRef(null);
     const sizeAbortRef = useRef(null);
     const searchInputRef = useRef(null);
+
+    // In-browser Audio Player
+    const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
+
+    const handlePlayInBrowser = (item) => {
+        const filePath = item?.result_files?.[0];
+        if (!filePath) {
+            toast.error("File path not available");
+            return;
+        }
+
+        const fileName = item.filename || item.title || filePath.split(/[\\/]/).pop();
+        const ext = filePath.split('.').pop()?.toLowerCase() || 'mp3';
+        const isVocal = filePath.toLowerCase().includes('vocal');
+        const isInstrumental = filePath.toLowerCase().includes('instrumental') || filePath.toLowerCase().includes('karaoke');
+
+        playTrack({
+            url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(filePath)}`,
+            title: fileName,
+            path: filePath,
+            type: isVocal ? 'vocal' : isInstrumental ? 'instrumental' : 'audio',
+            badge: ext.toUpperCase()
+        });
+        toast.success(`Playing in browser: ${fileName}`);
+    };
 
     const fetchLibrary = async () => {
         setIsRefreshing(true);
@@ -583,16 +609,21 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                            {paginatedItems.map((item) => (
+                            {paginatedItems.map((item) => {
+                                const isCurrentTrack = currentTrack?.path === item.result_files?.[0];
+                                return (
                                 <tr
                                     key={item.task_id}
-                                    className={`transition-all ${selectedItems.includes(item.task_id)
+                                    className={`transition-all cursor-pointer ${isCurrentTrack
+                                        ? 'bg-emerald-500/10 border-l-2 border-emerald-500'
+                                        : selectedItems.includes(item.task_id)
                                         ? 'bg-primary-500/5'
                                         : 'bg-dark-800/40 hover:bg-dark-800/60'
                                         }`}
+                                    onDoubleClick={() => handlePlayInBrowser(item)}
                                     onContextMenu={(e) => handleContextMenu(e, item)}
                                 >
-                                    <td className="px-4 py-2">
+                                    <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                         <input
                                             type="checkbox"
                                             checked={selectedItems.includes(item.task_id)}
@@ -603,7 +634,9 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                     <td className="px-4 py-2">
                                         <div className="flex items-center space-x-3">
                                             <div
-                                                className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer shadow-lg transition-transform hover:scale-105 ${item.model === 'spleeter'
+                                                className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 cursor-pointer shadow-lg transition-transform hover:scale-105 ${isCurrentTrack && isPlaying
+                                                    ? 'bg-gradient-to-tr from-emerald-500 to-teal-400 shadow-emerald-500/40 ring-2 ring-emerald-400'
+                                                    : item.model === 'spleeter'
                                                     ? 'bg-gradient-to-tr from-blue-600 to-blue-400 shadow-blue-500/20'
                                                     : item.model === 'demucs'
                                                         ? 'bg-gradient-to-tr from-orange-600 to-orange-400 shadow-orange-500/20'
@@ -611,10 +644,19 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                                             ? 'bg-gradient-to-tr from-emerald-600 to-emerald-400 shadow-emerald-500/20'
                                                             : 'bg-gradient-to-tr from-indigo-600 to-primary-500 shadow-primary-500/20'
                                                     }`}
-                                                onClick={() => libraryAPI.openFile(item.result_files?.[0]).catch(() => toast.error("Cannot open file."))}
-                                                title={item.model ? `Separated using ${item.model}` : (item.metadata?.is_video ? 'Video' : 'Audio')}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePlayInBrowser(item);
+                                                }}
+                                                title="Play in browser"
                                             >
-                                                {item.metadata?.is_video ? (
+                                                {isCurrentTrack && isPlaying ? (
+                                                    <span className="flex space-x-0.5 items-end h-4">
+                                                        <span className="w-1 bg-white h-3 animate-pulse rounded-full"></span>
+                                                        <span className="w-1 bg-white h-4 animate-pulse rounded-full" style={{ animationDelay: '150ms' }}></span>
+                                                        <span className="w-1 bg-white h-2 animate-pulse rounded-full" style={{ animationDelay: '300ms' }}></span>
+                                                    </span>
+                                                ) : item.metadata?.is_video ? (
                                                     <Video className="w-4 h-4 text-white" />
                                                 ) : (
                                                     <Music className="w-4 h-4 text-white" />
@@ -622,7 +664,7 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                             </div>
                                             <div className="flex flex-col min-w-0">
                                                 <span
-                                                    className="text-sm font-medium text-white truncate max-w-full"
+                                                    className={`text-sm font-medium truncate max-w-full ${isCurrentTrack ? 'text-emerald-400 font-bold' : 'text-white'}`}
                                                     title={item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
                                                 >
                                                     {item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
@@ -652,9 +694,16 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                     <td className="px-4 py-2">
                                         <div className="flex items-center justify-end space-x-1">
                                             <button
-                                                className="p-1.5 bg-primary-600/10 hover:bg-primary-600 text-primary-400 hover:text-white rounded transition-all"
-                                                onClick={() => libraryAPI.openFile(item.result_files?.[0]).catch(() => toast.error("Cannot open file."))}
-                                                title="Play"
+                                                className={`p-1.5 rounded transition-all ${
+                                                    isCurrentTrack && isPlaying
+                                                        ? 'bg-emerald-500 text-dark-950 font-bold shadow-md shadow-emerald-500/30'
+                                                        : 'bg-primary-600/10 hover:bg-primary-600 text-primary-400 hover:text-white'
+                                                }`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePlayInBrowser(item);
+                                                }}
+                                                title={isCurrentTrack && isPlaying ? "Playing in browser" : "Play in browser"}
                                             >
                                                 <PlayCircle className="w-3.5 h-3.5" />
                                             </button>
@@ -662,7 +711,10 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                             {!item.result_files?.[0].toLowerCase().includes('nomusic') && (
                                                 <button
                                                     className="p-1.5 bg-emerald-600/5 hover:bg-emerald-600/20 text-emerald-400 rounded-lg transition-all border border-emerald-500/20 hover:border-emerald-500/40"
-                                                    onClick={() => onSeparate?.(item.result_files?.[0])}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onSeparate?.(item.result_files?.[0]);
+                                                    }}
                                                     title="Separate vocals"
                                                 >
                                                     <AudioLines className="w-4 h-4" />
@@ -670,14 +722,20 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                             )}
                                             <button
                                                 className="p-1.5 bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white rounded transition-all"
-                                                onClick={() => libraryAPI.openFolder(item.result_files?.[0]).catch(() => toast.error("Cannot open folder."))}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    libraryAPI.openFolder(item.result_files?.[0]).catch(() => toast.error("Cannot open folder."));
+                                                }}
                                                 title="Folder"
                                             >
                                                 <FolderOpen className="w-3.5 h-3.5" />
                                             </button>
                                             <button
                                                 className="p-1.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white rounded transition-all"
-                                                onClick={() => handleDelete(item.task_id, item.result_files?.[0])}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDelete(item.task_id, item.result_files?.[0]);
+                                                }}
                                                 title="Delete"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -685,7 +743,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -871,13 +930,23 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                     </div>
                     <button
                         onClick={() => {
+                            handlePlayInBrowser(contextMenu.item);
+                            setContextMenu(null);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 flex items-center gap-2 font-medium"
+                    >
+                        <Play className="w-4 h-4 fill-current" />
+                        Play in Browser
+                    </button>
+                    <button
+                        onClick={() => {
                             libraryAPI.openFile(contextMenu.item?.result_files?.[0]).catch(() => { });
                             setContextMenu(null);
                         }}
                         className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-2"
                     >
-                        <PlayCircle className="w-4 h-4" />
-                        Play
+                        <ExternalLink className="w-4 h-4" />
+                        Open in Desktop Player
                     </button>
                     <button
                         onClick={() => {
