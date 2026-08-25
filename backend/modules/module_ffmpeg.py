@@ -415,3 +415,71 @@ def convert_audio_with_ffmpeg(input_path, output_path, codec=None, normalize_aud
     except Exception as e:
         print(f"{Fore.RED}An unexpected error occurred during audio conversion: {e}{Style.RESET_ALL}")
         return False
+
+_NVENC_H264_AVAILABLE = None
+
+def check_nvenc_h264_support():
+    """
+    Checks if h264_nvenc encoder is available and functioning with FFmpeg.
+    Caches the result to avoid repeating test encodes.
+    """
+    global _NVENC_H264_AVAILABLE
+    if _NVENC_H264_AVAILABLE is not None:
+        return _NVENC_H264_AVAILABLE
+
+    if not FFMPEG_EXE or not os.path.exists(FFMPEG_EXE):
+        _NVENC_H264_AVAILABLE = False
+        return False
+
+    try:
+        cmd = [FFMPEG_EXE, "-encoders"]
+        result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', check=True)
+        if "h264_nvenc" not in result.stdout:
+            _NVENC_H264_AVAILABLE = False
+            return False
+
+        # Quick test encode to ensure NVIDIA driver / hardware initializes correctly
+        test_cmd = [
+            FFMPEG_EXE, "-y", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.04",
+            "-frames:v", "1",
+            "-c:v", "h264_nvenc",
+            "-f", "null", "-"
+        ]
+        test_run = tracked_run(test_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        _NVENC_H264_AVAILABLE = (test_run.returncode == 0)
+    except Exception as e:
+        print(f"{Fore.YELLOW}Note: NVENC H.264 probe returned: {e}{Style.RESET_ALL}")
+        _NVENC_H264_AVAILABLE = False
+
+    return _NVENC_H264_AVAILABLE
+
+def resolve_h264_video_codec(requested_codec="h264_nvenc"):
+    """
+    Resolves the best available H.264 video codec.
+    - If requested is 'copy', returns 'copy'.
+    - If requested is 'h264_nvenc', checks GPU/NVENC support; falls back to 'libx264' if unavailable.
+    - Explicitly rejects x265/HEVC and redirects to H.264.
+    - Defaults to 'libx264' for general H.264 requests.
+    """
+    if not requested_codec or requested_codec == "copy":
+        return "copy"
+
+    req = str(requested_codec).strip().lower()
+
+    # Disallow x265 / hevc
+    if req in ["x265", "h265", "hevc", "hevc_nvenc", "libx265"]:
+        print(f"{Fore.YELLOW}x265/HEVC is disabled. Redirecting to H.264 pipeline.{Style.RESET_ALL}")
+        req = "h264_nvenc"
+
+    if req == "h264_nvenc":
+        if check_nvenc_h264_support():
+            print(f"{Fore.GREEN}Using hardware accelerated H.264 (h264_nvenc).{Style.RESET_ALL}")
+            return "h264_nvenc"
+        else:
+            print(f"{Fore.YELLOW}h264_nvenc not supported by GPU/driver. Falling back to libx264 (CPU).{Style.RESET_ALL}")
+            return "libx264"
+    elif req in ["h264", "x264", "libx264"]:
+        return "libx264"
+
+    return req

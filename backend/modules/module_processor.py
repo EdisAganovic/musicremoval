@@ -50,10 +50,68 @@ except ImportError:
     tracked_run = subprocess.run
 
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks, get_file_metadata
+from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks, get_file_metadata, resolve_h264_video_codec
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_audio import align_audio_tracks, mix_audio_tracks, calculate_audio_lag
+
+def execute_ffmpeg_video_export(input_file, audio_file, output_file, output_format, video_codec, video_bitrate, audio_codec, audio_bitrate, skip_video_encoding=False, description="video", update_progress_cb=None):
+    """
+    Executes FFmpeg to create the final video with fallback:
+    1. If skip_video_encoding or video_codec == 'copy' -> uses '-c:v copy'
+    2. Primary encoder: resolved codec (e.g. h264_nvenc)
+    3. Fallback 1: libx264 (if h264_nvenc fails during execution)
+    4. Fallback 2: copy (if re-encoding fails entirely)
+    """
+    codec_to_try = resolve_h264_video_codec(video_codec) if not skip_video_encoding else "copy"
+
+    def build_cmd(vcodec):
+        cmd = [
+            FFMPEG_EXE, "-loglevel", "error", "-y",
+            "-i", input_file,
+            "-i", audio_file,
+        ]
+        if vcodec == "copy":
+            cmd.extend(["-c:v", "copy"])
+        else:
+            cmd.extend(["-pix_fmt", "yuv420p", "-c:v", vcodec])
+            if video_bitrate:
+                cmd.extend(["-b:v", video_bitrate])
+
+        cmd.extend(["-c:a", audio_codec])
+        if audio_bitrate:
+            cmd.extend(["-b:a", audio_bitrate])
+
+        cmd.extend(["-map", "0:v:0", "-map", "1:a:0", "-shortest"])
+        if output_format == "mp4":
+            cmd.extend(["-f", "mp4"])
+        elif output_format == "mkv":
+            cmd.extend(["-f", "matroska"])
+        cmd.append(output_file)
+        return cmd
+
+    attempts = [codec_to_try]
+    if codec_to_try == "h264_nvenc":
+        attempts.append("libx264")
+    if codec_to_try != "copy" and "copy" not in attempts:
+        attempts.append("copy")
+
+    last_error = None
+    for attempt_codec in attempts:
+        cmd = build_cmd(attempt_codec)
+        print(f"\n{Fore.MAGENTA}Executing ({description} with {attempt_codec}): {' '.join(cmd)}{Style.RESET_ALL}")
+        if update_progress_cb:
+            update_progress_cb("Finalizing output", 95)
+        try:
+            tracked_run(cmd, check=True)
+            print(f"{Fore.GREEN}[OK] Successfully created {description} output: {output_file} (using {attempt_codec}){Style.RESET_ALL}")
+            return True
+        except subprocess.CalledProcessError as e:
+            last_error = e
+            print(f"{Fore.YELLOW}Warning: Video export with '{attempt_codec}' failed. Attempting next fallback...{Style.RESET_ALL}")
+
+    print(f"{Fore.RED}Error: All video export codec attempts failed for {output_file}: {last_error}{Style.RESET_ALL}")
+    raise last_error
 
 # Supported file extensions
 VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.wmv')
@@ -266,33 +324,18 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
                 output_format = output_settings.get('format', 'mp4')
                 output_instrumental = os.path.join(output_folder, f"{base_filename}_instrumental.{output_format}")
 
-                final_ffmpeg_cmd = [
-                    FFMPEG_EXE, "-loglevel", "error", "-y",
-                    "-i", input_file,
-                    "-i", instrumental_aac_path,
-                ]
-                if skip_video_encoding or video_codec == "copy":
-                    final_ffmpeg_cmd.extend(["-c:v", "copy"])
-                else:
-                    final_ffmpeg_cmd.extend(["-pix_fmt", "yuv420p", "-c:v", video_codec])
-                    video_bitrate = video_settings.get('bitrate')
-                    if video_bitrate:
-                        final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
-
-                final_ffmpeg_cmd.extend(["-c:a", audio_codec])
-                if audio_bitrate:
-                    final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
-
-                final_ffmpeg_cmd.extend(["-map", "0:v:0", "-map", "1:a:0", "-shortest"])
-                if output_format == "mp4":
-                    final_ffmpeg_cmd.extend(["-f", "mp4"])
-                elif output_format == "mkv":
-                    final_ffmpeg_cmd.extend(["-f", "matroska"])
-                final_ffmpeg_cmd.append(output_instrumental)
-
-                print(f"{Fore.MAGENTA}Executing (instrumental): {' '.join(final_ffmpeg_cmd)}{Style.RESET_ALL}")
-                tracked_run(final_ffmpeg_cmd, check=True)
-                print(f"{Fore.GREEN}[OK] Successfully created instrumental output: {output_instrumental}{Style.RESET_ALL}")
+                execute_ffmpeg_video_export(
+                    input_file=input_file,
+                    audio_file=instrumental_aac_path,
+                    output_file=output_instrumental,
+                    output_format=output_format,
+                    video_codec=video_codec,
+                    video_bitrate=video_settings.get('bitrate'),
+                    audio_codec=audio_codec,
+                    audio_bitrate=audio_bitrate,
+                    skip_video_encoding=skip_video_encoding,
+                    description="instrumental"
+                )
                 return output_instrumental
         finally:
             if os.path.exists(instrumental_aac_path):
@@ -846,54 +889,20 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     else:
                         print(f"{Fore.YELLOW}Unknown video codec '{v_codec}'. Using default '{audio_codec}'.{Style.RESET_ALL}")
 
-                final_ffmpeg_cmd = [
-                    FFMPEG_EXE,
-                    "-loglevel", "error",
-                    "-y",
-                    "-i", input_file,
-                    "-i", combined_vocals_aac_path,
-                ]
-
-                # If skip_video_encoding is True OR settings specify copy, we copy the original video stream
-                if skip_video_encoding or video_codec == "copy":
-                    final_ffmpeg_cmd.extend(["-c:v", "copy"])
-                elif video_codec != "copy":
-                    # Force yuv420p for h264 compatibility while preserving original resolution and aspect ratio
-                    final_ffmpeg_cmd.extend(["-pix_fmt", "yuv420p", "-c:v", video_codec])
-                    if video_bitrate:
-                        final_ffmpeg_cmd.extend(["-b:v", video_bitrate])
-                else:
-                    final_ffmpeg_cmd.extend(["-c:v", "copy"])
-                
-                final_ffmpeg_cmd.extend([
-                    "-c:a", audio_codec,
-                ])
-                if audio_bitrate:
-                    final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
-
-                # Muxer specific options
-                if skip_video_encoding:
-                    # If we skip encoding, we should try to preserve the original container if possible or follow output settings
-                    pass
-
-                final_ffmpeg_cmd.extend([
-                    "-map", "0:v:0",
-                    "-map", "1:a:0",
-                    "-shortest",
-                ])
-                
-                # Use appropriate muxer for the file extension
-                if output_format == "mp4":
-                    final_ffmpeg_cmd.extend(["-f", "mp4"])
-                elif output_format == "mkv":
-                    final_ffmpeg_cmd.extend(["-f", "matroska"])
-                
-                final_ffmpeg_cmd.append(output_video)
-                print(f"\n{Fore.MAGENTA}Executing: {' '.join(final_ffmpeg_cmd)}")
-                update_progress("Finalizing output", 95)
-                tracked_run(final_ffmpeg_cmd, check=True)
+                execute_ffmpeg_video_export(
+                    input_file=input_file,
+                    audio_file=combined_vocals_aac_path,
+                    output_file=output_video,
+                    output_format=output_format,
+                    video_codec=video_codec,
+                    video_bitrate=video_bitrate,
+                    audio_codec=audio_codec,
+                    audio_bitrate=audio_bitrate,
+                    skip_video_encoding=skip_video_encoding,
+                    description="vocal",
+                    update_progress_cb=update_progress
+                )
                 update_progress("Completed", 100)
-                print(f"\n{Fore.GREEN}[OK] Successfully created {output_video}{Style.RESET_ALL}")
 
                 # Get final audio duration and compare
                 final_duration = get_audio_duration(output_video)
