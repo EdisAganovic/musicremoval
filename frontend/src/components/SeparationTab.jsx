@@ -562,18 +562,22 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
       </div>
 
       {/* Model Selection */}
-      <div className="flex justify-center space-x-4 mb-6">
-        {["spleeter", "demucs", "both"].map((m) => (
+      <div className="flex flex-wrap justify-center gap-3 mb-6">
+        {[
+          { id: "both", label: "Both (Recommended)" },
+          { id: "roformer", label: "🎬 Roformer BGM (Cartoons/Movies)" },
+          { id: "demucs", label: "Demucs" },
+          { id: "spleeter", label: "Spleeter" },
+        ].map(({ id, label }) => (
           <button
-            key={`model-${m}`}
-            onClick={() => setModel(m)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent ${model === m
-              ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10"
-              : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700"
+            key={`model-${id}`}
+            onClick={() => setModel(id)}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 border ${model === id
+              ? "bg-primary-600/20 text-primary-400 border-primary-500/50 shadow-lg shadow-primary-500/10 scale-105"
+              : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
               }`}
           >
-            <span className="capitalize">{m}</span>{" "}
-            {m === "both" && "(Recommended)"}
+            <span>{label}</span>
           </button>
         ))}
       </div>

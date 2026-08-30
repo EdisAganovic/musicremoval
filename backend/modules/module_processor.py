@@ -578,71 +578,99 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         # Step 2 & 3: Run AI Source Separation Models
         settings = load_config('data/video.json')
         demucs_workers = settings.get('processing', {}).get('demucs_workers', 4)
-        print(f"{Fore.CYAN}Using {demucs_workers} Demucs parallel segment worker(s).{Style.RESET_ALL}")
 
-        # Both models return (path_to_vocal_wav, path_to_instrumental_wav_or_None, temp_segments_dir)
-        if model == "spleeter" or model == "both":
-            print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
-            s_start = time.time()
-            update_progress("Running Spleeter", 20 if model == "both" else 15)
-            spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
-                temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
+        if model in ["roformer", "bgm", "mel_band_roformer"]:
+            from module_roformer import separate_with_roformer
+            print(f"{Fore.CYAN}Starting Mel-Band Roformer BGM separation (Cartoon / Movie Mode)...{Style.RESET_ALL}")
+            r_start = time.time()
+            update_progress("Running Mel-Band Roformer BGM", 40)
+            roformer_out_path = os.path.join(temp_workspace, "roformer_out")
+            dialogue_sfx_path, roformer_music_path, temp_roformer_dir = separate_with_roformer(
+                temp_audio_wav_path, roformer_out_path, base_audio_name_no_ext,
                 pre_split_segments=shared_segments, want_instrumental=export_instrumental
             )
-            s_end = time.time()
-            timings['spleeter'] = s_end - s_start
-            print(f"{Fore.GREEN}Spleeter took {timings['spleeter']:.2f}s{Style.RESET_ALL}")
-        else:
-            print(f"{Fore.YELLOW}Skipping Spleeter based on model selection.{Style.RESET_ALL}")
+            r_end = time.time()
+            timings['roformer'] = r_end - r_start
+            print(f"{Fore.GREEN}Roformer BGM separation took {timings['roformer']:.2f}s{Style.RESET_ALL}")
 
-        if model == "demucs" or model == "both":
-            print(f"{Fore.CYAN}Starting Demucs separation...{Style.RESET_ALL}")
-            d_start = time.time()
-            update_progress("Running Demucs", 50 if model == "both" else 15)
-            demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir = separate_with_demucs(
-                temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext,
-                max_workers=demucs_workers, pre_split_segments=shared_segments, want_instrumental=export_instrumental
-            )
-            d_end = time.time()
-            timings['demucs'] = d_end - d_start
-            print(f"{Fore.GREEN}Demucs took {timings['demucs']:.2f}s{Style.RESET_ALL}")
-        else:
-            print(f"{Fore.YELLOW}Skipping Demucs based on model selection.{Style.RESET_ALL}")
+            if temp_roformer_dir:
+                temp_dirs_to_cleanup.append(temp_roformer_dir)
 
-        # Step 4: Logic for Alinging and Mixing the results
-        print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals...{Style.RESET_ALL}\n")
-
-        spleeter_input_exists = spleeter_vocal_wav_path and os.path.exists(spleeter_vocal_wav_path) and os.path.getsize(spleeter_vocal_wav_path) > 0
-        demucs_input_exists = demucs_vocal_wav_path and os.path.exists(demucs_vocal_wav_path) and os.path.getsize(demucs_vocal_wav_path) > 0
-
-        if not spleeter_input_exists and not demucs_input_exists:
-            print(f"{Fore.RED}Error: Neither Spleeter nor Demucs vocal files were successfully generated.{Style.RESET_ALL}")
-            return False, timings, None
-        
-        # Branching logic for when only one model succeeds
-        elif not spleeter_input_exists:
-            print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly.{Style.RESET_ALL}")
-            try:
-                # Copy Demucs WAV to our vocal mixture path (still WAV)
-                shutil.copy2(demucs_vocal_wav_path, vocal_mixture_wav_path)
-                print(f"{Fore.GREEN}Demucs vocals ready for mixing.{Style.RESET_ALL}")
-            except Exception as e:
-                print(f"{Fore.RED}Error copying Demucs vocals: {e}{Style.RESET_ALL}")
+            if not (dialogue_sfx_path and os.path.exists(dialogue_sfx_path) and os.path.getsize(dialogue_sfx_path) > 0):
+                print(f"{Fore.RED}Error: Roformer separation produced empty or missing dialogue/SFX track.{Style.RESET_ALL}")
                 return False, timings, None
-        elif not demucs_input_exists:
-            print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
-            try:
-                shutil.copy2(spleeter_vocal_wav_path, vocal_mixture_wav_path)
-                print(f"{Fore.GREEN}[OK] Spleeter vocals ready for mixing.{Style.RESET_ALL}")
-            except Exception as e:
-                print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
-                return False, timings, None
+
+            shutil.copy2(dialogue_sfx_path, vocal_mixture_wav_path)
+            print(f"{Fore.GREEN}[OK] Dialogue & Sound Effects track ready for export.{Style.RESET_ALL}")
+            if export_instrumental and roformer_music_path:
+                demucs_instrumental_wav_path = roformer_music_path
+
         else:
-            # When both exist, perform cross-correlation alignment to fix any millisecond offsets
-            print(f"{Fore.CYAN}Starting alignment and mixing...{Style.RESET_ALL}")
-            mix_start = time.time()
-            update_progress("Aligning audio tracks", 80)
-            aligned_spleeter, aligned_demucs = align_audio_tracks(spleeter_vocal_wav_path, demucs_vocal_wav_path, aligned_spleeter_vocals_path, aligned_demucs_vocals_path)
+            print(f"{Fore.CYAN}Using {demucs_workers} Demucs parallel segment worker(s).{Style.RESET_ALL}")
+
+            # Both models return (path_to_vocal_wav, path_to_instrumental_wav_or_None, temp_segments_dir)
+            if model == "spleeter" or model == "both":
+                print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
+                s_start = time.time()
+                update_progress("Running Spleeter", 20 if model == "both" else 15)
+                spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
+                    temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
+                    pre_split_segments=shared_segments, want_instrumental=export_instrumental
+                )
+                s_end = time.time()
+                timings['spleeter'] = s_end - s_start
+                print(f"{Fore.GREEN}Spleeter took {timings['spleeter']:.2f}s{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.YELLOW}Skipping Spleeter based on model selection.{Style.RESET_ALL}")
+
+            if model == "demucs" or model == "both":
+                print(f"{Fore.CYAN}Starting Demucs separation...{Style.RESET_ALL}")
+                d_start = time.time()
+                update_progress("Running Demucs", 50 if model == "both" else 15)
+                demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir = separate_with_demucs(
+                    temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext,
+                    max_workers=demucs_workers, pre_split_segments=shared_segments, want_instrumental=export_instrumental
+                )
+                d_end = time.time()
+                timings['demucs'] = d_end - d_start
+                print(f"{Fore.GREEN}Demucs took {timings['demucs']:.2f}s{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.YELLOW}Skipping Demucs based on model selection.{Style.RESET_ALL}")
+
+            # Step 4: Logic for Alinging and Mixing the results
+            print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals...{Style.RESET_ALL}\n")
+
+            spleeter_input_exists = spleeter_vocal_wav_path and os.path.exists(spleeter_vocal_wav_path) and os.path.getsize(spleeter_vocal_wav_path) > 0
+            demucs_input_exists = demucs_vocal_wav_path and os.path.exists(demucs_vocal_wav_path) and os.path.getsize(demucs_vocal_wav_path) > 0
+
+            if not spleeter_input_exists and not demucs_input_exists:
+                print(f"{Fore.RED}Error: Neither Spleeter nor Demucs vocal files were successfully generated.{Style.RESET_ALL}")
+                return False, timings, None
+            
+            # Branching logic for when only one model succeeds
+            elif not spleeter_input_exists:
+                print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly.{Style.RESET_ALL}")
+                try:
+                    # Copy Demucs WAV to our vocal mixture path (still WAV)
+                    shutil.copy2(demucs_vocal_wav_path, vocal_mixture_wav_path)
+                    print(f"{Fore.GREEN}Demucs vocals ready for mixing.{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.RED}Error copying Demucs vocals: {e}{Style.RESET_ALL}")
+                    return False, timings, None
+            elif not demucs_input_exists:
+                print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
+                try:
+                    shutil.copy2(spleeter_vocal_wav_path, vocal_mixture_wav_path)
+                    print(f"{Fore.GREEN}[OK] Spleeter vocals ready for mixing.{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
+                    return False, timings, None
+            else:
+                # When both exist, perform cross-correlation alignment to fix any millisecond offsets
+                print(f"{Fore.CYAN}Starting alignment and mixing...{Style.RESET_ALL}")
+                mix_start = time.time()
+                update_progress("Aligning audio tracks", 80)
+                aligned_spleeter, aligned_demucs = align_audio_tracks(spleeter_vocal_wav_path, demucs_vocal_wav_path, aligned_spleeter_vocals_path, aligned_demucs_vocals_path)
 
             if aligned_spleeter and aligned_demucs:
                 # Mix both aligned tracks into a temporary file
