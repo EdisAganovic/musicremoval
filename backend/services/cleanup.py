@@ -32,9 +32,9 @@ def cleanup_metadata_cache():
 
 
 def cleanup_temp_files():
-    """Clean up temporary files older than 24 hours."""
+    """Clean up temporary files older than 2 hours and prune empty temp directories."""
     temp_dirs = ['_temp', 'uploads', 'spleeter_out', 'demucs_out', '_processing_intermediates']
-    max_age_seconds = 24 * 60 * 60  # 24 hours
+    max_age_seconds = 2 * 3600  # 2 hours for temp files
     current_time = time.time()
     cleaned_count = 0
 
@@ -49,7 +49,7 @@ def cleanup_temp_files():
                 f_path = os.path.join(download_dir, f)
                 try:
                     file_age = current_time - os.path.getmtime(f_path)
-                    if file_age > 3600:
+                    if file_age > 1800:
                         if safe_remove(f_path):
                             orphan_count += 1
                 except (OSError, IOError):
@@ -63,7 +63,7 @@ def cleanup_temp_files():
             continue
 
         try:
-            for root, dirs, files in os.walk(dir_path):
+            for root, dirs, files in os.walk(dir_path, topdown=False):
                 for file in files:
                     file_path = os.path.join(root, file)
                     try:
@@ -71,6 +71,14 @@ def cleanup_temp_files():
                         if file_age > max_age_seconds:
                             if safe_remove(file_path):
                                 cleaned_count += 1
+                    except (OSError, IOError):
+                        pass
+                # Remove empty subdirectories
+                for d in dirs:
+                    d_path = os.path.join(root, d)
+                    try:
+                        if not os.listdir(d_path):
+                            os.rmdir(d_path)
                     except (OSError, IOError):
                         pass
         except (OSError, IOError):

@@ -110,7 +110,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
                 from modules.module_ffmpeg_shared import _find_shared_bin_dir
                 shared_bin = _find_shared_bin_dir()
-                two_stems_args = ["--two-stems", "vocals"] if want_instrumental else []
+                two_stems_args = ["--two-stems", "vocals"]
                 if shared_bin and sys.platform == "win32":
                     demucs_cmd = [
                         sys.executable, "-c",
@@ -207,7 +207,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             # Short file, just run directly
             from modules.module_ffmpeg_shared import _find_shared_bin_dir
             shared_bin = _find_shared_bin_dir()
-            two_stems_args = ["--two-stems", "vocals"] if want_instrumental else []
+            two_stems_args = ["--two-stems", "vocals"]
             if shared_bin and sys.platform == "win32":
                 demucs_cmd = [
                     sys.executable, "-c",

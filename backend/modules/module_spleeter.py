@@ -163,7 +163,8 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 return segment_vocal_path, segment_no_vocals_path
 
             # Use ThreadPoolExecutor for parallel processing
-            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            workers = get_spleeter_workers()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
                 future_to_segment = {executor.submit(process_segment, i, path): path for i, path in enumerate(split_audio_paths)}
                 for future in tqdm(concurrent.futures.as_completed(future_to_segment), total=len(split_audio_paths), desc="Spleeter segments", unit="seg"):
                     segment_vocal_path, segment_no_vocals_path = future.result()

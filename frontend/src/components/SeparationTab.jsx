@@ -109,19 +109,24 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
   // In-browser Audio Player
   const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
 
+  const isVideoOutput = Boolean(
+    metadata?.is_video ||
+    (resultFiles && resultFiles[0] && /\.(mp4|mkv|webm|mov|avi|ts|flv)$/i.test(resultFiles[0]))
+  );
+
   const handlePlayVocalsInBrowser = () => {
     if (!resultFiles || !resultFiles[0]) return;
     const filePath = resultFiles[0];
     const fileName = filePath.split(/[\\/]/).pop();
-    const ext = filePath.split('.').pop()?.toLowerCase() || 'mp3';
+    const isVideo = isVideoOutput;
     playTrack({
       url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(filePath)}`,
       title: fileName,
       path: filePath,
-      type: 'vocal',
-      badge: 'VOCALS'
+      type: isVideo ? 'video' : 'vocal',
+      badge: isVideo ? 'NO-MUSIC VIDEO' : 'VOCALS'
     });
-    toast.success(`Playing vocals in browser: ${fileName}`);
+    toast.success(`Playing ${isVideo ? 'video' : 'vocals'} in browser: ${fileName}`);
   };
 
   const handlePlayInstrumentalInBrowser = () => {
@@ -1246,14 +1251,18 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
             </div>
             <div className="flex flex-col items-center space-y-4 pt-2">
               <div className="flex flex-wrap justify-center gap-3">
-                {/* Play in Browser (Main / Vocals) */}
+                {/* Play in Browser (Video / Vocals) */}
                 <button
                   onClick={handlePlayVocalsInBrowser}
                   className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-dark-950 rounded-xl text-sm sm:text-base font-black transition-all shadow-xl shadow-emerald-500/25 active:scale-95 flex items-center space-x-2.5 group"
-                  title="Play vocal track in browser"
+                  title={isVideoOutput ? "Play video in browser" : "Play vocal track in browser"}
                 >
-                  <Play className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" />
-                  <span>Play Vocals in Browser</span>
+                  {isVideoOutput ? (
+                    <Video className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  ) : (
+                    <Play className="w-5 h-5 fill-current group-hover:scale-110 transition-transform" />
+                  )}
+                  <span>{isVideoOutput ? "Play Video in Browser" : "Play Vocals in Browser"}</span>
                 </button>
 
                 {/* Play Instrumental in Browser (if exists) */}
