@@ -605,6 +605,32 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             if export_instrumental and roformer_music_path:
                 demucs_instrumental_wav_path = roformer_music_path
 
+        elif model in ["tiger", "tiger_dnr", "tiger-dnr"]:
+            from module_tiger import separate_with_tiger
+            print(f"{Fore.CYAN}Starting TIGER-DnR separation (Cinematic 3-Stem Model)...{Style.RESET_ALL}")
+            t_start = time.time()
+            update_progress("Running TIGER-DnR", 40)
+            tiger_out_path = os.path.join(temp_workspace, "tiger_out")
+            dialogue_sfx_path, tiger_music_path, temp_tiger_dir = separate_with_tiger(
+                temp_audio_wav_path, tiger_out_path, base_audio_name_no_ext,
+                want_instrumental=export_instrumental
+            )
+            t_end = time.time()
+            timings['tiger'] = t_end - t_start
+            print(f"{Fore.GREEN}TIGER-DnR separation took {timings['tiger']:.2f}s{Style.RESET_ALL}")
+
+            if temp_tiger_dir:
+                temp_dirs_to_cleanup.append(temp_tiger_dir)
+
+            if not (dialogue_sfx_path and os.path.exists(dialogue_sfx_path) and os.path.getsize(dialogue_sfx_path) > 0):
+                print(f"{Fore.RED}Error: TIGER-DnR produced empty or missing dialogue/SFX track.{Style.RESET_ALL}")
+                return False, timings, None
+
+            shutil.copy2(dialogue_sfx_path, vocal_mixture_wav_path)
+            print(f"{Fore.GREEN}[OK] TIGER-DnR Dialogue & Sound Effects track ready for export.{Style.RESET_ALL}")
+            if export_instrumental and tiger_music_path:
+                demucs_instrumental_wav_path = tiger_music_path
+
         else:
             print(f"{Fore.CYAN}Using {demucs_workers} Demucs parallel segment worker(s).{Style.RESET_ALL}")
 
