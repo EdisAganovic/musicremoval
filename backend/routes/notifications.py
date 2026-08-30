@@ -230,12 +230,17 @@ async def get_system_info():
         static_info_task, dynamic_info_task, nomusic_size_task, download_size_task, library_stats_task
     )
 
+    # Load processing config
+    from modules.module_processor import load_config
+    cfg = load_config('data/video.json')
+    workers = cfg.get("processing", {}).get("demucs_workers", 4)
+
     # Assemble final object
     info = {
         **static_info,
         **dynamic_info,
         "processing": {
-            "demucs_workers": 2,
+            "demucs_workers": workers,
             "segment_duration": "600s"
         },
         "storage": {

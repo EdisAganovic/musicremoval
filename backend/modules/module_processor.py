@@ -50,31 +50,63 @@ except ImportError:
     tracked_run = subprocess.run
 
 from module_cuda import check_gpu_cuda_support
-from module_ffmpeg import get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg, get_audio_tracks, get_file_metadata, resolve_h264_video_codec
+from module_ffmpeg import (
+    get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg,
+    get_audio_tracks, get_file_metadata, resolve_h264_video_codec,
+    execute_super_keyframe_nvenc_export, get_resolution_scale_filter
+)
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
 from module_audio import align_audio_tracks, mix_audio_tracks, calculate_audio_lag
 
-def execute_ffmpeg_video_export(input_file, audio_file, output_file, output_format, video_codec, video_bitrate, audio_codec, audio_bitrate, skip_video_encoding=False, description="video", update_progress_cb=None):
+def execute_ffmpeg_video_export(input_file, audio_file, output_file, output_format, video_codec, video_bitrate, audio_codec, audio_bitrate, skip_video_encoding=False, super_keyframe=False, resolution="1080p", description="video", update_progress_cb=None):
     """
     Executes FFmpeg to create the final video with fallback:
     1. If skip_video_encoding or video_codec == 'copy' -> uses '-c:v copy'
-    2. Primary encoder: resolved codec (e.g. h264_nvenc)
-    3. Fallback 1: libx264 (if h264_nvenc fails during execution)
-    4. Fallback 2: copy (if re-encoding fails entirely)
+    2. If super_keyframe is enabled -> attempts parallel dual-NVENC chunked export
+    3. Primary encoder: resolved codec (e.g. h264_nvenc)
+    4. Fallback 1: libx264 (if h264_nvenc fails during execution)
+    5. Fallback 2: copy (if re-encoding fails entirely)
     """
+    if super_keyframe and not skip_video_encoding and video_codec != "copy":
+        resolved = resolve_h264_video_codec(video_codec)
+        if resolved == "h264_nvenc":
+            try:
+                print(f"\n{Fore.CYAN}[Super Keyframe] Attempting parallel multi-chunk NVENC video export...{Style.RESET_ALL}")
+                if execute_super_keyframe_nvenc_export(
+                    input_file=input_file,
+                    audio_file=audio_file,
+                    output_file=output_file,
+                    output_format=output_format,
+                    video_bitrate=video_bitrate,
+                    audio_codec=audio_codec,
+                    audio_bitrate=audio_bitrate,
+                    resolution=resolution,
+                    update_progress_cb=update_progress_cb
+                ):
+                    return True
+            except Exception as e:
+                print(f"{Fore.YELLOW}Super Keyframe export failed: {e}. Falling back to standard pipeline.{Style.RESET_ALL}")
+
     codec_to_try = resolve_h264_video_codec(video_codec) if not skip_video_encoding else "copy"
 
     def build_cmd(vcodec):
         cmd = [
             FFMPEG_EXE, "-loglevel", "error", "-y",
+        ]
+        if vcodec == "h264_nvenc":
+            cmd.extend(["-hwaccel", "cuda"])
+        cmd.extend([
             "-i", input_file,
             "-i", audio_file,
-        ]
+        ])
         if vcodec == "copy":
             cmd.extend(["-c:v", "copy"])
         else:
-            cmd.extend(["-pix_fmt", "yuv420p", "-c:v", vcodec])
+            scale_filter = get_resolution_scale_filter(resolution)
+            cmd.extend(["-vf", scale_filter, "-c:v", vcodec])
+            if vcodec == "h264_nvenc":
+                cmd.extend(["-preset", "p4", "-tune", "hq"])
             if video_bitrate:
                 cmd.extend(["-b:v", video_bitrate])
 
@@ -134,7 +166,7 @@ DEFAULT_CONFIG = {
         "format": "mp4"
     },
     "processing": {
-        "demucs_workers": 2,
+        "demucs_workers": 4,
         "skip_video_encoding": False
     }
 }
@@ -206,7 +238,7 @@ def load_config(config_path='data/video.json'):
                     raise ValueError("'processing.demucs_workers' must be an integer")
                 config['processing'] = {'demucs_workers': proc_config['demucs_workers']}
         else:
-            config['processing'] = {'demucs_workers': 2} # Default
+            config['processing'] = {'demucs_workers': 4} # Default
         
         print(f"{Fore.GREEN}Configuration loaded successfully from '{config_path}'.{Style.RESET_ALL}")
         return config
@@ -348,7 +380,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
         return None
 
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None, export_instrumental=False, remove_silence=False):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p"):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -545,15 +577,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
         # Step 2 & 3: Run AI Source Separation Models
         settings = load_config('data/video.json')
-        demucs_workers = settings.get('processing', {}).get('demucs_workers', 2)
-
-        # Parallel segment workers only help on CPU (more cores = more throughput).
-        # On GPU, N parallel Demucs subprocesses each load the model into the same
-        # GPU and compete for VRAM/compute, which tends to slow things down or risk
-        # OOM rather than speed anything up - so force single-segment-at-a-time.
-        if cuda_is_available and demucs_workers > 1:
-            print(f"{Fore.YELLOW}GPU detected: running Demucs segments one at a time instead of {demucs_workers} in parallel (avoids VRAM contention).{Style.RESET_ALL}")
-            demucs_workers = 1
+        demucs_workers = settings.get('processing', {}).get('demucs_workers', 4)
+        print(f"{Fore.CYAN}Using {demucs_workers} Demucs parallel segment worker(s).{Style.RESET_ALL}")
 
         # Both models return (path_to_vocal_wav, path_to_instrumental_wav_or_None, temp_segments_dir)
         if model == "spleeter" or model == "both":
@@ -899,6 +924,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     audio_codec=audio_codec,
                     audio_bitrate=audio_bitrate,
                     skip_video_encoding=skip_video_encoding,
+                    super_keyframe=super_keyframe,
+                    resolution=resolution,
                     description="vocal",
                     update_progress_cb=update_progress
                 )

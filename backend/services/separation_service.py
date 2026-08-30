@@ -1,25 +1,126 @@
 """
-Separation service - handles vocal separation using Demucs/Spleeter.
+Separation service - handles vocal separation using Demucs/Spleeter with FIFO Queue processing.
 """
 import os
 import time
+import queue
+import threading
+from colorama import Fore, Style
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
+from services.persistence import save_tasks_sync
+
+# Thread-safe FIFO separation queue
+_separation_queue = queue.Queue()
+_worker_lock = threading.Lock()
+_worker_thread = None
+_current_running_task_id = None
 
 
-def run_separation(task_id: str, file_path: str, duration=None, model="both", skip_video_encoding=False, export_instrumental=False, remove_silence=False):
+def get_current_separation_task_id():
+    """Returns the task_id of the currently executing separation, or None."""
+    global _current_running_task_id
+    return _current_running_task_id
+
+
+def get_separation_queue_length():
+    """Returns the number of tasks currently waiting in the separation queue."""
+    return _separation_queue.qsize()
+
+
+def enqueue_separation(task_id: str, file_path: str, duration=None, model="both",
+                       skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
     """
-    Run vocal separation on a file.
+    Adds a separation task to the FIFO queue and ensures the background worker is running.
+    Tasks are processed strictly one at a time to prevent GPU VRAM contention and process collisions.
+    """
+    global _worker_thread
 
-    Args:
-        task_id: Unique task identifier
-        file_path: Path to the file to process
-        duration: Optional duration limit in seconds
-        model: Separation model to use (spleeter, demucs, both)
-        export_instrumental: Also produce an instrumental/karaoke track alongside vocals
-        remove_silence: Remove silence gaps from output vocal track (keeps 1.0s lead-in/out)
+    # Queue item dictionary
+    item = {
+        "task_id": task_id,
+        "file_path": file_path,
+        "duration": duration,
+        "model": model,
+        "skip_video_encoding": skip_video_encoding,
+        "super_keyframe": super_keyframe,
+        "resolution": resolution,
+        "export_instrumental": export_instrumental,
+        "remove_silence": remove_silence
+    }
 
-    Returns:
-        None (updates tasks dict with results)
+    _separation_queue.put(item)
+    q_len = _separation_queue.qsize()
+
+    # If another task is already running, clearly indicate queue position
+    if _current_running_task_id is not None or q_len > 1:
+        if task_id in tasks:
+            tasks[task_id]["status"] = "pending"
+            tasks[task_id]["current_step"] = f"Queued (waiting in line, position #{q_len})"
+            save_tasks_sync()
+        print(f"{Fore.CYAN}[Separation Queue] Task {task_id} queued at position #{q_len} ({os.path.basename(file_path)}){Style.RESET_ALL}")
+    else:
+        if task_id in tasks:
+            tasks[task_id]["status"] = "pending"
+            tasks[task_id]["current_step"] = "Queued"
+            save_tasks_sync()
+
+    # Ensure worker thread is active
+    with _worker_lock:
+        if _worker_thread is None or not _worker_thread.is_alive():
+            _worker_thread = threading.Thread(target=_separation_worker_loop, daemon=True, name="SeparationWorker")
+            _worker_thread.start()
+
+
+def _separation_worker_loop():
+    """
+    Continuous worker loop that pulls separation tasks from the FIFO queue and processes them sequentially.
+    """
+    global _current_running_task_id
+
+    while True:
+        try:
+            # Block briefly to wait for next item or timeout to allow thread lifecycle management
+            item = _separation_queue.get(timeout=3.0)
+        except queue.Empty:
+            # Queue is empty, exit worker thread gracefully
+            with _worker_lock:
+                _current_running_task_id = None
+                break
+
+        task_id = item["task_id"]
+        _current_running_task_id = task_id
+
+        # Check if task was cancelled while sitting in queue
+        if task_id in tasks and tasks[task_id].get("status") == "cancelled":
+            print(f"{Fore.YELLOW}[Separation Queue] Skipping cancelled task {task_id}{Style.RESET_ALL}")
+            _separation_queue.task_done()
+            continue
+
+        try:
+            print(f"\n{Fore.GREEN}[Separation Queue] Starting execution of task {task_id} ({os.path.basename(item['file_path'])}){Style.RESET_ALL}")
+            _execute_separation(
+                task_id=task_id,
+                file_path=item["file_path"],
+                duration=item["duration"],
+                model=item["model"],
+                skip_video_encoding=item.get("skip_video_encoding", False),
+                super_keyframe=item.get("super_keyframe", False),
+                resolution=item.get("resolution", "1080p"),
+                export_instrumental=item["export_instrumental"],
+                remove_silence=item["remove_silence"]
+            )
+        except Exception as e:
+            print(f"{Fore.RED}[Separation Queue] Unhandled exception in task {task_id}: {e}{Style.RESET_ALL}")
+        finally:
+            _current_running_task_id = None
+            _separation_queue.task_done()
+            save_tasks_sync()
+
+
+def _execute_separation(task_id: str, file_path: str, duration=None, model="both",
+                        skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
+    """
+    Internal execution of vocal separation on a single file.
     """
     from modules.module_processor import process_file
     from modules.module_ffmpeg import download_ffmpeg
@@ -33,7 +134,9 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
         batch_id = tasks[task_id].get("batch_id")
         if batch_id and batch_id in tasks:
             tasks[batch_id]["status"] = "processing"
-            tasks[batch_id]["current_step"] = "Processing file 1/1..."
+            processed_count = tasks[batch_id].get("processed", 0)
+            total_count = tasks[batch_id].get("total_files", 1)
+            tasks[batch_id]["current_step"] = f"Processing file {processed_count + 1}/{total_count}..."
 
         if not download_ffmpeg():
             raise Exception("FFmpeg download failed")
@@ -45,7 +148,6 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
                 
                 # Periodically save to disk (every 10%)
                 if int(progress) % 10 == 0:
-                    from services.persistence import save_tasks_sync
                     save_tasks_sync()
 
             # Update batch parent progress
@@ -63,8 +165,9 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
         filename = os.path.basename(file_path)
         success_result, phase_timings, instrumental_path = process_file(
             file_path, keep_temp=False, duration=duration, progress_callback=on_progress,
-            model=model, skip_video_encoding=skip_video_encoding, export_instrumental=export_instrumental,
-            remove_silence=remove_silence
+            model=model, skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
+            resolution=resolution,
+            export_instrumental=export_instrumental, remove_silence=remove_silence
         )
 
         if success_result:
@@ -75,7 +178,6 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
             tasks[task_id]["processing_time"] = tasks[task_id]["end_time"] - tasks[task_id]["start_time"]
             tasks[task_id]["timings"] = phase_timings
             
-            from services.persistence import save_tasks_sync
             save_tasks_sync()
 
             # Update parent batch counters
@@ -83,16 +185,20 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
             if batch_id and batch_id in tasks:
                 tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
                 tasks[batch_id]["success"] = tasks[batch_id].get("success", 0) + 1
-                tasks[batch_id]["status"] = "completed"
-                tasks[batch_id]["current_step"] = "All files processed"
-                tasks[batch_id]["progress"] = 100
+                total_files = tasks[batch_id].get("total_files", 1)
+                if tasks[batch_id]["processed"] >= total_files:
+                    tasks[batch_id]["status"] = "completed"
+                    tasks[batch_id]["current_step"] = "All files processed"
+                    tasks[batch_id]["progress"] = 100
+                
                 # Update file status in batch
                 for file_item in tasks[batch_id].get("files", []):
                     if file_item.get("task_id") == task_id:
                         file_item["status"] = "completed"
                         file_item["progress"] = 100
+                        file_item["current_step"] = "Complete"
 
-            # Find output files - fix path to be relative to project root
+            # Find output files - relative to project root
             output_dir = os.path.abspath('nomusic')
 
             # Support both audio and video filenames by stripping UUID if present
@@ -114,8 +220,6 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
 
             tasks[task_id]["result_files"] = result_files
             if instrumental_path:
-                # Also picked up by the directory scan above (shares the same base
-                # filename), but kept explicit too so the UI can distinguish it.
                 tasks[task_id]["instrumental_file"] = instrumental_path
 
             # Save to library
@@ -157,12 +261,16 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
             if batch_id and batch_id in tasks:
                 tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
                 tasks[batch_id]["failed"] = tasks[batch_id].get("failed", 0) + 1
-                tasks[batch_id]["status"] = "failed"
-                tasks[batch_id]["current_step"] = "File processing failed"
+                total_files = tasks[batch_id].get("total_files", 1)
+                if tasks[batch_id]["processed"] >= total_files:
+                    tasks[batch_id]["status"] = "completed" if tasks[batch_id]["success"] > 0 else "failed"
+                    tasks[batch_id]["current_step"] = "Batch finished"
+                
                 # Update file status in batch
                 for file_item in tasks[batch_id].get("files", []):
                     if file_item.get("task_id") == task_id:
                         file_item["status"] = "failed"
+                        file_item["current_step"] = "Failed"
 
             add_notification("error", "Separation Failed", f"Failed to process {filename}")
 
@@ -176,11 +284,33 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both", sk
         if batch_id and batch_id in tasks:
             tasks[batch_id]["processed"] = tasks[batch_id].get("processed", 0) + 1
             tasks[batch_id]["failed"] = tasks[batch_id].get("failed", 0) + 1
-            tasks[batch_id]["status"] = "failed"
-            tasks[batch_id]["current_step"] = f"Error: {error_msg[:50]}"
+            total_files = tasks[batch_id].get("total_files", 1)
+            if tasks[batch_id]["processed"] >= total_files:
+                tasks[batch_id]["status"] = "completed" if tasks[batch_id]["success"] > 0 else "failed"
+                tasks[batch_id]["current_step"] = "Batch finished"
+            
             # Update file status in batch
             for file_item in tasks[batch_id].get("files", []):
                 if file_item.get("task_id") == task_id:
                     file_item["status"] = "failed"
+                    file_item["current_step"] = f"Error: {error_msg[:50]}"
 
         add_notification("error", "Separation Error", f"Error processing '{file_path}': {error_msg[:100]}")
+
+
+def run_separation(task_id: str, file_path: str, duration=None, model="both",
+                   skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
+    """
+    Backwards-compatible interface. Automatically routes through the FIFO separation queue.
+    """
+    enqueue_separation(
+        task_id=task_id,
+        file_path=file_path,
+        duration=duration,
+        model=model,
+        skip_video_encoding=skip_video_encoding,
+        super_keyframe=super_keyframe,
+        resolution=resolution,
+        export_instrumental=export_instrumental,
+        remove_silence=remove_silence
+    )

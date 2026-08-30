@@ -46,7 +46,7 @@ except ImportError:
     # Fallback if running standalone (e.g. from CLI main.py)
     tracked_run = subprocess.run
 
-def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=2, pre_split_segments=None, want_instrumental=False):
+def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=4, pre_split_segments=None, want_instrumental=False):
     """
     Separates vocals using Demucs (htdemucs model).
     If audio is > 10 min, it splits the file into segments, processes them in parallel, and joins them back.

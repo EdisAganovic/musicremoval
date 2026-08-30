@@ -68,6 +68,8 @@ import {
   Video,
   AudioLines,
   Scissors,
+  Zap,
+  Monitor,
   Play,
   Music,
   ExternalLink
@@ -96,6 +98,8 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
   const [processingTime, setProcessingTime] = useState(null);
   const [detailedTimings, setDetailedTimings] = useState(null);
   const [skipVideoEncoding, setSkipVideoEncoding] = useState(false);
+  const [superKeyframe, setSuperKeyframe] = useState(false);
+  const [resolution, setResolution] = useState("1080p");
   const [previewMode, setPreviewMode] = useState(false);
   const [previewSeconds, setPreviewSeconds] = useState(30);
   const [instrumentalFile, setInstrumentalFile] = useState(null);
@@ -425,6 +429,8 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         selected_files: selectedFiles,
         model,
         skip_video_encoding: skipVideoEncoding,
+        super_keyframe: superKeyframe,
+        resolution: resolution,
         export_instrumental: exportInstrumental,
         remove_silence: removeSilence
       });
@@ -455,6 +461,8 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
           file_path: libraryFilePath,
           model,
           skip_video_encoding: skipVideoEncoding,
+          super_keyframe: superKeyframe,
+          resolution: resolution,
           duration: previewMode ? previewSeconds : null,
           export_instrumental: exportInstrumental,
           remove_silence: removeSilence
@@ -466,6 +474,8 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         formData.append("file", file);
         formData.append("model", model);
         formData.append("skip_video_encoding", skipVideoEncoding);
+        formData.append("super_keyframe", superKeyframe);
+        formData.append("resolution", resolution);
         formData.append("export_instrumental", exportInstrumental);
         formData.append("remove_silence", removeSilence);
         if (previewMode) {
@@ -563,108 +573,110 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         ))}
       </div>
 
-      {/* Skip Video Encoding Toggle */}
-      <div className="flex justify-center mb-6">
-        <label className="flex items-center space-x-3 cursor-pointer group">
-          <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${skipVideoEncoding ? 'bg-emerald-600' : 'bg-dark-700'}`}>
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={skipVideoEncoding}
-              onChange={() => setSkipVideoEncoding(!skipVideoEncoding)}
-            />
-            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${skipVideoEncoding ? 'translate-x-6' : ''}`} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
-              <Video className="w-4 h-4 text-emerald-400" />
-              Skip Video Encoding
-            </span>
-            <span className="text-[10px] text-gray-500">Fast mode: uses original video stream</span>
-          </div>
-        </label>
-      </div>
-
-      {/* Export Instrumental/Karaoke Toggle */}
-      <div className="flex justify-center mb-6">
-        <label className="flex items-center space-x-3 cursor-pointer group">
-          <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${exportInstrumental ? 'bg-accent-500' : 'bg-dark-700'}`}>
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={exportInstrumental}
-              onChange={() => setExportInstrumental(!exportInstrumental)}
-            />
-            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${exportInstrumental ? 'translate-x-6' : ''}`} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
-              <AudioLines className="w-4 h-4 text-accent-400" />
-              Also Export Instrumental
-            </span>
-            <span className="text-[10px] text-gray-500">Karaoke track from the same separation, no extra AI pass</span>
-          </div>
-        </label>
-      </div>
-
-      {/* Remove Silence Toggle */}
-      <div className="flex justify-center mb-6">
-        <label className="flex items-center space-x-3 cursor-pointer group">
-          <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${removeSilence ? 'bg-cyan-600' : 'bg-dark-700'}`}>
-            <input
-              type="checkbox"
-              className="sr-only"
-              checked={removeSilence}
-              onChange={() => setRemoveSilence(!removeSilence)}
-            />
-            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${removeSilence ? 'translate-x-6' : ''}`} />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
-              <Scissors className="w-4 h-4 text-cyan-400" />
-              Remove Silence (1s Padding)
-            </span>
-            <span className="text-[10px] text-gray-500">Cuts silence gaps while preserving 1s before & after vocal parts</span>
-          </div>
-        </label>
-      </div>
-
-      {/* Preview Mode Toggle - single file only, lets you A/B models on a short clip first */}
-      {processingMode === "single" && (
-        <div className="flex justify-center items-center gap-4 mb-6 flex-wrap">
+      {/* Options Grid (2 Columns) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto mb-6 bg-dark-900/60 p-4 rounded-xl border border-white/5 shadow-inner">
+        {/* Left Column */}
+        <div className="space-y-4">
+          {/* Skip Video Encoding Toggle */}
           <label className="flex items-center space-x-3 cursor-pointer group">
-            <div className={`relative w-12 h-6 rounded-full transition-all duration-300 ${previewMode ? 'bg-primary-600' : 'bg-dark-700'}`}>
+            <div className={`relative w-11 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${skipVideoEncoding ? 'bg-emerald-600' : 'bg-dark-700'}`}>
               <input
                 type="checkbox"
                 className="sr-only"
-                checked={previewMode}
-                onChange={() => setPreviewMode(!previewMode)}
+                checked={skipVideoEncoding}
+                onChange={() => setSkipVideoEncoding(!skipVideoEncoding)}
               />
-              <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${previewMode ? 'translate-x-6' : ''}`} />
+              <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${skipVideoEncoding ? 'translate-x-5' : ''}`} />
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
-                <RefreshCw className="w-4 h-4 text-primary-400" />
-                Quick Preview
+                <Video className="w-4 h-4 text-emerald-400" />
+                Skip Video Encoding
               </span>
-              <span className="text-[10px] text-gray-500">Only process the first few seconds to compare models fast</span>
+              <span className="text-[10px] text-gray-500">Fast mode: uses original video stream</span>
             </div>
           </label>
-          {previewMode && (
-            <div className="flex items-center gap-2">
+
+          {/* Remove Silence Toggle */}
+          <label className="flex items-center space-x-3 cursor-pointer group">
+            <div className={`relative w-11 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${removeSilence ? 'bg-cyan-600' : 'bg-dark-700'}`}>
               <input
-                type="number"
-                min="5"
-                max="300"
-                value={previewSeconds}
-                onChange={(e) => setPreviewSeconds(Math.max(5, Math.min(300, Number(e.target.value) || 30)))}
-                className="w-20 bg-dark-800 text-white text-sm text-center border border-white/10 rounded-lg px-2 py-1.5 outline-none focus:border-primary-500/50 transition-colors"
+                type="checkbox"
+                className="sr-only"
+                checked={removeSilence}
+                onChange={() => setRemoveSilence(!removeSilence)}
               />
-              <span className="text-xs text-gray-500">seconds</span>
+              <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${removeSilence ? 'translate-x-5' : ''}`} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-cyan-400" />
+                Remove Silence (1s Padding)
+              </span>
+              <span className="text-[10px] text-gray-500">Cuts silence gaps with 1s padding</span>
+            </div>
+          </label>
+
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-4">
+          {/* Super Keyframe Toggle */}
+          <label className="flex items-center space-x-3 cursor-pointer group">
+            <div className={`relative w-11 h-6 rounded-full transition-all duration-300 flex-shrink-0 ${superKeyframe ? 'bg-amber-500 shadow-lg shadow-amber-500/20' : 'bg-dark-700'}`}>
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={superKeyframe}
+                onChange={() => setSuperKeyframe(!superKeyframe)}
+              />
+              <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full transition-transform duration-300 ${superKeyframe ? 'translate-x-5' : ''}`} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-400" />
+                Super keyframe
+              </span>
+              <span className="text-[10px] text-gray-500">Parallel dual-NVENC chunked encode</span>
+            </div>
+          </label>
+
+
+          {/* Resolution Selector */}
+          {!skipVideoEncoding && (
+            <div className="flex items-center justify-between pt-0.5">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-blue-400" />
+                  Resolution
+                </span>
+                <span className="text-[10px] text-gray-500">Output video scale</span>
+              </div>
+              <div className="flex items-center bg-dark-800 rounded-lg p-0.5 border border-white/10 text-xs">
+                {[
+                  { label: "4K", value: "4k" },
+                  { label: "1080p", value: "1080p" },
+                  { label: "720p", value: "720p" },
+                  { label: "Original", value: "original" },
+                ].map((r) => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    onClick={() => setResolution(r.value)}
+                    className={`px-2 py-0.5 rounded-md transition-all text-xs font-semibold ${
+                      resolution === r.value
+                        ? "bg-blue-600 text-white shadow-sm shadow-blue-500/30"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
-      )}
+      </div>
 
       {processingMode === "folder" && (
         <motion.div

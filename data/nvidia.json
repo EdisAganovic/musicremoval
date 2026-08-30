@@ -1,0 +1,16 @@
+{
+  "cuda_available": true,
+  "gpu_name": "NVIDIA GeForce RTX 5070 Ti",
+  "vram_gb": 15.92,
+  "cuda_version": "12.8",
+  "nvenc_engines": 2,
+  "optimal_chunks": 4,
+  "max_concurrent_sessions": 5,
+  "supports_av1_nvenc": true,
+  "supports_hevc_nvenc": true,
+  "supports_h264_nvenc": true,
+  "recommended_preset": "p4",
+  "recommended_tune": "hq",
+  "device_count": 1,
+  "compute_capability": "12.0"
+}

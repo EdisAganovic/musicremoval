@@ -76,6 +76,8 @@ class SeparateRequest(BaseModel):
     file_path: str
     model: str = "both"
     skip_video_encoding: bool = False
+    super_keyframe: bool = False
+    resolution: Optional[str] = "1080p"
     duration: Optional[int] = None
     export_instrumental: bool = False
     remove_silence: bool = False
@@ -106,6 +108,8 @@ class FolderQueueProcessRequest(BaseModel):
     selected_files: Optional[List[str]] = None
     duration: Optional[int] = None
     skip_video_encoding: bool = False
+    super_keyframe: bool = False
+    resolution: Optional[str] = "1080p"
     export_instrumental: bool = False
     remove_silence: bool = False
 

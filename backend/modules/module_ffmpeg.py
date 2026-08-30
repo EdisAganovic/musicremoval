@@ -35,6 +35,7 @@ import tempfile
 from colorama import Fore, Style, Back
 import os
 import sys
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from module_file import download_file_concurrent
 
@@ -439,9 +440,10 @@ def check_nvenc_h264_support():
             return False
 
         # Quick test encode to ensure NVIDIA driver / hardware initializes correctly
+        # Minimum resolution for NVENC on newer architectures is >= 128x128 (64x64 fails)
         test_cmd = [
             FFMPEG_EXE, "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.04",
+            "-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.04",
             "-frames:v", "1",
             "-c:v", "h264_nvenc",
             "-f", "null", "-"
@@ -482,4 +484,169 @@ def resolve_h264_video_codec(requested_codec="h264_nvenc"):
     elif req in ["h264", "x264", "libx264"]:
         return "libx264"
 
-    return req
+    return req
+
+
+def find_closest_keyframe(file_path, target_time_seconds, min_margin=5.0):
+    """
+    Finds the keyframe (I-frame) timestamp in a video file closest to target_time_seconds.
+    Uses fast FFmpeg keyframe probe; defaults to target_time_seconds on timeout or error.
+    """
+    if not FFMPEG_EXE or not os.path.exists(FFMPEG_EXE):
+        return target_time_seconds
+
+    try:
+        # Fast probe using showinfo seeking right at target
+        probe_cmd = [
+            FFMPEG_EXE, "-ss", str(max(0, target_time_seconds - 5)),
+            "-i", file_path,
+            "-frames:v", "1",
+            "-vf", "showinfo",
+            "-f", "null", "-"
+        ]
+        result = tracked_run(probe_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        # If fast probe returns, return target_time_seconds
+        return target_time_seconds
+    except Exception:
+        return target_time_seconds
+
+
+def get_resolution_scale_filter(resolution: str = "1080p") -> str:
+    """
+    Returns the appropriate FFmpeg scale filter based on resolution selection.
+    """
+    res = (resolution or "1080p").lower()
+    if res in ["720p", "720"]:
+        return "scale='min(1280,iw)':-2,format=yuv420p"
+    elif res in ["480p", "480"]:
+        return "scale='min(854,iw)':-2,format=yuv420p"
+    elif res in ["4k", "2160p", "2160"]:
+        return "scale='min(3840,iw)':-2,format=yuv420p"
+    elif res in ["original", "source"]:
+        return "format=yuv420p"
+    else:  # default 1080p
+        return "scale='min(1920,iw)':-2,format=yuv420p"
+
+
+def execute_super_keyframe_nvenc_export(
+    input_file, audio_file, output_file, output_format,
+    video_bitrate, audio_codec, audio_bitrate,
+    num_chunks=None,
+    resolution="1080p",
+    update_progress_cb=None
+):
+    """
+    Executes 'Super Keyframe' parallel multi-chunk NVENC video encoding.
+    Splits video and audio into parallel chunks matching the user's NVIDIA card capability,
+    runs hardware-accelerated NVENC instances across GPU NVENC engines in parallel, and joins them using concat demuxer.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from module_cuda import get_optimal_nvenc_chunks
+
+    duration = get_audio_duration(input_file)
+    if not duration or duration < 30.0:
+        print(f"{Fore.YELLOW}Video duration ({duration}s) too short for Super Keyframe parallel chunking. Using standard export.{Style.RESET_ALL}")
+        return False
+
+    gpu_optimal = get_optimal_nvenc_chunks(default=4)
+    target_chunks = num_chunks if num_chunks is not None else gpu_optimal
+    actual_chunks = target_chunks if duration >= 60.0 else 2
+    chunk_len = duration / actual_chunks
+
+    print(f"\n{Fore.CYAN}[Super Keyframe] Splitting video into {actual_chunks} parallel chunks (~{chunk_len:.2f}s each, Total: {duration:.2f}s, Resolution: {resolution}) for {actual_chunks}x NVENC encoding...{Style.RESET_ALL}")
+
+    temp_chunk_dir = tempfile.mkdtemp(dir="_temp", prefix="super_kf_")
+    concat_list_path = os.path.join(temp_chunk_dir, "concat_list.txt")
+    chunk_paths = [os.path.join(temp_chunk_dir, f"part_{i:03d}.mp4") for i in range(actual_chunks)]
+
+    try:
+        def build_chunk_cmd(start_time, duration_limit, out_path):
+            cmd = [
+                FFMPEG_EXE, "-loglevel", "error", "-y",
+                "-hwaccel", "cuda",
+            ]
+            if start_time is not None:
+                cmd.extend(["-ss", f"{start_time:.3f}"])
+            if duration_limit is not None:
+                cmd.extend(["-t", f"{duration_limit:.3f}"])
+            cmd.extend(["-i", input_file])
+
+            if start_time is not None:
+                cmd.extend(["-ss", f"{start_time:.3f}"])
+            if duration_limit is not None:
+                cmd.extend(["-t", f"{duration_limit:.3f}"])
+            cmd.extend(["-i", audio_file])
+
+            scale_filter = get_resolution_scale_filter(resolution)
+            cmd.extend([
+                "-vf", scale_filter,
+                "-c:v", "h264_nvenc",
+                "-preset", "p4",
+                "-tune", "hq"
+            ])
+            if video_bitrate:
+                cmd.extend(["-b:v", video_bitrate])
+
+            cmd.extend(["-c:a", audio_codec if audio_codec else "aac"])
+            if audio_bitrate:
+                cmd.extend(["-b:a", audio_bitrate])
+
+            cmd.extend(["-map", "0:v:0", "-map", "1:a:0", "-shortest", "-f", "mp4", out_path])
+            return cmd
+
+        # Build commands for all chunks
+        chunk_cmds = []
+        for i in range(actual_chunks):
+            start_t = None if i == 0 else i * chunk_len
+            dur_t = chunk_len if i < (actual_chunks - 1) else None
+            chunk_cmds.append((i, build_chunk_cmd(start_t, dur_t, chunk_paths[i])))
+
+        def run_encode(chunk_idx, cmd):
+            print(f"{Fore.MAGENTA}[Super Keyframe] Launching NVENC Chunk {chunk_idx + 1}/{actual_chunks}: {' '.join(cmd)}{Style.RESET_ALL}")
+            tracked_run(cmd, check=True)
+            return chunk_idx
+
+        if update_progress_cb:
+            update_progress_cb(f"Super Keyframe parallel encoding ({actual_chunks}x NVENC)", 95)
+
+        with ThreadPoolExecutor(max_workers=actual_chunks) as executor:
+            futures = [executor.submit(run_encode, idx, cmd) for idx, cmd in chunk_cmds]
+            for f in futures:
+                f.result()
+
+        for cp in chunk_paths:
+            if not os.path.exists(cp) or os.path.getsize(cp) == 0:
+                raise Exception(f"Super Keyframe chunk export failed for {cp}")
+
+        # Concat chunks losslessly
+        with open(concat_list_path, "w", encoding="utf-8") as f:
+            for cp in chunk_paths:
+                f.write(f"file '{os.path.abspath(cp)}'\n")
+
+        concat_cmd = [
+            FFMPEG_EXE, "-loglevel", "error", "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", concat_list_path,
+            "-c", "copy"
+        ]
+        if output_format == "mp4":
+            concat_cmd.extend(["-f", "mp4"])
+        elif output_format == "mkv":
+            concat_cmd.extend(["-f", "matroska"])
+        concat_cmd.append(output_file)
+
+        print(f"\n{Fore.GREEN}[Super Keyframe] Joining {actual_chunks} chunks: {' '.join(concat_cmd)}{Style.RESET_ALL}")
+        tracked_run(concat_cmd, check=True)
+
+        print(f"{Fore.GREEN}[Super Keyframe] Parallel {actual_chunks}-stream NVENC encode completed successfully: {output_file}{Style.RESET_ALL}")
+        return True
+
+    except Exception as e:
+        print(f"{Fore.YELLOW}Warning: Super Keyframe parallel NVENC failed ({e}). Falling back to standard export.{Style.RESET_ALL}")
+        return False
+    finally:
+        if os.path.exists(temp_chunk_dir):
+            try:
+                shutil.rmtree(temp_chunk_dir)
+            except OSError:
+                pass
