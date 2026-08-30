@@ -28,6 +28,8 @@ def get_separation_queue_length():
 
 
 def enqueue_separation(task_id: str, file_path: str, duration=None, model="both",
+                       roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
+                       tiger_target="dialogue_sfx", tiger_overlap=50,
                        skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
     """
     Adds a separation task to the FIFO queue and ensures the background worker is running.
@@ -41,6 +43,9 @@ def enqueue_separation(task_id: str, file_path: str, duration=None, model="both"
         "file_path": file_path,
         "duration": duration,
         "model": model,
+        "roformer_model": roformer_model,
+        "tiger_target": tiger_target,
+        "tiger_overlap": tiger_overlap,
         "skip_video_encoding": skip_video_encoding,
         "super_keyframe": super_keyframe,
         "resolution": resolution,
@@ -103,6 +108,9 @@ def _separation_worker_loop():
                 file_path=item["file_path"],
                 duration=item["duration"],
                 model=item["model"],
+                roformer_model=item.get("roformer_model", "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"),
+                tiger_target=item.get("tiger_target", "dialogue_sfx"),
+                tiger_overlap=item.get("tiger_overlap", 50),
                 skip_video_encoding=item.get("skip_video_encoding", False),
                 super_keyframe=item.get("super_keyframe", False),
                 resolution=item.get("resolution", "1080p"),
@@ -118,6 +126,8 @@ def _separation_worker_loop():
 
 
 def _execute_separation(task_id: str, file_path: str, duration=None, model="both",
+                        roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
+                        tiger_target="dialogue_sfx", tiger_overlap=50,
                         skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
     """
     Internal execution of vocal separation on a single file.
@@ -165,7 +175,9 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model="both
         filename = os.path.basename(file_path)
         success_result, phase_timings, instrumental_path = process_file(
             file_path, keep_temp=False, duration=duration, progress_callback=on_progress,
-            model=model, skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
+            model=model, roformer_model=roformer_model,
+            tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+            skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
             resolution=resolution,
             export_instrumental=export_instrumental, remove_silence=remove_silence
         )

@@ -41,9 +41,15 @@ import sys
 import os
 import re
 import time
+import warnings
 from colorama import Fore, Style
 from module_ffmpeg import get_video_resolution
 from utils.validation import sanitize_filename
+
+# Suppress harmless yt-dlp deprecation/cffi warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="yt_dlp.*")
+warnings.filterwarnings("ignore", message=".*Deprecated Feature.*")
+warnings.filterwarnings("ignore", message=".*curl_cffi.*")
 
 try:
     from services.process_manager import tracked_run

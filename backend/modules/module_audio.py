@@ -298,7 +298,7 @@ def mix_audio_tracks(track1_path, track2_path, output_mixed_path, volume1=0.5, v
         # Write the mixed audio to file
         sf.write(output_mixed_path, mixed_audio, sr1)
 
-        print(f"{Fore.GREEN}\N{check mark} Audio tracks mixed successfully and saved to {output_mixed_path}.{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}[OK] Audio tracks mixed successfully and saved to {output_mixed_path}.{Style.RESET_ALL}")
         return output_mixed_path
 
     except FileNotFoundError:

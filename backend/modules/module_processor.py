@@ -38,11 +38,18 @@ DEPENDENCIES:
 """
 import json
 import os
+import sys
 import subprocess
 import tempfile
 import shutil
 import time
 from colorama import Fore, Back, Style
+
+# Ensure UTF-8 output on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 try:
     from services.process_manager import tracked_run
@@ -380,7 +387,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
         return None
 
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p"):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt", tiger_target="dialogue_sfx", tiger_overlap=50, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p"):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -547,16 +554,17 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
         # Shared segmentation logic to avoid double splitting (for files > 10 min)
         SEGMENT_DURATION = 600
-        if original_duration and original_duration > SEGMENT_DURATION:
-            print(f"\n{Fore.YELLOW}Audio duration ({original_duration:.2f}s) exceeds 10 minutes. Splitting audio ONCE for all models...{Style.RESET_ALL}\n")
+        actual_extracted_duration = get_audio_duration(temp_audio_wav_path) or original_duration
+        if actual_extracted_duration and actual_extracted_duration > SEGMENT_DURATION:
+            print(f"\n{Fore.YELLOW}Audio duration ({actual_extracted_duration:.2f}s) exceeds 10 minutes. Splitting audio ONCE for all models...{Style.RESET_ALL}\n")
             shared_segments_dir = tempfile.mkdtemp(dir=TEMP_DIR)
             temp_dirs_to_cleanup.append(shared_segments_dir)
             shared_segments = []
             
             curr_start = 0
             seg_idx = 0
-            while curr_start < original_duration:
-                seg_dur = min(SEGMENT_DURATION, original_duration - curr_start)
+            while curr_start < actual_extracted_duration:
+                seg_dur = min(SEGMENT_DURATION, actual_extracted_duration - curr_start)
                 seg_name = f"part_{seg_idx:03d}.wav"
                 seg_path = os.path.join(shared_segments_dir, seg_name)
                 
@@ -587,6 +595,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             roformer_out_path = os.path.join(task_workspace, "roformer_out")
             dialogue_sfx_path, roformer_music_path, temp_roformer_dir = separate_with_roformer(
                 temp_audio_wav_path, roformer_out_path, base_audio_name_no_ext,
+                model_filename=roformer_model,
                 pre_split_segments=shared_segments, want_instrumental=export_instrumental
             )
             r_end = time.time()
@@ -613,6 +622,9 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             tiger_out_path = os.path.join(task_workspace, "tiger_out")
             dialogue_sfx_path, tiger_music_path, temp_tiger_dir = separate_with_tiger(
                 temp_audio_wav_path, tiger_out_path, base_audio_name_no_ext,
+                tiger_target=tiger_target,
+                tiger_overlap=tiger_overlap,
+                progress_callback=update_progress,
                 want_instrumental=export_instrumental
             )
             t_end = time.time()

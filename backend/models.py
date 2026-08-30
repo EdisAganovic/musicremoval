@@ -75,6 +75,9 @@ class FileActionRequest(BaseModel):
 class SeparateRequest(BaseModel):
     file_path: str
     model: str = "both"
+    roformer_model: Optional[str] = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
+    tiger_target: Optional[str] = "dialogue_sfx"
+    tiger_overlap: Optional[int] = 50
     skip_video_encoding: bool = False
     super_keyframe: bool = False
     resolution: Optional[str] = "1080p"
@@ -105,6 +108,9 @@ class FolderQueueRemoveRequest(BaseModel):
 class FolderQueueProcessRequest(BaseModel):
     queue_id: str
     model: str = "both"
+    roformer_model: Optional[str] = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
+    tiger_target: Optional[str] = "dialogue_sfx"
+    tiger_overlap: Optional[int] = 50
     selected_files: Optional[List[str]] = None
     duration: Optional[int] = None
     skip_video_encoding: bool = False

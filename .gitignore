@@ -1,39 +1,86 @@
+# =======================================================
+# DemucsPleeter Git Ignore Rules
+# =======================================================
+
+# Media & Storage Folders
 /download/
+/downloads/
 /uploads/
 /nomusic/
-/pretrained_models/
 /patrolne/
 /spleeter_out/
 /demucs_out/
 /_temp/
 /_processing_intermediates/
 /ffmpeg_shared/
+
+# Pretrained Neural Models & Large Weights
+/pretrained_models/
+*.ckpt
+*.pth
+*.pt
+*.safetensors
+*.tflite
+*.onnx
+*.bin
+
+# Python Virtual Environment & Cache
+.venv/
 .ENV
-/backend/__pycache__/
-/backend/modules/__pycache__
-/backend/_processing_intermediates/
-/backend/services/__pycache__/
-uv.lock
-GEMINI.MD
-.venv
-/src/
-/__pycache__/
+venv/
+env/
+__pycache__/
 **/__pycache__/
-/modules/__pycache__/
+*.py[cod]
+*$py.class
+uv.lock
+
+# Frontend Builds & Dependencies
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+dist/
+
+# Audio & Video Media Files
+*.mp4
+*.mkv
+*.webm
+*.avi
+*.mov
+*.flv
+*.wmv
+*.mp3
+*.wav
+*.aac
+*.flac
+*.ogg
+*.m4a
+*.wma
+
+# Binaries & Executables
+ffmpeg.exe
+ffprobe.exe
+**/ffmpeg.exe
+**/ffprobe.exe
+
+# Database & User State
 data/download_queue.json
 data/library.json
 data/metadata_cache.json
 data/notifications.json
 data/tasks.json
 data/video.json
-*.mp4
-*.mp3
-*.mkv
-*.aac
-*.webm
-ffmpeg.exe
-ffprobe.exe
+
+# Logs & Credentials
 log.txt
+*.log
 cookies.txt
 data/cookies.txt
 **/cookies.txt
+.env
+.env.*
+!.env.example
+
+# Documentation & Scratch
+GEMINI.MD

@@ -92,12 +92,61 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
   const [error, setError] = useState(null);
   const [resultFiles, setResultFiles] = useState([]);
   const [model, setModel] = useState("both");
+  const [roformerModel, setRoformerModel] = useState("mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt");
+  const [tigerTarget, setTigerTarget] = useState("dialogue_sfx");
+  const [tigerOverlap, setTigerOverlap] = useState(50);
   const [metadata, setMetadata] = useState(null);
   const [processingMode, setProcessingMode] = useState("single");
   const [isScanning, setIsScanning] = useState(false);
   const [processingTime, setProcessingTime] = useState(null);
   const [detailedTimings, setDetailedTimings] = useState(null);
   const [skipVideoEncoding, setSkipVideoEncoding] = useState(false);
+
+  const TIGER_TARGETS = [
+    { id: "dialogue_sfx", name: "🎬 Dialogue + SFX (No Music)", desc: "Clean dialogue with 100% cartoon Foley & sound effects" },
+    { id: "dialogue", name: "🗣️ Dialogue Only", desc: "Pure speech isolation (ideal for voiceovers / dubbing)" },
+    { id: "sfx", name: "💥 SFX / Foley Only", desc: "Pure cartoon sound effects, hits & atmosphere (no speech or music)" },
+    { id: "music", name: "🎼 Music Only", desc: "Isolates only the background musical score" }
+  ];
+
+  const ROFORMER_MODELS = [
+    {
+      id: "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
+      name: "🎬 Mel-Band Roformer Crowd & BGM",
+      desc: "Best for Cartoons, Anime & Movies (Preserves Speech, Shouts & Foley)",
+      badge: "Recommended"
+    },
+    {
+      id: "model_mel_band_roformer_ep_3_sdr_14.8359.ckpt",
+      name: "🎥 MSST Film & Cartoon SFX Stripper",
+      desc: "Specialized MSST Film Model (Ultra-high SDR 14.84 for Music vs SFX+Dialogue)",
+      badge: "Film SFX HQ"
+    },
+    {
+      id: "MDX23C-8KFFT-InstVoc_HQ.ckpt",
+      name: "🎨 MDX23C InstVoc HQ",
+      desc: "Gentle Cartoon Mode (Preserves Musical/Synth Sound Effects)",
+      badge: "Cartoon SFX"
+    },
+    {
+      id: "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt",
+      name: "🎼 Mel-Band Roformer Karaoke",
+      desc: "Heavy Score Stripper (Action Movies & Loud Soundtracks)",
+      badge: "High SDR"
+    },
+    {
+      id: "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt",
+      name: "🏛️ Mel-Band Roformer De-Reverb",
+      desc: "Studio Clean Dialogue (Strips Room Reverb & Hall Echo)",
+      badge: "De-Echo"
+    },
+    {
+      id: "mel_band_roformer_bleed_suppressor_v1.ckpt",
+      name: "🧹 Mel-Band Roformer Bleed Suppressor",
+      desc: "Cleans High-Frequency Bleed from Vintage / Noisy Audio",
+      badge: "Clean Bleed"
+    }
+  ];
   const [superKeyframe, setSuperKeyframe] = useState(false);
   const [resolution, setResolution] = useState("1080p");
   const [previewMode, setPreviewMode] = useState(false);
@@ -433,6 +482,9 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         queue_id: queueId,
         selected_files: selectedFiles,
         model,
+        roformer_model: roformerModel,
+        tiger_target: tigerTarget,
+        tiger_overlap: tigerOverlap,
         skip_video_encoding: skipVideoEncoding,
         super_keyframe: superKeyframe,
         resolution: resolution,
@@ -465,6 +517,9 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         const response = await axios.post(`${BACKEND_URL}/api/separate-file`, {
           file_path: libraryFilePath,
           model,
+          roformer_model: roformerModel,
+          tiger_target: tigerTarget,
+          tiger_overlap: tigerOverlap,
           skip_video_encoding: skipVideoEncoding,
           super_keyframe: superKeyframe,
           resolution: resolution,
@@ -478,6 +533,9 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
         const formData = new FormData();
         formData.append("file", file);
         formData.append("model", model);
+        formData.append("roformer_model", roformerModel);
+        formData.append("tiger_target", tigerTarget);
+        formData.append("tiger_overlap", tigerOverlap);
         formData.append("skip_video_encoding", skipVideoEncoding);
         formData.append("super_keyframe", superKeyframe);
         formData.append("resolution", resolution);
@@ -582,6 +640,124 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
           </button>
         ))}
       </div>
+
+      {/* Roformer Architecture Dropdown */}
+      {model === "roformer" && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-primary-950/40 via-dark-900 to-primary-950/40 p-4 rounded-xl border border-primary-500/30 shadow-lg mb-6 max-w-2xl mx-auto"
+        >
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-primary-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Music className="w-3.5 h-3.5" />
+                <span>Roformer BGM Neural Checkpoint</span>
+              </label>
+              <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                NVIDIA CUDA Accelerated
+              </span>
+            </div>
+            
+            <div className="relative">
+              <select
+                value={roformerModel}
+                onChange={(e) => setRoformerModel(e.target.value)}
+                style={{ backgroundColor: '#0f172a', color: '#f8fafc' }}
+                className="w-full bg-[#0f172a] border border-primary-500/40 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium text-white shadow-inner focus:outline-none focus:border-primary-400 focus:ring-1 focus:ring-primary-400 cursor-pointer appearance-none pr-10"
+              >
+                {ROFORMER_MODELS.map((item) => (
+                  <option key={item.id} value={item.id} style={{ backgroundColor: '#0f172a', color: '#f8fafc' }} className="bg-[#0f172a] text-gray-100 py-2">
+                    {item.name} [{item.badge}]
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-primary-400">
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                  <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                </svg>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 italic pt-1">
+              💡 {ROFORMER_MODELS.find(m => m.id === roformerModel)?.desc}
+            </p>
+          </div>
+        </motion.div>
+      )}
+
+      {/* TIGER-DnR Options Panel */}
+      {model === "tiger" && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-amber-950/40 via-dark-900 to-amber-950/40 p-4 rounded-xl border border-amber-500/30 shadow-lg mb-6 max-w-2xl mx-auto"
+        >
+          <div className="flex flex-col space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🐯 TIGER-DnR 3-Stem Extraction Engine</span>
+              </label>
+              <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                PyTorch CUDA Tensor Cores (FP16)
+              </span>
+            </div>
+
+            {/* Target Stem Selector */}
+            <div className="space-y-1">
+              <span className="text-[11px] font-semibold text-gray-300 uppercase">Target Extraction Track:</span>
+              <div className="relative">
+                <select
+                  value={tigerTarget}
+                  onChange={(e) => setTigerTarget(e.target.value)}
+                  style={{ backgroundColor: '#0f172a', color: '#f8fafc' }}
+                  className="w-full bg-[#0f172a] border border-amber-500/40 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium text-white shadow-inner focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 cursor-pointer appearance-none pr-10"
+                >
+                  {TIGER_TARGETS.map((t) => (
+                    <option key={t.id} value={t.id} style={{ backgroundColor: '#0f172a', color: '#f8fafc' }} className="bg-[#0f172a] text-gray-100 py-2">
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-amber-400">
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                    <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                  </svg>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 italic pt-0.5">
+                💡 {TIGER_TARGETS.find(t => t.id === tigerTarget)?.desc}
+              </p>
+            </div>
+
+            {/* Overlap & Quality Selector */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-200">Overlap Precision (Hann Window)</span>
+                <span className="text-[10px] text-gray-400">
+                  {tigerOverlap >= 75 ? "4-pass smooth crossfade (Best for classical & complex scores)" : "Standard 2-pass crossfade (Fast - 4.8x realtime)"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 bg-dark-950 p-1 rounded-lg border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setTigerOverlap(50)}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${tigerOverlap === 50 ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                  50% (Fast)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTigerOverlap(75)}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${tigerOverlap === 75 ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                >
+                  75% (Ultra-HQ)
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Options Grid (2 Columns) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto mb-6 bg-dark-900/60 p-4 rounded-xl border border-white/5 shadow-inner">

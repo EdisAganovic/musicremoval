@@ -17,6 +17,8 @@ router = APIRouter(prefix="/api", tags=["separation"])
 
 def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, filename: str,
                              metadata: dict, model: str, skip_video_encoding: bool, current_step: str,
+                             roformer_model: str = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
+                             tiger_target: str = "dialogue_sfx", tiger_overlap: int = 50,
                              duration: int = None, export_instrumental: bool = False, remove_silence: bool = False,
                              super_keyframe: bool = False, resolution: str = "1080p"):
     """
@@ -68,6 +70,8 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
 
     enqueue_separation(
         task_id=task_id, file_path=file_path, duration=duration, model=model,
+        roformer_model=roformer_model,
+        tiger_target=tiger_target, tiger_overlap=tiger_overlap,
         skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
         resolution=resolution,
         export_instrumental=export_instrumental, remove_silence=remove_silence
@@ -77,15 +81,13 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
 
 
 @router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: int = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False)):
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), roformer_model: str = Form("mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"), tiger_target: str = Form("dialogue_sfx"), tiger_overlap: int = Form(50), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: int = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False)):
     """Upload and separate vocals from an audio file."""
     from modules.module_ffmpeg import get_file_metadata
     from colorama import Fore, Style
 
     upload_dir = "uploads"
     os.makedirs(upload_dir, exist_ok=True)
-    # Filename gets its own uuid prefix (independent of the task_id created below)
-    # to keep uploaded files unique on disk even before a task exists.
     file_path = os.path.join(upload_dir, f"{uuid.uuid4()}_{file.filename}")
 
     with open(file_path, "wb") as buffer:
@@ -100,7 +102,10 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
 
     task_id, batch_id = _create_separation_task(
         background_tasks, file_path, file.filename, metadata,
-        model, skip_video_encoding, "File uploaded", duration=duration,
+        model, skip_video_encoding, "File uploaded",
+        roformer_model=roformer_model,
+        tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+        duration=duration,
         export_instrumental=export_instrumental, remove_silence=remove_silence,
         super_keyframe=super_keyframe, resolution=resolution
     )
@@ -116,6 +121,9 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
 
     file_path = payload.file_path
     model = payload.model
+    roformer_model = payload.roformer_model or "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
+    tiger_target = payload.tiger_target or "dialogue_sfx"
+    tiger_overlap = payload.tiger_overlap or 50
     skip_video_encoding = payload.skip_video_encoding
     super_keyframe = payload.super_keyframe
     resolution = payload.resolution or "1080p"
@@ -134,7 +142,10 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
 
     task_id, batch_id = _create_separation_task(
         background_tasks, file_path, os.path.basename(file_path), metadata,
-        model, skip_video_encoding, "File queued for separation", duration=duration,
+        model, skip_video_encoding, "File queued for separation",
+        roformer_model=roformer_model,
+        tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+        duration=duration,
         export_instrumental=export_instrumental, remove_silence=payload.remove_silence,
         super_keyframe=super_keyframe, resolution=resolution
     )
@@ -384,6 +395,9 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             file_path=file_path,
             duration=payload.duration if hasattr(payload, 'duration') else None,
             model=payload.model,
+            roformer_model=payload.roformer_model or "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
+            tiger_target=payload.tiger_target or "dialogue_sfx",
+            tiger_overlap=payload.tiger_overlap or 50,
             skip_video_encoding=payload.skip_video_encoding,
             super_keyframe=payload.super_keyframe,
             resolution=payload.resolution or "1080p",
