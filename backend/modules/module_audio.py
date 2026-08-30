@@ -211,7 +211,7 @@ def align_audio_tracks(track1_path, track2_path, output_aligned_track1_path, out
         sf.write(output_aligned_track1_path, aligned_audio1, sr1)
         sf.write(output_aligned_track2_path, aligned_audio2, sr2)
 
-        print(f"{Fore.GREEN}\N{check mark} Audio tracks aligned and saved.{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}[OK] Audio tracks aligned and saved.{Style.RESET_ALL}")
         return output_aligned_track1_path, output_aligned_track2_path
 
     except FileNotFoundError:
