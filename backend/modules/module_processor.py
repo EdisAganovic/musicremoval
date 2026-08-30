@@ -584,7 +584,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.CYAN}Starting Mel-Band Roformer BGM separation (Cartoon / Movie Mode)...{Style.RESET_ALL}")
             r_start = time.time()
             update_progress("Running Mel-Band Roformer BGM", 40)
-            roformer_out_path = os.path.join(temp_workspace, "roformer_out")
+            roformer_out_path = os.path.join(task_workspace, "roformer_out")
             dialogue_sfx_path, roformer_music_path, temp_roformer_dir = separate_with_roformer(
                 temp_audio_wav_path, roformer_out_path, base_audio_name_no_ext,
                 pre_split_segments=shared_segments, want_instrumental=export_instrumental
@@ -610,7 +610,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.CYAN}Starting TIGER-DnR separation (Cinematic 3-Stem Model)...{Style.RESET_ALL}")
             t_start = time.time()
             update_progress("Running TIGER-DnR", 40)
-            tiger_out_path = os.path.join(temp_workspace, "tiger_out")
+            tiger_out_path = os.path.join(task_workspace, "tiger_out")
             dialogue_sfx_path, tiger_music_path, temp_tiger_dir = separate_with_tiger(
                 temp_audio_wav_path, tiger_out_path, base_audio_name_no_ext,
                 want_instrumental=export_instrumental
