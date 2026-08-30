@@ -123,21 +123,28 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 try:
                     tracked_run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 except subprocess.CalledProcessError as e:
-                    tqdm.write(f"{Fore.YELLOW}Warning: Demucs failed for segment {segment_base_name}.{Style.RESET_ALL}")
-                    if e.stderr:
-                        tqdm.write(f"{Fore.RED}Demucs Error: {e.stderr[:500]}{Style.RESET_ALL}")
-                    # Create silence fallback
-                    os.makedirs(os.path.dirname(segment_vocal_path), exist_ok=True)
-                    silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", segment_vocal_path]
-                    try:
-                        tracked_run(silence_cmd, check=True)
-                    except (subprocess.CalledProcessError, OSError):
-                        return i, None, None
+                    err_msg = e.stderr or e.stdout or str(e)
+                    print(f"\n{Fore.RED}{'='*70}")
+                    print(f"[FATAL CHUNK ERROR] Demucs failed on Segment {i+1}/{len(split_audio_paths)}")
+                    print(f"Segment Audio File: {segment_path}")
+                    print(f"Command Executed: {' '.join(demucs_cmd)}")
+                    print(f"Error Details:\n{err_msg}")
+                    print(f"{'='*70}{Style.RESET_ALL}\n")
+                    raise RuntimeError(f"Demucs failed on segment {i+1} ({os.path.basename(segment_path)}): {err_msg[:300]}")
+                except Exception as e:
+                    print(f"\n{Fore.RED}[FATAL CHUNK ERROR] Demucs unexpected error on Segment {i+1}: {e}{Style.RESET_ALL}\n")
+                    raise
 
-                if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
-                    no_vocals = segment_no_vocals_path if (want_instrumental and os.path.exists(segment_no_vocals_path) and os.path.getsize(segment_no_vocals_path) > 0) else None
-                    return i, segment_vocal_path, no_vocals
-                return i, None, None
+                if not (os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 1024):
+                    print(f"\n{Fore.RED}{'='*70}")
+                    print(f"[FATAL CHUNK ERROR] Demucs produced missing or empty vocals on Segment {i+1}")
+                    print(f"Expected File: {segment_vocal_path}")
+                    print(f"Source Segment: {segment_path}")
+                    print(f"{'='*70}{Style.RESET_ALL}\n")
+                    raise RuntimeError(f"Demucs produced empty vocals on segment {i+1} ({os.path.basename(segment_path)})")
+
+                no_vocals = segment_no_vocals_path if (want_instrumental and os.path.exists(segment_no_vocals_path) and os.path.getsize(segment_no_vocals_path) > 0) else None
+                return i, segment_vocal_path, no_vocals
 
             # Execute in parallel
             results = [None] * len(split_audio_paths)
@@ -147,37 +154,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 with tqdm(total=len(split_audio_paths), desc="Demucs Parallel", unit="seg") as pbar:
                     for future in as_completed(futures):
                         i, segment_path = futures[future]
-                        try:
-                            idx, vocal_path, no_vocals_path = future.result()
-                        except Exception as e:
-                            print(f"{Fore.YELLOW}Demucs worker exception on segment {i+1}: {e}{Style.RESET_ALL}")
-                            idx, vocal_path, no_vocals_path = i, None, None
-
-                        # Double check: ensure valid vocal file exists or generate exact silence fallback
-                        if not (vocal_path and os.path.exists(vocal_path) and os.path.getsize(vocal_path) > 1024):
-                            segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
-                            fallback_vocal_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "vocals.wav")
-                            os.makedirs(os.path.dirname(fallback_vocal_path), exist_ok=True)
-                            print(f"{Fore.YELLOW}[Double-Check] Generating silence fallback for Demucs segment {i+1}/{len(split_audio_paths)} to prevent timeline shift...{Style.RESET_ALL}")
-                            silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", fallback_vocal_path]
-                            try:
-                                tracked_run(silence_cmd, check=True)
-                                vocal_path = fallback_vocal_path
-                            except Exception as e:
-                                print(f"{Fore.RED}Failed to create silence fallback for segment {i+1}: {e}{Style.RESET_ALL}")
-
-                        # Double check: ensure valid no_vocals file exists if requested
-                        if want_instrumental and not (no_vocals_path and os.path.exists(no_vocals_path) and os.path.getsize(no_vocals_path) > 1024):
-                            segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
-                            fallback_no_vocals_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "no_vocals.wav")
-                            os.makedirs(os.path.dirname(fallback_no_vocals_path), exist_ok=True)
-                            silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", fallback_no_vocals_path]
-                            try:
-                                tracked_run(silence_cmd, check=True)
-                                no_vocals_path = fallback_no_vocals_path
-                            except Exception:
-                                pass
-
+                        idx, vocal_path, no_vocals_path = future.result()
                         results[i] = (vocal_path, no_vocals_path)
                         pbar.update(1)
 

@@ -130,8 +130,6 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
                 
                 if use_docker:
-                    # Docker command
-                    # We volume map the input file directory and the output directory
                     input_dir = os.path.dirname(os.path.abspath(segment_path))
                     input_file = os.path.basename(segment_path)
                     output_dir_abs = os.path.abspath(spleeter_out_path)
@@ -146,20 +144,38 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                         "separate", "-p", "spleeter:2stems", "-o", "/output", f"/input/{input_file}"
                     ]
                 else:
-                    # Local command
                     spleeter_cmd = [sys.executable, "-m", "spleeter", "separate", "-p", "spleeter:2stems", "-o", spleeter_out_path, segment_path]
                 
-                # tqdm.write(f"{Fore.MAGENTA}Processing segment {i+1} with {'Docker' if use_docker else 'Local Spleeter'}{Style.RESET_ALL}")
-                
-                # Set up environment for local spleeter to find models
                 env = os.environ.copy()
                 if not use_docker:
                     env["MODEL_PATH"] = MODEL_DIRECTORY_HOST
                 
-                tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
+                try:
+                    res = tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
+                except subprocess.CalledProcessError as e:
+                    err_msg = e.stderr or e.stdout or str(e)
+                    print(f"\n{Fore.RED}{'='*70}")
+                    print(f"[FATAL CHUNK ERROR] Spleeter failed on Segment {i+1}/{len(split_audio_paths)}")
+                    print(f"Segment Audio File: {segment_path}")
+                    print(f"Command Executed: {' '.join(spleeter_cmd)}")
+                    print(f"Error Details:\n{err_msg}")
+                    print(f"{'='*70}{Style.RESET_ALL}\n")
+                    raise RuntimeError(f"Spleeter failed on segment {i+1} ({os.path.basename(segment_path)}): {err_msg[:300]}")
+                except Exception as e:
+                    print(f"\n{Fore.RED}[FATAL CHUNK ERROR] Spleeter unexpected error on Segment {i+1}: {e}{Style.RESET_ALL}\n")
+                    raise
 
                 segment_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
                 segment_no_vocals_path = os.path.join(spleeter_out_path, segment_base_name, "accompaniment.wav")
+
+                if not (os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 1024):
+                    print(f"\n{Fore.RED}{'='*70}")
+                    print(f"[FATAL CHUNK ERROR] Spleeter produced missing or empty vocals on Segment {i+1}")
+                    print(f"Expected File: {segment_vocal_path}")
+                    print(f"Source Segment: {segment_path}")
+                    print(f"{'='*70}{Style.RESET_ALL}\n")
+                    raise RuntimeError(f"Spleeter produced empty vocals on segment {i+1} ({os.path.basename(segment_path)})")
+
                 return segment_vocal_path, segment_no_vocals_path
 
             # Use ThreadPoolExecutor for parallel processing
@@ -169,37 +185,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 futures = {executor.submit(process_segment, i, path): (i, path) for i, path in enumerate(split_audio_paths)}
                 for future in tqdm(concurrent.futures.as_completed(futures), total=len(split_audio_paths), desc="Spleeter segments", unit="seg"):
                     i, segment_path = futures[future]
-                    try:
-                        segment_vocal_path, segment_no_vocals_path = future.result()
-                    except Exception as e:
-                        print(f"{Fore.YELLOW}Spleeter worker exception on segment {i+1}: {e}{Style.RESET_ALL}")
-                        segment_vocal_path, segment_no_vocals_path = None, None
-
-                    # Double check: ensure valid vocal file exists or generate exact silence fallback
-                    if not (segment_vocal_path and os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 1024):
-                        segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
-                        fallback_vocal_path = os.path.join(spleeter_out_path, segment_base_name, "vocals.wav")
-                        os.makedirs(os.path.dirname(fallback_vocal_path), exist_ok=True)
-                        print(f"{Fore.YELLOW}[Double-Check] Generating silence fallback for Spleeter segment {i+1}/{len(split_audio_paths)} to prevent timeline shift...{Style.RESET_ALL}")
-                        silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", fallback_vocal_path]
-                        try:
-                            tracked_run(silence_cmd, check=True)
-                            segment_vocal_path = fallback_vocal_path
-                        except Exception as e:
-                            print(f"{Fore.RED}Failed to create silence fallback for segment {i+1}: {e}{Style.RESET_ALL}")
-
-                    # Double check: ensure valid accompaniment file exists if requested
-                    if want_instrumental and not (segment_no_vocals_path and os.path.exists(segment_no_vocals_path) and os.path.getsize(segment_no_vocals_path) > 1024):
-                        segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
-                        fallback_no_vocals_path = os.path.join(spleeter_out_path, segment_base_name, "accompaniment.wav")
-                        os.makedirs(os.path.dirname(fallback_no_vocals_path), exist_ok=True)
-                        silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", segment_path, "-af", "volume=0", fallback_no_vocals_path]
-                        try:
-                            tracked_run(silence_cmd, check=True)
-                            segment_no_vocals_path = fallback_no_vocals_path
-                        except Exception:
-                            pass
-
+                    segment_vocal_path, segment_no_vocals_path = future.result()
                     results[i] = (segment_vocal_path, segment_no_vocals_path)
 
             spleeter_segment_vocal_paths = [r[0] for r in results if r and r[0]]
