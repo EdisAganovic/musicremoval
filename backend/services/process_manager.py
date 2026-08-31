@@ -97,6 +97,13 @@ def tracked_run(cmd, **kwargs):
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.PIPE
 
+    # On Windows, ensure UTF-8 encoding with error replacement to prevent cp1252/charmap UnicodeDecodeErrors
+    if kwargs.get("text") or kwargs.get("universal_newlines"):
+        if "encoding" not in kwargs:
+            kwargs["encoding"] = "utf-8"
+        if "errors" not in kwargs:
+            kwargs["errors"] = "replace"
+
     proc = subprocess.Popen(cmd, **kwargs)
 
     with _lock:

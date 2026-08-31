@@ -971,122 +971,147 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                       </div>
                     </div>
                   )}
-
-                  {/* Processing Mode - Show Progress */}
                   {status === "processing" && (
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2 text-xs text-gray-500">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Processing files...</span>
+                    <div className="flex items-center justify-between mb-3 bg-primary-950/40 p-3 rounded-xl border border-primary-500/30 shadow-inner">
+                      <div className="flex items-center space-x-2.5 text-xs">
+                        <Loader2 className="w-4 h-4 animate-spin text-primary-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <span className="text-gray-400">Current Action: </span>
+                          <span className="text-white font-bold tracking-tight">{currentStep || "Processing..."}</span>
+                        </div>
                       </div>
-                      <div className="text-xs font-bold text-primary-400">
-                        {Math.round(progress)}% Complete
+                      <div className="text-xs font-mono font-black text-primary-400 bg-primary-500/20 px-2.5 py-1 rounded-lg border border-primary-500/30 flex-shrink-0">
+                        {Math.round(progress)}% Total
                       </div>
                     </div>
                   )}
 
                   <div className="max-h-80 overflow-y-auto space-y-2 pr-2" ref={batchListRef}>
-                    {batchFiles.map((fileInfo, idx) => (
-                      <div
-                        key={`batch-file-${fileInfo.task_id || fileInfo.id || idx}-${idx}`}
-                        className={`flex items-center justify-between p-3 rounded-lg border transition-all ${status === "processing"
-                          ? (fileInfo.status === "completed" ? "bg-emerald-600/10 border-emerald-500/30" :
-                            fileInfo.status === "failed" ? "bg-red-600/10 border-red-500/30" :
-                              fileInfo.status === "processing" ? "bg-primary-600/10 border-primary-500/30" :
-                                "bg-dark-800/80 border-white/10")
-                          : (fileInfo.selected ? "bg-dark-800/80 border-white/10" : "bg-dark-900/50 border-white/5 opacity-60")
-                          }`}
-                      >
-                        <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    {batchFiles.map((fileInfo, idx) => {
+                      const isItemProcessing = fileInfo.status === "processing";
+                      const isItemCompleted = fileInfo.status === "completed";
+                      const isItemFailed = fileInfo.status === "failed";
+
+                      return (
+                        <div
+                          key={`batch-file-${fileInfo.task_id || fileInfo.id || idx}-${idx}`}
+                          className={`flex items-center justify-between p-3 rounded-xl border transition-all duration-300 ${status === "processing"
+                            ? (isItemCompleted ? "bg-emerald-600/10 border-emerald-500/30" :
+                              isItemFailed ? "bg-red-600/10 border-red-500/30" :
+                                isItemProcessing ? "bg-primary-950/60 border-primary-500/60 shadow-lg shadow-primary-500/20 ring-1 ring-primary-500/40" :
+                                  "bg-dark-800/80 border-white/5 opacity-60")
+                            : (fileInfo.selected ? "bg-dark-800/80 border-white/10" : "bg-dark-900/50 border-white/5 opacity-60")
+                            }`}
+                        >
+                          <div className="flex items-center space-x-3 flex-1 min-w-0 mr-3">
+                            {status === "processing" ? (
+                              /* Show status icon during processing */
+                              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isItemCompleted ? "bg-emerald-600/20 text-emerald-400" :
+                                isItemFailed ? "bg-red-600/20 text-red-400" :
+                                  isItemProcessing ? "bg-primary-500/20 text-primary-400" :
+                                    "bg-dark-700 text-gray-500"
+                                }`}>
+                                {isItemCompleted ? (
+                                  <CheckCircle className="w-5 h-5" />
+                                ) : isItemFailed ? (
+                                  <AlertCircle className="w-5 h-5" />
+                                ) : isItemProcessing ? (
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                  <FileAudio className="w-5 h-5" />
+                                )}
+                              </div>
+                            ) : (
+                              /* Show checkbox before processing */
+                              <input
+                                type="checkbox"
+                                checked={fileInfo.selected}
+                                onChange={() => handleToggleFile(fileInfo.id)}
+                                className="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500 focus:ring-2 cursor-pointer flex-shrink-0"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <p className={`text-sm font-medium truncate ${isItemProcessing ? "text-white font-bold" : "text-gray-200"}`} title={fileInfo.file_path || fileInfo.file}>
+                                  {fileInfo.filename || (fileInfo.file || '').split(/[\\/]/).pop()}
+                                </p>
+                                {isItemProcessing && (
+                                  <span className="px-1.5 py-0.5 rounded bg-primary-500/30 text-primary-300 text-[10px] font-black uppercase tracking-wider border border-primary-500/40 animate-pulse flex-shrink-0">
+                                    Active
+                                  </span>
+                                )}
+                                {fileInfo.already_processed && status !== "processing" && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-tighter border border-emerald-500/30 flex items-center gap-1 flex-shrink-0">
+                                    <CheckCircle className="w-2.5 h-2.5" />
+                                    Already Processed
+                                  </span>
+                                )}
+                              </div>
+
+                              {status !== "processing" && fileInfo.metadata?.duration && (
+                                <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
+                                  <span>{fileInfo.metadata.duration}</span>
+                                  {fileInfo.already_processed && (
+                                    <span className="text-emerald-600/70 font-medium ml-1">Output exists in /nomusic/</span>
+                                  )}
+                                  {fileInfo.metadata?.resolution && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{fileInfo.metadata.resolution}</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {status === "processing" && (
+                                <p className={`text-xs mt-0.5 truncate ${
+                                  isItemCompleted ? "text-emerald-400 font-semibold" :
+                                  isItemFailed ? "text-red-400 font-semibold" :
+                                  isItemProcessing ? "text-primary-300 font-bold" :
+                                  "text-gray-500"
+                                }`}>
+                                  {fileInfo.current_step || (isItemProcessing ? "Processing..." : isItemCompleted ? "Completed" : "Queued in line")}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
                           {status === "processing" ? (
-                            /* Show status icon during processing */
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${fileInfo.status === "completed" ? "bg-emerald-600/20" :
-                              fileInfo.status === "failed" ? "bg-red-600/20" :
-                                fileInfo.status === "processing" ? "bg-primary-600/20" :
-                                  "bg-dark-700"
-                              }`}>
-                              {fileInfo.status === "completed" ? (
-                                <CheckCircle className="w-4 h-4 text-emerald-400" />
-                              ) : fileInfo.status === "failed" ? (
-                                <AlertCircle className="w-4 h-4 text-red-400" />
-                              ) : fileInfo.status === "processing" ? (
-                                <Loader2 className="w-4 h-4 text-primary-400 animate-spin" />
+                            /* Show progress bar and percentage during processing */
+                            <div className="w-28 flex-shrink-0 text-right">
+                              {isItemProcessing ? (
+                                <div>
+                                  <div className="text-xs font-mono font-bold text-primary-400 mb-1">
+                                    {Math.round(fileInfo.progress || 0)}%
+                                  </div>
+                                  <div className="h-2 bg-dark-700 rounded-full overflow-hidden border border-white/5">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-primary-500 to-accent-500 transition-all duration-300 rounded-full"
+                                      style={{ width: `${Math.max(5, fileInfo.progress || 0)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : isItemCompleted ? (
+                                <span className="text-xs font-bold text-emerald-400">100%</span>
+                              ) : isItemFailed ? (
+                                <span className="text-xs font-bold text-red-400">Failed</span>
                               ) : (
-                                <FileAudio className="w-4 h-4 text-gray-500" />
+                                <span className="text-xs text-gray-500">Waiting</span>
                               )}
                             </div>
                           ) : (
-                            /* Show checkbox before processing */
-                            <input
-                              type="checkbox"
-                              checked={fileInfo.selected}
-                              onChange={() => handleToggleFile(fileInfo.id)}
-                              className="w-4 h-4 rounded border-gray-600 bg-dark-700 text-primary-500 focus:ring-primary-500 focus:ring-2 cursor-pointer"
-                            />
+                            /* Show remove button before processing */
+                            <button
+                              onClick={() => handleRemoveFile(fileInfo.id)}
+                              className="p-2 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg transition-all"
+                              title="Remove from queue"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-2">
-                                <p className="text-white text-sm font-medium truncate max-w-[150px] sm:max-w-xs" title={fileInfo.file_path || fileInfo.file}>
-                                    {fileInfo.filename || (fileInfo.file || '').split(/[\\/]/).pop()}
-                                </p>
-                                {fileInfo.already_processed && status !== "processing" && (
-                                    <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-tighter border border-emerald-500/30 flex items-center gap-1">
-                                        <CheckCircle className="w-2.5 h-2.5" />
-                                        Already Processed
-                                    </span>
-                                )}
-                            </div>
-                            {status !== "processing" && fileInfo.metadata?.duration && (
-                              <div className="flex items-center space-x-2 text-xs text-gray-500 mt-0.5">
-                                <span>{fileInfo.metadata.duration}</span>
-                                {fileInfo.already_processed && (
-                                    <span className="text-emerald-600/70 font-medium ml-1">Output exists in /nomusic/</span>
-                                )}
-                                {fileInfo.metadata?.resolution && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{fileInfo.metadata.resolution}</span>
-                                  </>
-                                )}
-                              </div>
-                            )}
-                            {status === "processing" && (
-                              <p className="text-xs capitalize font-bold" style={{
-                                color: fileInfo.status === "completed" ? "#34d399" :
-                                  fileInfo.status === "failed" ? "#f87171" :
-                                    fileInfo.status === "processing" ? "#60a5fa" :
-                                      "#9ca3af"
-                              }}>
-                                {fileInfo.status || "queued"}
-                              </p>
-                            )}
-                          </div>
                         </div>
-                        {status === "processing" ? (
-                          /* Show progress bar during processing */
-                          fileInfo.progress !== undefined && (
-                            <div className="w-24">
-                              <div className="text-xs text-gray-500 text-right mb-1">{fileInfo.progress}%</div>
-                              <div className="h-1.5 bg-dark-700 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-gradient-to-r from-primary-500 to-accent-500 transition-all"
-                                  style={{ width: `${fileInfo.progress}%` }}
-                                />
-                              </div>
-                            </div>
-                          )
-                        ) : (
-                          /* Show remove button before processing */
-                          <button
-                            onClick={() => handleRemoveFile(fileInfo.id)}
-                            className="p-2 hover:bg-red-600/20 text-gray-500 hover:text-red-400 rounded-lg transition-all"
-                            title="Remove from queue"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

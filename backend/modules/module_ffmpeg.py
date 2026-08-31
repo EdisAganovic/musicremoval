@@ -36,6 +36,13 @@ from colorama import Fore, Style, Back
 import os
 import sys
 import shutil
+
+# Ensure UTF-8 output on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 try:
     from module_file import download_file_concurrent
 except ImportError:

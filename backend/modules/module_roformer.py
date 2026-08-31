@@ -108,13 +108,17 @@ def separate_with_roformer(
 
         return dialogue_sfx_path, music_path
 
-    # Multi-segment processing
+    # Multi-segment parallel processing
     if split_audio_paths:
-        results = [None] * len(split_audio_paths)
-        for i, segment_path in enumerate(tqdm(split_audio_paths, desc="Roformer BGM Segments", unit="seg")):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        max_workers = min(3, len(split_audio_paths))
+        print(f"\n{Fore.CYAN}[Roformer BGM] Launching {len(split_audio_paths)} segments in parallel ({max_workers} concurrent GPU workers on CUDA)...{Style.RESET_ALL}")
+
+        def process_segment_task(item):
+            i, segment_path = item
             seg_out_dir = os.path.join(output_base_dir, f"seg_{i:03d}")
             os.makedirs(seg_out_dir, exist_ok=True)
-            
             try:
                 vocal_sfx_p, music_p = process_single_file(segment_path, seg_out_dir)
             except Exception as e:
@@ -128,7 +132,16 @@ def separate_with_roformer(
             if not (vocal_sfx_p and os.path.exists(vocal_sfx_p) and os.path.getsize(vocal_sfx_p) > 1024):
                 raise RuntimeError(f"Roformer produced empty output on segment {i+1} ({os.path.basename(segment_path)})")
 
-            results[i] = (vocal_sfx_p, music_p)
+            return i, vocal_sfx_p, music_p
+
+        results = [None] * len(split_audio_paths)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_segment_task, (i, p)): (i, p) for i, p in enumerate(split_audio_paths)}
+            with tqdm(total=len(split_audio_paths), desc="Roformer Parallel", unit="seg") as pbar:
+                for future in as_completed(futures):
+                    i, vocal_sfx_p, music_p = future.result()
+                    results[i] = (vocal_sfx_p, music_p)
+                    pbar.update(1)
 
         vocal_paths = [r[0] for r in results if r and r[0]]
         music_paths = [r[1] for r in results if r and r[1]]

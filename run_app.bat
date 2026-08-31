@@ -13,8 +13,10 @@ powershell -Command "$p = Get-NetTCPConnection -LocalPort 5170 -ErrorAction Sile
 
 :: 2. Launch Backend
 echo [2/3] Launching Backend...
+set PYTHONIOENCODING=utf-8
+set PYTHONUTF8=1
 REM Using 'uv run --no-sync' ensures fast startup without file locking issues.
-start "AudioSplitter-Backend" cmd /k "uv run --no-sync uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-dir backend --log-level warning"
+start "AudioSplitter-Backend" cmd /k "set PYTHONIOENCODING=utf-8&& set PYTHONUTF8=1&& uv run --no-sync uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-dir backend --log-level warning"
 
 :: 3. Launch Frontend
 echo [3/3] Launching Frontend...
