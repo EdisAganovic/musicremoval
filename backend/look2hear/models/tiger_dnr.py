@@ -845,6 +845,10 @@ class TIGERDNR(BaseModel):
             all_segment_length.append(segment_length)
 
         all_input = torch.cat(all_input, 0)
+        num_batch = num_session // batch_size
+        if num_session % batch_size > 0:
+            num_batch += 1
+
         from tqdm import tqdm
         with tqdm(total=num_batch, desc=f"TIGER-DnR [{pass_name}]", unit="batch", leave=True) as pbar:
             for i in range(num_batch):
