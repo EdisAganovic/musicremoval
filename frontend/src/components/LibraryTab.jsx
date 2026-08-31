@@ -209,9 +209,11 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
         toast.success(`Playing in browser: ${fileName}`);
     };
 
-    const fetchLibrary = async () => {
+    const fetchLibrary = async (isInitial = false) => {
         setIsRefreshing(true);
-        setIsLoading(true);
+        if (isInitial || items.length === 0) {
+            setIsLoading(true);
+        }
         // Cancel previous request if still pending
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -230,14 +232,13 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
             if (foldRes.status === 'fulfilled' && foldRes.value?.data) {
                 setDiskFolders(foldRes.value.data);
             }
-            setIsLoading(false);
-            setIsRefreshing(false);
         } catch (err) {
             // Silently ignore abort errors (expected when switching tabs)
             if (err.name === 'AbortError' || err.name === 'CanceledError') {
                 return;
             }
             console.error("Failed to fetch library", err);
+        } finally {
             setIsLoading(false);
             setIsRefreshing(false);
         }
