@@ -534,7 +534,6 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
     try {
       if (libraryFilePath) {
         // Library file processing
-        setStatus("processing");
         setCurrentStep("Starting separation...");
         setProgress(0);
 
@@ -552,6 +551,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
           remove_silence: removeSilence
         });
         setTaskId(response.data.task_id);
+        setStatus("processing");
       } else {
         // Direct upload processing
         const formData = new FormData();
