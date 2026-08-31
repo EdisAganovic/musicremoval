@@ -231,10 +231,34 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
             try:
                 tracked_run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
-                demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
-                candidate_no_vocals = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "no_vocals.wav")
-                if want_instrumental and os.path.exists(candidate_no_vocals) and os.path.getsize(candidate_no_vocals) > 0:
-                    demucs_instrumental_wav_path = candidate_no_vocals
+                actual_name = os.path.splitext(os.path.basename(temp_audio_wav_path))[0]
+                
+                # Check expected locations
+                ht_dir = os.path.join(demucs_base_out_path, "htdemucs")
+                candidate_dirs = [
+                    os.path.join(ht_dir, actual_name),
+                    os.path.join(ht_dir, base_audio_name_no_ext),
+                ]
+                if os.path.exists(ht_dir):
+                    for sub in os.listdir(ht_dir):
+                        p = os.path.join(ht_dir, sub)
+                        if os.path.isdir(p) and p not in candidate_dirs:
+                            candidate_dirs.append(p)
+
+                found_dir = None
+                for c_dir in candidate_dirs:
+                    if os.path.exists(os.path.join(c_dir, "vocals.wav")):
+                        found_dir = c_dir
+                        break
+
+                if found_dir:
+                    demucs_vocal_wav_path = os.path.join(found_dir, "vocals.wav")
+                    candidate_no_vocals = os.path.join(found_dir, "no_vocals.wav")
+                    if want_instrumental and os.path.exists(candidate_no_vocals) and os.path.getsize(candidate_no_vocals) > 0:
+                        demucs_instrumental_wav_path = candidate_no_vocals
+                else:
+                    demucs_vocal_wav_path = os.path.join(ht_dir, base_audio_name_no_ext, "vocals.wav")
+
             except subprocess.CalledProcessError as e:
                 print(f"{Fore.RED}Demucs failed!{Style.RESET_ALL}")
                 if e.stderr:
@@ -248,7 +272,7 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
             print(f"\n{Fore.GREEN}[OK] Demucs separation complete.\n{Style.RESET_ALL}")
 
-        if not os.path.exists(demucs_vocal_wav_path) or os.path.getsize(demucs_vocal_wav_path) == 0:
+        if not demucs_vocal_wav_path or not os.path.exists(demucs_vocal_wav_path) or os.path.getsize(demucs_vocal_wav_path) == 0:
             print(f"{Fore.YELLOW}Warning: Demucs vocals not found or empty at {demucs_vocal_wav_path}.{Style.RESET_ALL}")
             return None, None, temp_demucs_segments_dir
 

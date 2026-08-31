@@ -36,8 +36,10 @@ from colorama import Fore, Style, Back
 import os
 import sys
 import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from module_file import download_file_concurrent
+try:
+    from module_file import download_file_concurrent
+except ImportError:
+    from modules.module_file import download_file_concurrent
 
 try:
     from services.process_manager import tracked_run

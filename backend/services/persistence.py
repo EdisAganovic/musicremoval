@@ -282,8 +282,15 @@ def save_to_library(task_data):
 
         library = library[:500]
 
+        library_copy = list(library)
         with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
-            json.dump(library, f, indent=4)
+            json.dump(library_copy, f, indent=4)
+
+        try:
+            from routes.library import invalidate_library_cache
+            invalidate_library_cache()
+        except ImportError:
+            pass
     except (OSError, IOError, TypeError) as e:
         print(f"Error saving to library: {e}")
 
@@ -348,8 +355,9 @@ async def save_queue_async():
     """Saves the download queue to disk with lock protection."""
     async with download_queue_lock:
         try:
+            queue_copy = list(download_queue)
             with open(QUEUE_FILE, "w", encoding="utf-8") as f:
-                json.dump(download_queue, f, indent=4)
+                json.dump(queue_copy, f, indent=4)
         except (OSError, IOError, TypeError) as e:
             print(f"Error saving queue: {e}")
 
@@ -357,8 +365,9 @@ async def save_queue_async():
 def save_queue():
     """Saves the download queue to disk."""
     try:
+        queue_copy = list(download_queue)
         with open(QUEUE_FILE, "w", encoding="utf-8") as f:
-            json.dump(download_queue, f, indent=4)
+            json.dump(queue_copy, f, indent=4)
     except (OSError, IOError, TypeError) as e:
         print(f"Error saving queue: {e}")
 
@@ -396,8 +405,9 @@ async def save_notifications_async():
     """Saves notifications to disk with lock protection."""
     async with notifications_lock:
         try:
+            notifs_copy = list(notifications)
             with open(NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
-                json.dump(notifications, f, indent=4)
+                json.dump(notifs_copy, f, indent=4)
         except (OSError, IOError, TypeError) as e:
             print(f"Error saving notifications: {e}")
 
@@ -405,8 +415,9 @@ async def save_notifications_async():
 def save_notifications():
     """Saves notifications to disk."""
     try:
+        notifs_copy = list(notifications)
         with open(NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
-            json.dump(notifications, f, indent=4)
+            json.dump(notifs_copy, f, indent=4)
     except (OSError, IOError, TypeError) as e:
         print(f"Error saving notifications: {e}")
 
@@ -486,7 +497,7 @@ def _normalize_cache_keys():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     to_add = {}
     to_remove = []
-    for key, value in metadata_cache.items():
+    for key, value in list(metadata_cache.items()):
         # Keys are "<path>:<mtime>"
         colon_idx = key.rfind(':')
         if colon_idx == -1:
@@ -527,8 +538,9 @@ async def save_metadata_cache_async():
     """Saves metadata cache to disk with lock protection."""
     async with metadata_cache_lock:
         try:
+            cache_copy = dict(metadata_cache)
             with open(METADATA_CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(metadata_cache, f, indent=4)
+                json.dump(cache_copy, f, indent=4)
         except (OSError, IOError, TypeError) as e:
             print(f"Error saving metadata cache: {e}")
 
@@ -536,8 +548,9 @@ async def save_metadata_cache_async():
 def save_metadata_cache():
     """Saves metadata cache to disk."""
     try:
+        cache_copy = dict(metadata_cache)
         with open(METADATA_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(metadata_cache, f, indent=4)
+            json.dump(cache_copy, f, indent=4)
     except (OSError, IOError, TypeError) as e:
         print(f"Error saving metadata cache: {e}")
 

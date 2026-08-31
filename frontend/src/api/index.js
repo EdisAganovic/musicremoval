@@ -129,6 +129,9 @@ export const libraryAPI = {
   },
   rename: (taskId, newName) =>
     api.post("/rename-file", { task_id: taskId, new_name: newName }),
+  move: (payload) => api.post("/library/move", payload),
+  createFolder: (payload) => api.post("/library/create-folder", payload),
+  getFolders: () => api.get("/library/folders"),
 };
 
 // Notifications API endpoints

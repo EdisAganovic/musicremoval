@@ -221,22 +221,13 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
     // Queue polling effect
     useEffect(() => {
         fetchSettings();
-        let consecutiveErrors = 0;
-        const MAX_CONSECUTIVE_ERRORS = 10;
 
         const queueInterval = setInterval(async () => {
             if (document.hidden) return;
             try {
                 await fetchQueue();
-                consecutiveErrors = 0; // Reset on success
             } catch (err) {
-                consecutiveErrors++;
-
-                // Show error after 3 consecutive failures
-                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                    setError("Connection lost to backend. Refresh page to reconnect.");
-                    clearInterval(queueInterval);
-                }
+                // Keep interval running to auto-reconnect on server reload
             }
         }, 2000);
         return () => clearInterval(queueInterval);
@@ -253,20 +244,12 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
     };
 
     useEffect(() => {
-        let consecutiveErrors = 0;
-        const MAX_CONSECUTIVE_ERRORS = 10;
-
         const downloadsInterval = setInterval(async () => {
             if (document.hidden) return;
             try {
                 await fetchActiveDownloads();
-                consecutiveErrors = 0;
             } catch (err) {
-                consecutiveErrors++;
-
-                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                    clearInterval(downloadsInterval);
-                }
+                // Keep interval running to auto-reconnect on server reload
             }
         }, 1000);
         return () => clearInterval(downloadsInterval);
@@ -327,6 +310,11 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
                 auto_separate: autoSeparate,
                 subfolder: subfolder.trim() || null
             });
+
+            // Start queue processing immediately
+            try {
+                await axios.post(`${BACKEND_URL}/api/queue/start`);
+            } catch (_) {}
 
             setShowPlaylistConfirm(false);
             setPlaylistConfirmData(null);
@@ -400,10 +388,11 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
         setSubfolder('');
 
         try {
-            const response = await axios.post(`${BACKEND_URL}/api/yt-formats`, {
-                url,
-                check_playlist: true
-            });
+            const response = await axios.post(
+                `${BACKEND_URL}/api/yt-formats`,
+                { url, check_playlist: true },
+                { timeout: 120000 }
+            );
             setVideoInfo(response.data);
 
             // Check if this is a playlist
@@ -496,6 +485,13 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
     const handleDownload = async () => {
         if (!url) return;
 
+        // If analyzing or displaying a playlist, add all selected items to queue
+        if (isPlaylist && playlistVideos.length > 0) {
+            handleAddToQueue();
+            return;
+        }
+
+        console.log('[Downloader] handleDownload called with url:', url, 'format:', format, 'format_id:', selectedFormatId);
         setStatus('processing');
         setProgress(0);
         setCurrentStep('Starting download...');
@@ -505,6 +501,7 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
         setDownloadingTitle(videoInfo?.title || url);
 
         try {
+            console.log('[Downloader] Sending POST to /api/download');
             const response = await axios.post(`${BACKEND_URL}/api/download`, {
                 url,
                 format,
@@ -512,6 +509,8 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
                 subfolder: subfolder.trim() || null,
                 auto_separate: autoSeparate
             });
+
+            console.log('[Downloader] Response:', response.data);
 
             // Handle special responses from server
             if (response.data.status === 'duplicate') {
@@ -530,11 +529,12 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
                 return;
             }
 
+            console.log('[Downloader] Setting taskId:', response.data.task_id);
             setTaskId(response.data.task_id);
             setCurrentTaskId(response.data.task_id);
         } catch (err) {
-            console.error('[Downloader] Download failed:', err);
-            setError('Failed to start download.');
+            console.error('[Downloader] Download failed:', err, err?.response?.data);
+            setError(err?.response?.data?.detail || 'Failed to start download.');
             setStatus('error');
         }
     };
@@ -887,24 +887,30 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={handleDownload}
-                        disabled={!url || status === 'processing' || isAnalyzing}
+                        disabled={!url || (isPlaylist ? selectedPlaylistVideos.length === 0 : status === 'processing') || isAnalyzing}
                         title={
                             !url ? "Please enter a URL first" :
-                                status === 'processing' ? "Download in progress..." :
-                                    isAnalyzing ? "Analyzing..." :
-                                        "Start download"
+                                isPlaylist && selectedPlaylistVideos.length === 0 ? "Select at least one video" :
+                                    status === 'processing' && !isPlaylist ? "Download in progress..." :
+                                        isAnalyzing ? "Analyzing..." :
+                                            "Start download"
                         }
                         className={`py-4 rounded-2xl font-bold text-lg shadow-2xl flex items-center justify-center space-x-2 transition-all duration-300 overflow-hidden relative group
-                            ${!url || status === 'processing' || isAnalyzing
+                            ${!url || (isPlaylist ? selectedPlaylistVideos.length === 0 : status === 'processing') || isAnalyzing
                                 ? 'bg-dark-800 text-gray-600 cursor-not-allowed border border-white/5'
                                 : 'bg-gradient-to-tr from-red-600 to-red-500 text-white shadow-red-600/30 hover:shadow-red-600/50 hover:brightness-110'
                             }`}
                     >
                         <div className="relative z-10 flex items-center space-x-2">
-                            {status === 'processing' ? (
+                            {status === 'processing' && !isPlaylist ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
                                     <span>Downloading...</span>
+                                </>
+                            ) : isPlaylist ? (
+                                <>
+                                    <Download className="w-5 h-5 group-hover:animate-bounce" />
+                                    <span>Download {selectedPlaylistVideos.length} Video{selectedPlaylistVideos.length !== 1 ? 's' : ''}</span>
                                 </>
                             ) : (
                                 <>

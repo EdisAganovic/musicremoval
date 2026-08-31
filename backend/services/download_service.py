@@ -2,9 +2,15 @@
 Download service - handles downloads via yt-dlp (YouTube, Facebook, and more).
 """
 import os
+import sys
 import asyncio
 from typing import Optional
 from colorama import Fore, Style
+
+# Ensure backend/modules is in sys.path for intra-module imports
+_modules_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'modules'))
+if _modules_dir not in sys.path:
+    sys.path.insert(0, _modules_dir)
 
 from config import (
     tasks, active_downloads, save_to_library, add_notification,
@@ -146,7 +152,7 @@ def run_yt_dlp(
                 }],
             })
             if format_id and format_id != 'best':
-                opts['format'] = f"{format_id}+bestaudio/bestaudio"
+                opts['format'] = f"{format_id}/bestaudio/best"
         else:
             if format_id:
                 opts['format'] = f"{format_id}+bestaudio/best"

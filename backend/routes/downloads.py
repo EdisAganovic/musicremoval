@@ -27,9 +27,19 @@ def normalize_youtube_url(url: str) -> str:
     """Normalizes youtube.com and youtu.be URLs, removing tracking parameters."""
     if not url:
         return url
+    url = url.strip()
+
+    # Handle truncated or mobile prefixes like "m/watch...", "/watch...", "watch?v=..."
+    if url.startswith("m/watch") or url.startswith("/watch") or url.startswith("watch?"):
+        query_part = url[url.find("?"):] if "?" in url else ("?" + url.split("/", 1)[-1])
+        url = f"https://www.youtube.com/watch{query_part}"
+    elif not url.startswith(("http://", "https://")):
+        url = f"https://{url}"
+
     try:
-        parsed = urllib.parse.urlparse(url.strip())
-        if parsed.netloc in ["youtu.be", "www.youtu.be"]:
+        parsed = urllib.parse.urlparse(url)
+        netloc = parsed.netloc.lower()
+        if netloc in ["youtu.be", "www.youtu.be"]:
             video_id = parsed.path.strip("/")
             new_url = f"https://www.youtube.com/watch?v={video_id}"
             
@@ -42,7 +52,10 @@ def normalize_youtube_url(url: str) -> str:
                 params.append(f"t={query['t'][0]}")
             if params:
                 new_url += "&" + "&".join(params)
-            return new_url
+            url = new_url
+        elif "youtube.com" in netloc and parsed.path.startswith("/shorts/"):
+            video_id = parsed.path.replace("/shorts/", "").strip("/")
+            url = f"https://www.youtube.com/watch?v={video_id}"
     except Exception:
         pass
     
@@ -156,10 +169,17 @@ async def get_yt_formats(payload: dict):
                         title = entry.get('title', 'Unknown')
                         if not title or title.lower() in ['[private video]', '[deleted video]', 'private video', 'deleted video']:
                             continue
+                        
+                        # Safe thumbnail resolution
+                        thumb = entry.get('thumbnail', '')
+                        if not thumb:
+                            thumbnails_list = entry.get('thumbnails') or []
+                            thumb = next((t.get('url', '') for t in thumbnails_list if isinstance(t, dict) and t.get('url')), '')
+
                         videos.append({
                             "id": entry.get('id', ''),
                             "title": title,
-                            "thumbnail": entry.get('thumbnail', '') or next(iter(t['url'] for t in entry.get('thumbnails', []) if 'url' in t), ''),
+                            "thumbnail": thumb,
                             "duration": format_duration(entry.get('duration', 0)),
                             "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
                         })

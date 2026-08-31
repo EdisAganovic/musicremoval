@@ -34,8 +34,8 @@ init(autoreset=True)
 
 # Create FastAPI app
 app = FastAPI(
-    title="DemucsPleeter API",
-    description="API for vocal separation and YouTube downloading",
+    title="Audio Splitter Pro API",
+    description="API for vocal separation, audio studio, and media downloading",
     version="0.0.16"
 )
 
@@ -61,12 +61,18 @@ from routes.separation import router as separation_router
 from routes.library import router as library_router
 from routes.notifications import router as notifications_router
 from routes.diagnostics import router as diagnostics_router
+from routes.audio_project import router as audio_project_router
+from fastapi.staticfiles import StaticFiles
 
 app.include_router(downloads_router)
 app.include_router(separation_router)
 app.include_router(library_router)
 app.include_router(notifications_router)
 app.include_router(diagnostics_router)
+app.include_router(audio_project_router)
+
+os.makedirs("projects", exist_ok=True)
+app.mount("/projects", StaticFiles(directory="projects"), name="projects")
 
 
 # ============== Startup/Shutdown Events ==============
@@ -164,4 +170,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5170)
+    uvicorn.run("backend:app", host="0.0.0.0", port=5170, reload=True)

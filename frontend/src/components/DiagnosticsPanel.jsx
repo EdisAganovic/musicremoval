@@ -146,7 +146,7 @@ const DiagnosticsPanel = ({ onClose }) => {
     const copyReport = () => {
         if (!healthData) return;
         const d = healthData;
-        let report = `## DemucsPleeter Diagnostics Report\n`;
+        let report = `## Audio Splitter Pro Diagnostics Report\n`;
         report += `Generated: ${new Date().toISOString()}\n\n`;
 
         report += `### System\n`;

@@ -8,4 +8,4 @@ export const APP_VERSION = "0.0.18";
 
 export const APP_NAME = "Audio Splitter Pro";
 
-export const BACKEND_URL = "http://localhost:5170";
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5170";

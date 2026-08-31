@@ -30,6 +30,7 @@ import { useState, useEffect, useRef } from 'react';
 import SeparationTab from './components/SeparationTab';
 import DownloaderTab from './components/DownloaderTab';
 import LibraryTab from './components/LibraryTab';
+import AudioStudioTab from './components/AudioStudioTab';
 import NotificationBell from './components/NotificationBell';
 import DiagnosticsPanel from './components/DiagnosticsPanel';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -37,7 +38,7 @@ import { AudioPlayerProvider } from './contexts/AudioPlayerContext';
 import AudioPlayer from './components/AudioPlayer';
 import { APP_VERSION, APP_NAME, BACKEND_URL } from './config';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle, Activity } from 'lucide-react';
+import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle, Activity, Sliders } from 'lucide-react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 
@@ -132,8 +133,8 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen text-gray-200 font-sans p-4 md:p-6 selection:bg-primary-500/30">
-      <div className="max-w-5xl mx-auto space-y-4">
+    <div className="min-h-screen text-gray-200 font-sans p-2 md:p-4 selection:bg-primary-500/30">
+      <div className={`${activeTab === 'studio' ? 'max-w-[98vw] 2xl:max-w-[1900px]' : activeTab === 'library' ? 'max-w-7xl' : 'max-w-5xl'} mx-auto space-y-4 transition-all duration-300`}>
 
         {/* Header - Compact */}
         <motion.div
@@ -203,7 +204,7 @@ function AppContent() {
         {/* Tab Navigation - Pill Style */}
         <div className="flex justify-center">
           <div className="bg-dark-900/50 backdrop-blur-md p-1 rounded-full inline-flex border border-white/5 shadow-xl relative">
-            {['separation', 'downloader', 'library'].map((tab) => (
+            {['separation', 'studio', 'downloader', 'library'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -218,8 +219,8 @@ function AppContent() {
                   />
                 )}
                 <span className="relative z-10 flex items-center space-x-2">
-                  {tab === 'separation' ? <AudioLines className="w-4 h-4" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
-                  <span className="capitalize">{tab === 'downloader' ? 'Downloader' : tab}</span>
+                  {tab === 'separation' ? <AudioLines className="w-4 h-4" /> : tab === 'studio' ? <Sliders className="w-4 h-4 text-amber-300" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
+                  <span className="capitalize">{tab === 'studio' ? 'Audio Studio' : tab === 'downloader' ? 'Downloader' : tab}</span>
                 </span>
               </button>
             ))}
@@ -239,10 +240,26 @@ function AppContent() {
           >
             <SeparationTab
               libraryFile={libraryFileToSeparate}
+              initialFilePath={libraryFileToSeparate}
               onFileCleared={() => setLibraryFileToSeparate(null)}
+              onClearInitialFile={() => setLibraryFileToSeparate(null)}
               externalBatchId={bulkSeparateBatchId}
+              initialBatchId={bulkSeparateBatchId}
               onExternalBatchConsumed={() => setBulkSeparateBatchId(null)}
+              onClearBatchId={() => setBulkSeparateBatchId(null)}
             />
+          </motion.div>
+
+          {/* Audio Studio Tab */}
+          <motion.div
+            key="studio"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: activeTab === 'studio' ? 1 : 0 }}
+            transition={{ duration: 0.15 }}
+            style={{ display: activeTab === 'studio' ? 'block' : 'none' }}
+            className="glass-card p-4 md:p-6 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
+          >
+            <AudioStudioTab />
           </motion.div>
 
           {/* Downloader Tab */}

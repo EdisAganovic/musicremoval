@@ -73,14 +73,15 @@ const AudioPlayer = () => {
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ y: 100, opacity: 0, scale: 0.95 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 100, opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className="fixed bottom-4 left-4 right-4 md:left-1/2 md:-translate-x-1/2 md:max-w-4xl z-50 pointer-events-auto"
-      >
-        <div className="relative bg-dark-900/95 backdrop-blur-2xl border border-white/15 shadow-2xl rounded-2xl p-3.5 sm:p-4 text-white overflow-hidden ring-1 ring-primary-500/20">
+      <div className="fixed bottom-5 inset-x-0 z-50 flex justify-center px-4 pointer-events-none">
+        <motion.div
+          initial={{ y: 80, opacity: 0, scale: 0.95 }}
+          animate={{ y: 0, opacity: 1, scale: 1 }}
+          exit={{ y: 80, opacity: 0, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 320, damping: 30 }}
+          className="w-full max-w-3xl pointer-events-auto"
+        >
+          <div className="relative bg-dark-900/95 backdrop-blur-2xl border border-white/15 shadow-2xl rounded-2xl p-3.5 sm:p-4 text-white overflow-hidden ring-1 ring-primary-500/20">
           {/* Subtle animated background glow */}
           <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary-500/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -270,7 +271,7 @@ const AudioPlayer = () => {
                   min="0"
                   max="1"
                   step="0.05"
-                  value={isMuted ? 0 : volume}
+                  value={isMuted ? 0 : (volume ?? 1)}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="w-16 h-1 bg-dark-600 rounded-lg appearance-none cursor-pointer accent-emerald-400"
                   title={`Volume: ${Math.round((isMuted ? 0 : volume) * 100)}%`}
@@ -300,7 +301,8 @@ const AudioPlayer = () => {
           </div>
         </div>
       </motion.div>
-    </AnimatePresence>
+    </div>
+  </AnimatePresence>
   );
 };
 

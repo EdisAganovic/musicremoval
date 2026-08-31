@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ==========================================
-echo       DemucsPleeter Startup Utility
+echo     Audio Splitter Pro Startup Utility
 echo ==========================================
 echo.
 
@@ -13,13 +13,13 @@ powershell -Command "$p = Get-NetTCPConnection -LocalPort 5170 -ErrorAction Sile
 
 :: 2. Launch Backend
 echo [2/3] Launching Backend...
-REM Using 'uv run' ensures the environment is synced and managed correctly.
-start "Demucs-Backend" cmd /k "uv run uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-dir backend --log-level warning"
+REM Using 'uv run --no-sync' ensures fast startup without file locking issues.
+start "AudioSplitter-Backend" cmd /k "uv run --no-sync uvicorn backend.backend:app --host 0.0.0.0 --port 5170 --reload --reload-dir backend --log-level warning"
 
 :: 3. Launch Frontend
 echo [3/3] Launching Frontend...
 if exist "frontend" (
-    start "Demucs-Frontend" cmd /k "cd frontend && npm run dev"
+    start "AudioSplitter-Frontend" cmd /k "cd frontend && npm run dev"
 )
 
 echo.

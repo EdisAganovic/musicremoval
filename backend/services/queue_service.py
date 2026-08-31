@@ -52,6 +52,7 @@ async def process_queue():
         final_status = task_status.get("status")
         if final_status == "completed":
             pending_item["status"] = "completed"
+            pending_item["result_files"] = task_status.get("result_files", [])
         elif final_status == "cancelled":
             pending_item["status"] = "cancelled"
         else:
@@ -59,8 +60,9 @@ async def process_queue():
 
         save_queue()
 
-        # Check if we should stop (user clicked stop while downloading)
-        if not state.queue_processing:
+        has_more_pending = any(i.get("status") == "pending" for i in state.download_queue)
+        if not has_more_pending:
+            print(f"{Fore.GREEN}[Queue] All queue items have finished processing.{Style.RESET_ALL}")
             break
 
         # Random delay between downloads (anti-bot measure)

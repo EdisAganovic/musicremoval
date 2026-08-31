@@ -77,7 +77,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
-const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternalBatchConsumed }) => {
+const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
+  const activeLibraryFile = libraryFile || initialFilePath;
+  const activeBatchId = externalBatchId || initialBatchId;
   const [file, setFile] = useState(null);
   const [libraryFilePath, setLibraryFilePath] = useState(null);
   const [folderPath, setFolderPath] = useState(null);
@@ -210,35 +212,36 @@ const SeparationTab = ({ libraryFile, onFileCleared, externalBatchId, onExternal
 
   // Handle library file pre-load
   useEffect(() => {
-    if (libraryFile) {
-      setLibraryFilePath(libraryFile);
+    if (activeLibraryFile) {
+      setLibraryFilePath(activeLibraryFile);
       setFile({
-        name: libraryFile.split(/[\\/]/).pop() || 'Selected File',
+        name: activeLibraryFile.split(/[\\/]/).pop() || 'Selected File',
         size: 0,
-        path: libraryFile
+        path: activeLibraryFile
       });
       setStatus("idle");
       setProgress(0);
       setResultFiles([]);
       setError(null);
     }
-  }, [libraryFile]);
+  }, [activeLibraryFile]);
 
   // Handle an already-running batch handed off from Library's bulk "Separate Selected"
   // action: jump straight into folder/batch mode and let the existing batch-status
   // polling effect (keyed on batchId + processingMode) pick it up.
   useEffect(() => {
-    if (externalBatchId) {
+    if (activeBatchId) {
       setProcessingMode("folder");
       setQueueId(null);
       setBatchFiles([]);
       setError(null);
       setProgress(0);
       setStatus("processing");
-      setBatchId(externalBatchId);
+      setBatchId(activeBatchId);
       onExternalBatchConsumed?.();
+      onClearBatchId?.();
     }
-  }, [externalBatchId]);
+  }, [activeBatchId]);
 
   const handleReset = () => {
     setFile(null);

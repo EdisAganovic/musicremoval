@@ -248,11 +248,30 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                 env["MODEL_PATH"] = MODEL_DIRECTORY_HOST
             
             tracked_run(spleeter_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', env=env)
-            spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
-            if want_instrumental:
-                candidate_accompaniment = os.path.join(spleeter_out_path, base_audio_name_no_ext, "accompaniment.wav")
-                if os.path.exists(candidate_accompaniment) and os.path.getsize(candidate_accompaniment) > 0:
+            actual_name = os.path.splitext(os.path.basename(temp_audio_wav_path))[0]
+            candidate_dirs = [
+                os.path.join(spleeter_out_path, actual_name),
+                os.path.join(spleeter_out_path, base_audio_name_no_ext)
+            ]
+            if os.path.exists(spleeter_out_path):
+                for sub in os.listdir(spleeter_out_path):
+                    p = os.path.join(spleeter_out_path, sub)
+                    if os.path.isdir(p) and p not in candidate_dirs:
+                        candidate_dirs.append(p)
+
+            found_dir = None
+            for c_dir in candidate_dirs:
+                if os.path.exists(os.path.join(c_dir, "vocals.wav")):
+                    found_dir = c_dir
+                    break
+
+            if found_dir:
+                spleeter_vocal_wav_path = os.path.join(found_dir, "vocals.wav")
+                candidate_accompaniment = os.path.join(found_dir, "accompaniment.wav")
+                if want_instrumental and os.path.exists(candidate_accompaniment) and os.path.getsize(candidate_accompaniment) > 0:
                     spleeter_instrumental_wav_path = candidate_accompaniment
+            else:
+                spleeter_vocal_wav_path = os.path.join(spleeter_out_path, base_audio_name_no_ext, "vocals.wav")
             print(f"{Fore.GREEN}Spleeter separation complete.{Style.RESET_ALL}")
 
         if spleeter_vocal_wav_path and not (os.path.exists(spleeter_vocal_wav_path) and os.path.getsize(spleeter_vocal_wav_path) > 0):

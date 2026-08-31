@@ -64,8 +64,12 @@ def is_youtube_url(url: str) -> bool:
     if not url:
         return False
     try:
-        parsed = urlparse(url.strip())
-        return parsed.netloc.lower().replace('www.', '') in ['youtube.com', 'youtu.be']
+        url_check = url.strip()
+        if not (url_check.startswith('http://') or url_check.startswith('https://')):
+            url_check = 'https://' + url_check
+        parsed = urlparse(url_check)
+        netloc = parsed.netloc.lower()
+        return netloc == 'youtu.be' or netloc.endswith('youtu.be') or netloc.endswith('youtube.com')
     except Exception:
         return False
 

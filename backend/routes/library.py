@@ -19,30 +19,70 @@ from config import (
 router = APIRouter(prefix="/api", tags=["library"])
 
 
+# In-memory library cache for instantaneous responses on repeated polling
+_library_cache = {
+    "data": None,
+    "timestamp": 0.0,
+    "ttl": 4.0  # seconds to serve directly from memory without re-scanning disk
+}
+
+def invalidate_library_cache():
+    """Forces the next get_library call to perform a fresh disk scan."""
+    _library_cache["timestamp"] = 0.0
+    _library_cache["data"] = None
+
+
+def _fast_scan_dir_files(folder_path: str, allowed_exts: set) -> list:
+    """Fast recursive file discovery using os.scandir."""
+    found_files = []
+    if not os.path.exists(folder_path):
+        return found_files
+    
+    stack = [os.path.abspath(folder_path)]
+    while stack:
+        current_dir = stack.pop()
+        try:
+            with os.scandir(current_dir) as it:
+                for entry in it:
+                    if entry.is_file(follow_symlinks=False):
+                        _, ext = os.path.splitext(entry.name)
+                        if ext.lower() in allowed_exts:
+                            found_files.append((entry.path, entry.name))
+                    elif entry.is_dir(follow_symlinks=False):
+                        stack.append(entry.path)
+        except (OSError, PermissionError):
+            continue
+    return found_files
+
+
 @router.get("/library")
-async def get_library():
+async def get_library(force: bool = False):
     """Returns a list of all completed tasks and scans for existing files."""
-    from colorama import Fore, Style
     import time
+    now = time.time()
+
+    # Instant response if cache is fresh and not forced
+    if not force and _library_cache["data"] is not None and (now - _library_cache["timestamp"]) < _library_cache["ttl"]:
+        return _library_cache["data"]
 
     def scan_library():
         library = get_full_library()
 
-        existing_ids = {item.get("task_id") for item in library}
-        existing_files = {os.path.abspath(os.path.normpath(item.get("result_files", [""])[0])) 
-                          for item in library if item.get("result_files")}
+        existing_ids = {item.get("task_id") for item in library if isinstance(item, dict)}
+        existing_files = {
+            os.path.abspath(os.path.normpath(item.get("result_files", [""])[0])) 
+            for item in library if isinstance(item, dict) and item.get("result_files")
+        }
         
-        # Only exclude files that are ACTIVELY being processed — never block completed/failed tasks
+        # Only exclude files that are ACTIVELY being processed
         ACTIVE_STATUSES = {"processing", "downloading", "separating", "queued", "pending"}
         active_task_files = set()
         for t in tasks.values():
-            if t.get("status") not in ACTIVE_STATUSES:
+            if not isinstance(t, dict) or t.get("status") not in ACTIVE_STATUSES:
                 continue
-            # Source file currently being worked on
             f_path = t.get("file_path")
             if f_path:
                 active_task_files.add(os.path.abspath(os.path.normpath(f_path)))
-            # Result files being written right now
             for rf in t.get("result_files", []):
                 if rf:
                     active_task_files.add(os.path.abspath(os.path.normpath(rf)))
@@ -51,122 +91,92 @@ async def get_library():
         AUDIO_EXTENSIONS = {'.mp3', '.m4a', '.wav', '.flac', '.aac', '.ogg', '.wma', '.opus'}
         NOMUSIC_EXTENSIONS = AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
 
-        # Scan download folder
-        download_folder = "download"
-        if os.path.exists(download_folder):
-            for root, dirs, files in os.walk(download_folder):
-                for filename in files:
-                    _, ext = os.path.splitext(filename)
-                    if ext.lower() not in VIDEO_EXTENSIONS:
-                        continue
+        new_items_added = 0
+        metadata_changed = False
 
-                    file_path = os.path.abspath(os.path.normpath(os.path.join(root, filename)))
-                    if os.path.isfile(file_path):
-                        if file_path in existing_files or file_path in active_task_files:
-                            continue
+        # 1. Fast scan download folder
+        download_files = _fast_scan_dir_files("download", VIDEO_EXTENSIONS)
+        for file_path, filename in download_files:
+            abs_norm = os.path.abspath(os.path.normpath(file_path))
+            if abs_norm in existing_files or abs_norm in active_task_files:
+                continue
 
-                        # Check if MD5 based ID already exists
-                        task_id = hashlib.md5(file_path.encode()).hexdigest()
+            task_id = hashlib.md5(abs_norm.encode()).hexdigest()
+            if task_id in existing_ids:
+                continue
 
-                        if task_id in existing_ids:
-                            continue
+            existing_files.add(abs_norm)
+            existing_ids.add(task_id)
+            new_items_added += 1
 
-                        metadata = get_file_metadata_cached(file_path)
-                        
-                        # Use file modification time as created_at for existing files
-                        try:
-                            file_mtime = os.path.getmtime(file_path)
-                        except OSError:
-                            file_mtime = time.time()
+            metadata = get_file_metadata_cached(abs_norm)
+            try:
+                file_mtime = os.path.getmtime(abs_norm)
+            except OSError:
+                file_mtime = time.time()
 
-                        library.insert(0, {
-                            "task_id": task_id,
-                            "status": "completed",
-                            "progress": 100,
-                            "current_step": "Finished",
-                            "result_files": [file_path],
-                            "metadata": metadata,
-                            "url": "",
-                            "filename": filename,
-                            "created_at": file_mtime
-                        })
+            library.insert(0, {
+                "task_id": task_id,
+                "status": "completed",
+                "progress": 100,
+                "current_step": "Finished",
+                "result_files": [abs_norm],
+                "metadata": metadata,
+                "url": "",
+                "filename": filename,
+                "created_at": file_mtime
+            })
 
-        # Scan nomusic folder
-        nomusic_folder = "nomusic"
-        nomusic_added = 0
-        if os.path.exists(nomusic_folder):
-            nomusic_total = 0
-            nomusic_found = 0
-            nomusic_skipped_existing = 0
+        # 2. Fast scan nomusic folder
+        nomusic_files = _fast_scan_dir_files("nomusic", NOMUSIC_EXTENSIONS)
+        for file_path, filename in nomusic_files:
+            abs_norm = os.path.abspath(os.path.normpath(file_path))
+            if abs_norm in existing_files or abs_norm in active_task_files:
+                continue
 
-            for root, dirs, files in os.walk(nomusic_folder):
-                for filename in files:
-                    _, ext = os.path.splitext(filename)
+            task_id = hashlib.md5(abs_norm.encode()).hexdigest()
+            if task_id in existing_ids:
+                continue
 
-                    if ext.lower() not in NOMUSIC_EXTENSIONS:
-                        continue
-                    nomusic_total += 1
-                    file_path = os.path.abspath(os.path.normpath(os.path.join(root, filename)))
+            existing_files.add(abs_norm)
+            existing_ids.add(task_id)
+            new_items_added += 1
 
-                    if file_path in existing_files or file_path in active_task_files:
-                        nomusic_skipped_existing += 1
-                        continue
+            metadata = get_file_metadata_cached(abs_norm)
+            try:
+                file_mtime = os.path.getmtime(abs_norm)
+            except OSError:
+                file_mtime = time.time()
 
-                    task_id = hashlib.md5(file_path.encode()).hexdigest()
+            library.insert(0, {
+                "task_id": task_id,
+                "status": "completed",
+                "progress": 100,
+                "current_step": "Finished",
+                "result_files": [abs_norm],
+                "metadata": metadata,
+                "url": "",
+                "filename": filename,
+                "created_at": file_mtime
+            })
 
-                    if task_id in existing_ids:
-                        nomusic_skipped_existing += 1
-                        continue
-
-                    nomusic_found += 1
-                    nomusic_added += 1
-
-                    metadata = get_file_metadata_cached(file_path)
-                    
-                    # Use file modification time as created_at for existing files
-                    try:
-                        file_mtime = os.path.getmtime(file_path)
-                    except OSError:
-                        file_mtime = time.time()
-
-                    library.insert(0, {
-                        "task_id": task_id,
-                        "status": "completed",
-                        "progress": 100,
-                        "current_step": "Finished",
-                        "result_files": [file_path],
-                        "metadata": metadata,
-                        "url": "",
-                        "filename": filename,
-                        "created_at": file_mtime
-                    })
-            print(f"{Fore.CYAN}[Library Scan] Nomusic: {nomusic_total} total, {nomusic_found} new, {nomusic_skipped_existing} skipped{Style.RESET_ALL}")
-
-        # Repair existing entries with 'N/A' metadata
-        library_changed = False
-        for item in library:
-            meta = item.get("metadata", {})
-            if meta.get("duration") == "N/A":
-                res_files = item.get("result_files", [])
-                if res_files and os.path.exists(res_files[0]):
-                    new_metadata = get_file_metadata_cached(res_files[0])
-                    if new_metadata.get("duration") != "N/A":
-                        item["metadata"] = new_metadata
-                        library_changed = True
-
-        # Sort by created_at timestamp (newest first)
+        # 3. Sort by created_at timestamp (newest first)
         library.sort(key=lambda x: x.get("created_at", 0), reverse=True)
         
-        # Save library if we added new files or repaired metadata
-        if nomusic_added > 0 or library_changed:
+        # Save library to disk only if changes were made
+        if new_items_added > 0:
             from config import LIBRARY_FILE
             try:
+                library_copy = list(library)
                 with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
-                    json.dump(library, f, indent=4)
+                    json.dump(library_copy, f, indent=4)
             except (OSError, IOError, TypeError):
                 pass
 
-        save_metadata_cache()
+        # Update in-memory cache
+        _library_cache["data"] = library
+        _library_cache["timestamp"] = time.time()
+
         return library
 
     import asyncio
@@ -224,12 +234,142 @@ async def delete_file(payload: dict):
         metadata_cache.pop(key, None)
 
     try:
+        cache_copy = dict(metadata_cache)
         with open(METADATA_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(metadata_cache, f, indent=4)
+            json.dump(cache_copy, f, indent=4)
     except (OSError, IOError, TypeError):
         pass
 
+    invalidate_library_cache()
+
     return {"status": "deleted", "files": deleted}
+
+
+@router.post("/library/move")
+@router.post("/move-file")
+async def move_files(payload: dict):
+    """Move one or more files to a target folder/subfolder."""
+    import shutil
+    task_ids = payload.get("task_ids", [])
+    file_paths = payload.get("file_paths", [])
+    if payload.get("task_id"):
+        task_ids.append(payload["task_id"])
+    if payload.get("file_path"):
+        file_paths.append(payload["file_path"])
+
+    target_category = payload.get("target_category", "download")  # 'download' or 'nomusic'
+    target_subfolder = payload.get("target_subfolder")  # None, "", "(Direct Files)", or subfolder name
+
+    if target_subfolder in (None, "", "(Direct Files)", "root", "Root"):
+        target_dir = os.path.abspath(target_category)
+    else:
+        clean_subfolder = os.path.basename(target_subfolder.strip())
+        target_dir = os.path.abspath(os.path.join(target_category, clean_subfolder))
+
+    os.makedirs(target_dir, exist_ok=True)
+
+    library = get_full_library()
+    moved = []
+    task_map = {item.get("task_id"): item for item in library if isinstance(item, dict)}
+
+    all_targets = []
+    for tid in task_ids:
+        if tid in task_map:
+            for rf in task_map[tid].get("result_files", []):
+                all_targets.append((tid, rf))
+
+    for fp in file_paths:
+        tid = None
+        for item in library:
+            if isinstance(item, dict) and fp in item.get("result_files", []):
+                tid = item.get("task_id")
+                break
+        all_targets.append((tid, fp))
+
+    library_changed = False
+    for tid, src_file in all_targets:
+        if not src_file or not os.path.exists(src_file):
+            continue
+
+        src_file_abs = os.path.abspath(os.path.normpath(src_file))
+        filename = os.path.basename(src_file_abs)
+        dst_file_abs = os.path.abspath(os.path.normpath(os.path.join(target_dir, filename)))
+
+        if src_file_abs == dst_file_abs:
+            continue
+
+        try:
+            # Handle destination collision safely
+            if os.path.exists(dst_file_abs):
+                base_name, ext = os.path.splitext(filename)
+                counter = 1
+                while os.path.exists(dst_file_abs):
+                    dst_file_abs = os.path.abspath(os.path.normpath(os.path.join(target_dir, f"{base_name}_{counter}{ext}")))
+                    counter += 1
+
+            shutil.move(src_file_abs, dst_file_abs)
+            moved.append({"old": src_file_abs, "new": dst_file_abs})
+
+            # Update library entry
+            if tid and tid in task_map:
+                task_map[tid]["result_files"] = [dst_file_abs]
+                library_changed = True
+            else:
+                for item in library:
+                    if isinstance(item, dict) and src_file_abs in [os.path.abspath(os.path.normpath(f)) for f in item.get("result_files", [])]:
+                        item["result_files"] = [dst_file_abs]
+                        library_changed = True
+        except (OSError, IOError, shutil.Error) as e:
+            print(f"Error moving file {src_file_abs}: {e}")
+
+    if library_changed:
+        from config import LIBRARY_FILE
+        try:
+            library_copy = list(library)
+            with open(LIBRARY_FILE, "w", encoding="utf-8") as f:
+                json.dump(library_copy, f, indent=4)
+        except (OSError, IOError, TypeError):
+            pass
+
+    invalidate_library_cache()
+    return {"status": "success", "moved": moved, "count": len(moved)}
+
+
+@router.get("/library/folders")
+@router.get("/folders")
+async def get_library_folders():
+    """Returns all subfolders on disk in download and nomusic directories, including empty ones."""
+    def scan_subdirs(base_dir):
+        if not os.path.exists(base_dir):
+            return []
+        subdirs = []
+        try:
+            for entry in os.scandir(base_dir):
+                if entry.is_dir(follow_symlinks=False):
+                    subdirs.append(entry.name)
+        except (OSError, PermissionError):
+            pass
+        return sorted(subdirs, key=lambda s: s.lower())
+
+    return {
+        "download": scan_subdirs("download"),
+        "nomusic": scan_subdirs("nomusic")
+    }
+
+
+@router.post("/library/create-folder")
+async def create_folder(payload: dict):
+    """Create a new subfolder in download or nomusic directory."""
+    category = payload.get("category", "download")
+    folder_name = payload.get("folder_name", "").strip()
+    if not folder_name:
+        raise HTTPException(status_code=400, detail="Folder name is required")
+
+    clean_name = os.path.basename(folder_name)
+    target_path = os.path.abspath(os.path.join(category, clean_name))
+    os.makedirs(target_path, exist_ok=True)
+    invalidate_library_cache()
+    return {"status": "created", "path": target_path, "name": clean_name}
 
 
 @router.get("/media/stream")
