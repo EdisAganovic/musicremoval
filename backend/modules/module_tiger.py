@@ -107,16 +107,18 @@ def separate_with_tiger(
                 target_length=TARGET_LEN,
                 hop_length=HOP_SEC,
                 batch_size=BATCH_SIZE,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                want_instrumental=want_instrumental,
+                target_stem=tiger_target
             )
 
-    d_np = d_out.squeeze().to(torch.float32).cpu().numpy()
-    e_np = e_out.squeeze().to(torch.float32).cpu().numpy()
-    m_np = m_out.squeeze().to(torch.float32).cpu().numpy()
+    d_np = d_out.squeeze().to(torch.float32).cpu().numpy() if d_out is not None else None
+    e_np = e_out.squeeze().to(torch.float32).cpu().numpy() if e_out is not None else None
+    m_np = m_out.squeeze().to(torch.float32).cpu().numpy() if m_out is not None else None
 
     t_end = time.time()
     infer_time = t_end - t_start
-    print(f"Neural inference completed in {infer_time:.2f}s ({total_duration / max(infer_time, 0.01):.1f}x realtime).")
+    print(f"\n{Fore.GREEN}Neural inference completed in {infer_time:.2f}s ({total_duration / max(infer_time, 0.01):.1f}x realtime).{Style.RESET_ALL}")
 
     # Select target stem
     if tiger_target == "dialogue":
@@ -126,7 +128,14 @@ def separate_with_tiger(
     elif tiger_target == "music":
         target_audio = m_np
     else:  # "dialogue_sfx" (default)
-        target_audio = d_np + e_np
+        if d_np is not None and e_np is not None:
+            target_audio = d_np + e_np
+        elif d_np is not None:
+            target_audio = d_np
+        elif e_np is not None:
+            target_audio = e_np
+        else:
+            target_audio = m_np
 
     # Resample back to original sample rate if needed
     if orig_sr != TARGET_SR:

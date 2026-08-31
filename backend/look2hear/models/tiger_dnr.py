@@ -845,34 +845,56 @@ class TIGERDNR(BaseModel):
             all_segment_length.append(segment_length)
 
         all_input = torch.cat(all_input, 0)
-        num_batch = num_session // batch_size
-        if num_session % batch_size > 0:
-            num_batch += 1
-        
-        for i in range(num_batch):
-            this_input = all_input[i*batch_size:(i+1)*batch_size]
-            actual_batch_size = this_input.shape[0]
-            with torch.no_grad():
-                est_target = model(this_input)
-                est_target = est_target.unsqueeze(2)
-                
-            for j in range(actual_batch_size):
-                this_est_target = est_target[j,:,:,:all_segment_length[i*batch_size+j]][:,:,ignore:ignore+target].unsqueeze(0)
-                all_target[:,:,:,ignore+(i*batch_size+j)*hop:ignore+(i*batch_size+j)*hop+target] += this_est_target # [batch, ntrack, nch, T]
+        from tqdm import tqdm
+        with tqdm(total=num_batch, desc=f"TIGER-DnR [{pass_name}]", unit="batch", leave=True) as pbar:
+            for i in range(num_batch):
+                this_input = all_input[i*batch_size:(i+1)*batch_size]
+                actual_batch_size = this_input.shape[0]
+                with torch.no_grad():
+                    est_target = model(this_input)
+                    est_target = est_target.unsqueeze(2)
+                    
+                for j in range(actual_batch_size):
+                    this_est_target = est_target[j,:,:,:all_segment_length[i*batch_size+j]][:,:,ignore:ignore+target].unsqueeze(0)
+                    all_target[:,:,:,ignore+(i*batch_size+j)*hop:ignore+(i*batch_size+j)*hop+target] += this_est_target # [batch, ntrack, nch, T]
 
-            if progress_callback and num_batch > 0:
-                pct = (pass_idx + (i + 1) / num_batch) / total_passes
-                overall_progress = int(40 + pct * 45)
-                progress_callback(f"TIGER-DnR: {pass_name} ({i+1}/{num_batch} batches)", overall_progress)
+                pbar.update(1)
+                if progress_callback and num_batch > 0:
+                    pct = (pass_idx + (i + 1) / num_batch) / total_passes
+                    overall_progress = int(30 + pct * 60)
+                    progress_callback(f"TIGER-DnR: {pass_name} ({i+1}/{num_batch})", overall_progress)
 
         all_target = all_target[:,:,:,skip_idx:skip_idx+batch_length].contiguous() / tr_ratio
 
         return all_target.squeeze(0)
     
-    def forward(self, mixture_tensor, target_length=12.0, hop_length=6.0, batch_size=4, progress_callback=None):
-        all_target_dialog = self.wav_chunk_inference(self.dialog, mixture_tensor, target_length=target_length, hop_length=hop_length, batch_size=batch_size, progress_callback=progress_callback, pass_name="Dialogue", pass_idx=0, total_passes=3)[2]
-        all_target_effect = self.wav_chunk_inference(self.effect, mixture_tensor, target_length=target_length, hop_length=hop_length, batch_size=batch_size, progress_callback=progress_callback, pass_name="Sound Effects", pass_idx=1, total_passes=3)[1]
-        all_target_music = self.wav_chunk_inference(self.music, mixture_tensor, target_length=target_length, hop_length=hop_length, batch_size=batch_size, progress_callback=progress_callback, pass_name="Music Score", pass_idx=2, total_passes=3)[0]
+    def forward(self, mixture_tensor, target_length=12.0, hop_length=6.0, batch_size=4, progress_callback=None, want_instrumental=False, target_stem="dialogue_sfx"):
+        needs_dialog = target_stem in ["dialogue", "dialogue_sfx"]
+        needs_effect = target_stem in ["sfx", "dialogue_sfx"]
+        needs_music = (target_stem == "music") or want_instrumental
+
+        active_passes = []
+        if needs_dialog:
+            active_passes.append(("dialog", "Dialogue", self.dialog, 2))
+        if needs_effect:
+            active_passes.append(("effect", "Sound Effects", self.effect, 1))
+        if needs_music:
+            active_passes.append(("music", "Music Score", self.music, 0))
+
+        total_passes = max(1, len(active_passes))
+        results = {}
+
+        for idx, (stem_key, pass_name, sub_model, track_idx) in enumerate(active_passes):
+            target_out = self.wav_chunk_inference(
+                sub_model, mixture_tensor, target_length=target_length, hop_length=hop_length,
+                batch_size=batch_size, progress_callback=progress_callback,
+                pass_name=pass_name, pass_idx=idx, total_passes=total_passes
+            )[track_idx]
+            results[stem_key] = target_out
+
+        all_target_dialog = results.get("dialog")
+        all_target_effect = results.get("effect")
+        all_target_music = results.get("music")
         return all_target_dialog, all_target_effect, all_target_music
     
     def get_model_args(self):
