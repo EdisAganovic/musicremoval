@@ -36,8 +36,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
 
     // Helper to extract folder category and subfolder name from file path
     const getFolderInfo = (item) => {
-        const filePath = item.result_files?.[0] || '';
-        const normalized = filePath.replace(/\\/g, '/');
+        const rawPath = item.result_files?.[0] || item.source_file || item.file_path || '';
+        const normalized = ('/' + rawPath.replace(/\\/g, '/')).replace(/\/+/g, '/');
         const lower = normalized.toLowerCase();
         
         const downloadIdx = lower.indexOf('/download/');
@@ -45,13 +45,13 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
         
         if (downloadIdx !== -1) {
             const rest = normalized.slice(downloadIdx + '/download/'.length);
-            const parts = rest.split('/');
+            const parts = rest.split('/').filter(Boolean);
             const sub = parts.length > 1 ? parts[0] : '(Direct Files)';
             return { category: 'download', subfolder: sub };
         }
         if (nomusicIdx !== -1) {
             const rest = normalized.slice(nomusicIdx + '/nomusic/'.length);
-            const parts = rest.split('/');
+            const parts = rest.split('/').filter(Boolean);
             const sub = parts.length > 1 ? parts[0] : '(Direct Files)';
             return { category: 'nomusic', subfolder: sub };
         }

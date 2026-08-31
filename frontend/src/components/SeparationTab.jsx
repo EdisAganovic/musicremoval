@@ -646,7 +646,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       {/* Model Selection */}
       <div className="flex flex-wrap justify-center gap-2.5 mb-6">
         {[
-          { id: "both", label: "Spleeter+Demucs },
+          { id: "both", label: "Spleeter+Demucs" },
           { id: "roformer", label: "🎬 Roformer BGM" },
           { id: "tiger", label: "🐯 TIGER-DnR (3-Stem)" },
           { id: "demucs", label: "Demucs" },
@@ -874,8 +874,8 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                     type="button"
                     onClick={() => setResolution(r.value)}
                     className={`px-2 py-0.5 rounded-md transition-all text-xs font-semibold ${resolution === r.value
-                        ? "bg-blue-600 text-white shadow-sm shadow-blue-500/30"
-                        : "text-gray-400 hover:text-white"
+                      ? "bg-blue-600 text-white shadow-sm shadow-blue-500/30"
+                      : "text-gray-400 hover:text-white"
                       }`}
                   >
                     {r.label}
@@ -1078,9 +1078,9 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
 
                               {status === "processing" && (
                                 <p className={`text-xs mt-0.5 truncate ${isItemCompleted ? "text-emerald-400 font-semibold" :
-                                    isItemFailed ? "text-red-400 font-semibold" :
-                                      isItemProcessing ? "text-primary-300 font-bold" :
-                                        "text-gray-500"
+                                  isItemFailed ? "text-red-400 font-semibold" :
+                                    isItemProcessing ? "text-primary-300 font-bold" :
+                                      "text-gray-500"
                                   }`}>
                                   {fileInfo.current_step || (isItemProcessing ? "Processing..." : isItemCompleted ? "Completed" : "Queued in line")}
                                 </p>
