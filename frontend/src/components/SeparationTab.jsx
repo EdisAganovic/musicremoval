@@ -119,9 +119,9 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       badge: "Recommended"
     },
     {
-      id: "model_mel_band_roformer_ep_3_sdr_14.8359.ckpt",
-      name: "🎥 MSST Film & Cartoon SFX Stripper",
-      desc: "Specialized MSST Film Model (Ultra-high SDR 14.84 for Music vs SFX+Dialogue)",
+      id: "melband_roformer_instvoc_duality_v1.ckpt",
+      name: "🎥 Mel-Band Roformer InstVoc Duality (Kim)",
+      desc: "Specialized Film Model (High SDR for Music vs SFX+Dialogue)",
       badge: "Film SFX HQ"
     },
     {
@@ -141,6 +141,12 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       name: "🏛️ Mel-Band Roformer De-Reverb",
       desc: "Studio Clean Dialogue (Strips Room Reverb & Hall Echo)",
       badge: "De-Echo"
+    },
+    {
+      id: "denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt",
+      name: "✨ Mel-Band Roformer Denoise & Clean",
+      desc: "Removes Background Noise & Hiss while keeping Dialogue intact",
+      badge: "Denoise"
     },
     {
       id: "mel_band_roformer_bleed_suppressor_v1.ckpt",
