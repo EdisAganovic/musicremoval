@@ -1,5 +1,19 @@
 # Frontend Changelog
 
+## [0.0.19] - 2026-08-31 🚀
+
+### [Added]
+- **Audio Splitter Pro Rebranding**: Updated application branding, title bars, and diagnostics reports across the entire web application.
+- **Collapsible Folders Sidebar**: Interactive folder tree with real-time file counts for `Download`, `NoMusic`, and all show/series subfolders.
+- **Direct Disk Folder Discovery**: Auto-detects physical subdirectories on disk (`GET /api/library/folders`), instantly displaying newly created and empty folders in the tree.
+- **Root-Only Default View**: By default, the library table displays only direct root files to keep the main list clean and uncluttered.
+- **Instant Drag & Drop File Moving**: Drag single or multi-selected files directly into sidebar folders with zero-delay optimistic UI updates and background synchronization (`POST /api/library/move`).
+- **On-the-Fly Folder Creation**: `[ 📁+ ]` modal in the sidebar header to create subfolders in `Download` or `NoMusic` without page reload.
+- **Centered Floating Audio Player**: Mathematically centered bottom media player across all screen sizes with smooth spring animations.
+- **Library TTL Caching & Fast Scanning**: High-speed iterative directory traversal (`os.scandir`) and in-memory TTL caching reducing scan latency.
+
+---
+
 ## [0.0.18] - 2026-08-20 ⚡
 
 ### [Added]

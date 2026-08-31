@@ -1,10 +1,10 @@
-# Demucs & Spleeter Vocal Extractor
+# Audio Splitter Pro
 
-**Version:** 0.0.18 | **Last Updated:** 2026-08-20
+**Version:** 0.0.19 | **Last Updated:** 2026-08-31
 
-A professional AI-powered vocal separation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
+A professional AI-powered vocal separation and audio workstation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.18-emerald)
+![Version](https://img.shields.io/badge/version-0.0.19-emerald)
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.129+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
@@ -581,6 +581,14 @@ _Times include both Spleeter + Demucs processing with alignment_
 ## 📝 Changelog
 
 See [docs/backend_changelog.md](docs/backend_changelog.md) and [docs/frontend_changelog.md](docs/frontend_changelog.md) for detailed version history.
+
+### v0.0.19 (2026-08-31)
+- ✅ **Rebrand to Audio Splitter Pro** across frontend, backend, titles, and diagnostic dashboards
+- ✅ **Collapsible Folders Sidebar** with dynamic file counts and subfolder management
+- ✅ **Instant Drag & Drop** for moving single or multiple files into folders with zero-delay optimistic UI
+- ✅ **Disk Folder Auto-Discovery** via `/api/library/folders` with empty subfolder support
+- ✅ **Centered Floating Audio Player** with smooth spring animations and full responsive support
+- ✅ **High-Performance Library Caching & Fast Traversal** with `os.scandir` iteration and in-memory TTL caching
 
 ### v0.0.18 (2026-08-20)
 - ✅ Added "Remove Silence" toggle with natural 1.0s lead-in/lead-out flow padding and micro-fades
