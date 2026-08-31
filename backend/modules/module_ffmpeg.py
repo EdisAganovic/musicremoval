@@ -266,7 +266,6 @@ def get_file_metadata(file_path):
         try:
             result = tracked_run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
             if result.returncode != 0:
-                print(f"ffprobe failed for {file_path}. Return code: {result.returncode}, stderr: {result.stderr}")
                 return metadata
             data = json.loads(result.stdout)
         except subprocess.TimeoutExpired:

@@ -97,6 +97,8 @@ def execute_ffmpeg_video_export(input_file, audio_file, output_file, output_form
 
     codec_to_try = resolve_h264_video_codec(video_codec) if not skip_video_encoding else "copy"
 
+    tmp_target = output_file + ".tmp"
+
     def build_cmd(vcodec):
         cmd = [
             FFMPEG_EXE, "-loglevel", "error", "-y",
@@ -126,7 +128,7 @@ def execute_ffmpeg_video_export(input_file, audio_file, output_file, output_form
             cmd.extend(["-f", "mp4"])
         elif output_format == "mkv":
             cmd.extend(["-f", "matroska"])
-        cmd.append(output_file)
+        cmd.append(tmp_target)
         return cmd
 
     attempts = [codec_to_try]
@@ -143,12 +145,29 @@ def execute_ffmpeg_video_export(input_file, audio_file, output_file, output_form
             update_progress_cb("Finalizing output", 95)
         try:
             tracked_run(cmd, check=True)
-            print(f"{Fore.GREEN}[OK] Successfully created {description} output: {output_file} (using {attempt_codec}){Style.RESET_ALL}")
-            return True
+            if os.path.exists(tmp_target) and os.path.getsize(tmp_target) > 0:
+                if os.path.exists(output_file):
+                    try:
+                        os.remove(output_file)
+                    except OSError:
+                        pass
+                shutil.move(tmp_target, output_file)
+                print(f"{Fore.GREEN}[OK] Successfully created {description} output: {output_file} (using {attempt_codec}){Style.RESET_ALL}")
+                return True
         except subprocess.CalledProcessError as e:
             last_error = e
+            if os.path.exists(tmp_target):
+                try:
+                    os.remove(tmp_target)
+                except OSError:
+                    pass
             print(f"{Fore.YELLOW}Warning: Video export with '{attempt_codec}' failed. Attempting next fallback...{Style.RESET_ALL}")
 
+    if os.path.exists(tmp_target):
+        try:
+            os.remove(tmp_target)
+        except OSError:
+            pass
     print(f"{Fore.RED}Error: All video export codec attempts failed for {output_file}: {last_error}{Style.RESET_ALL}")
     raise last_error
 

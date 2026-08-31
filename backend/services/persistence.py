@@ -608,18 +608,9 @@ def get_file_metadata_cached(file_path):
 
     # Check cache first
     if cache_key in metadata_cache:
-        cached_data = metadata_cache[cache_key]
-        # If duration or resolution is N/A, try to re-fetch it.
-        # This helps recover from partial/failed metadata extraction.
-        if cached_data.get("duration") != "N/A" and cached_data.get("resolution") != "N/A":
-            return cached_data
-        
-        # Also return if it IS an audio file (meaning resolution is expected to be N/A)
-        # but only if duration is valid.
-        if not cached_data.get("is_video") and cached_data.get("duration") != "N/A":
-            return cached_data
+        return metadata_cache[cache_key]
 
-    # Not in cache or needs re-fetch, extract metadata
+    # Not in cache, extract metadata
     try:
         metadata = get_file_metadata(abs_path)
     except (OSError, IOError, RuntimeError):
