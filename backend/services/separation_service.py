@@ -114,8 +114,8 @@ def _separation_worker_loop():
                 skip_video_encoding=item.get("skip_video_encoding", False),
                 super_keyframe=item.get("super_keyframe", False),
                 resolution=item.get("resolution", "1080p"),
-                export_instrumental=item["export_instrumental"],
-                remove_silence=item["remove_silence"]
+                export_instrumental=item.get("export_instrumental", False),
+                remove_silence=item.get("remove_silence", False)
             )
         except Exception as e:
             print(f"{Fore.RED}[Separation Queue] Unhandled exception in task {task_id}: {e}{Style.RESET_ALL}")

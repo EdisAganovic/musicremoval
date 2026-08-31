@@ -10,29 +10,42 @@ from typing import Optional
 class TransactionContext:
     """
     Context manager for transactional operations with rollback support.
-    
+
     Usage:
         with TransactionContext() as tx:
             tx.add_action(lambda: os.remove(file1))
             tx.add_action(lambda: os.remove(file2))
-            # If any action fails, all completed actions are rolled back
+            # commit() runs the actions; if any fails, earlier ones are rolled back.
+            # If an exception is raised inside the `with` block, committed actions
+            # are rolled back on exit.
     """
     def __init__(self):
-        self.completed_actions = []
-        self.rollback_actions = []
-        self.success = True
+        self._pending = []       # (action, rollback) not yet executed
+        self._committed = []     # (action, rollback) successfully executed
+        self._committed_flag = False
 
     def add_action(self, action, rollback=None):
-        """Add an action with optional rollback."""
-        self.completed_actions.append((action, rollback))
+        """Queue an action with an optional rollback to run on failure."""
+        self._pending.append((action, rollback))
 
     def commit(self):
-        """Mark transaction as successful."""
-        self.success = True
+        """Execute all pending actions; on failure, roll back already-executed ones."""
+        while self._pending:
+            action, rollback = self._pending.pop(0)
+            try:
+                action()
+            except Exception:
+                # Roll back everything that already succeeded before re-raising
+                self.rollback()
+                self._committed.clear()
+                self._pending.clear()
+                raise
+            self._committed.append((action, rollback))
+        self._committed_flag = True
 
     def rollback(self):
-        """Execute rollback actions in reverse order."""
-        for action, rollback in reversed(self.completed_actions):
+        """Execute rollback actions in reverse order of the executed actions."""
+        for action, rollback in reversed(self._committed):
             if rollback:
                 try:
                     rollback()
@@ -44,7 +57,10 @@ class TransactionContext:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type is not None:
-            self.success = False
+            # Commit anything still pending that caller didn't explicitly commit,
+            # then roll back on error.
+            if self._pending:
+                self.commit()
             self.rollback()
         return False  # Don't suppress exceptions
 

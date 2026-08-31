@@ -77,7 +77,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
-const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
+const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearInitialFile: _onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
   const activeLibraryFile = libraryFile || initialFilePath;
   const activeBatchId = externalBatchId || initialBatchId;
   const [file, setFile] = useState(null);
@@ -241,6 +241,10 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       onExternalBatchConsumed?.();
       onClearBatchId?.();
     }
+    // `onExternalBatchConsumed`/`onClearBatchId` are inline callbacks that clear the
+    // hand-off batch; they're consumed once when the batch arrives, so they're
+    // intentionally excluded to avoid re-firing as parent re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBatchId]);
 
   const handleReset = () => {
@@ -271,6 +275,9 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // `handleReset` is recreated each render; including it would re-register the
+    // keydown listener on every render. The handler only depends on `status`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   // Polling effect

@@ -236,6 +236,8 @@ def load_config(config_path='data/video.json'):
                 config['output']['format'] = output_config['format']
         
         # Validate processing settings
+        if 'processing' not in config:
+            config['processing'] = {'demucs_workers': 4, 'skip_video_encoding': False}
         if 'processing' in user_config:
             if not isinstance(user_config['processing'], dict):
                 raise ValueError("'processing' must be an object")
@@ -243,10 +245,10 @@ def load_config(config_path='data/video.json'):
             if 'demucs_workers' in proc_config:
                 if not isinstance(proc_config['demucs_workers'], int):
                     raise ValueError("'processing.demucs_workers' must be an integer")
-                config['processing'] = {'demucs_workers': proc_config['demucs_workers']}
-        else:
-            config['processing'] = {'demucs_workers': 4} # Default
-        
+                config['processing']['demucs_workers'] = proc_config['demucs_workers']
+            if 'skip_video_encoding' in proc_config:
+                config['processing']['skip_video_encoding'] = bool(proc_config['skip_video_encoding'])
+
         print(f"{Fore.GREEN}Configuration loaded successfully from '{config_path}'.{Style.RESET_ALL}")
         return config
         
@@ -805,10 +807,13 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 filter_parts = []
                 if lag_ms > 0:
                     filter_parts.append(f"adelay={int(lag_ms)}|{int(lag_ms)}")
-                
+                elif lag_ms < 0:
+                    trim_start_s = abs(lag_ms) / 1000.0
+                    filter_parts.append(f"atrim=start={trim_start_s:.4f},asetpts=PTS-STARTPTS")
+
                 # Pad to original duration
                 filter_parts.append(f"apad=whole_dur={original_audio_duration}")
-                
+
                 # Hard trim at original duration
                 filter_parts.append(f"atrim=0:{original_audio_duration}")
                 
@@ -863,9 +868,6 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
 
         output_folder = "nomusic"
         os.makedirs(output_folder, exist_ok=True)
-
-        # Load and validate configuration
-        settings = load_config('data/video.json')
 
         video_settings = settings.get('video', {})
         audio_settings = settings.get('audio', {})

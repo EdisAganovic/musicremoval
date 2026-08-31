@@ -22,6 +22,30 @@ def safe_path(user_input: str, base_dir: str) -> Optional[str]:
     return None
 
 
+def is_path_within_allowed_roots(target: str, allowed_roots: list) -> bool:
+    """
+    Return True if `target` (an absolute path) resides inside any of the allowed
+    root directories. Guards against path traversal in file-serving / file-open
+    endpoints. Accepts symlink-unsafe comparisons on the normalized absolute path.
+    """
+    if not target:
+        return False
+    try:
+        target_abs = os.path.abspath(os.path.normpath(target)).lower()
+    except (ValueError, TypeError, OSError):
+        return False
+    for root in allowed_roots:
+        if not root:
+            continue
+        try:
+            root_abs = os.path.abspath(os.path.normpath(root)).lower()
+        except (ValueError, TypeError, OSError):
+            continue
+        if target_abs == root_abs or target_abs.startswith(root_abs + os.sep) or target_abs.startswith(root_abs + "/"):
+            return True
+    return False
+
+
 def validate_url(url: str) -> bool:
     """
     Basic URL validation.

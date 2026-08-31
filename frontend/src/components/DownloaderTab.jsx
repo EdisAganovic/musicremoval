@@ -54,7 +54,7 @@ import { useAudioPlayer } from '../contexts/AudioPlayerContext';
 import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X, AudioLines } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
+const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) => {
     const [url, setUrl] = useState('');
     const [taskId, setTaskId] = useState(null);
     const [status, setStatus] = useState(null);
@@ -216,7 +216,11 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
         return () => {
             clearInterval(interval);
         };
-    }, [taskId, status]);
+        // `onSeparate` is an inline callback recreated each parent render; restarting
+        // this polling interval on every render would be wasteful, so it's intentionally
+        // excluded from the dependency array.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [taskId, status, autoSeparate]);
 
     // Queue polling effect
     useEffect(() => {
@@ -458,7 +462,7 @@ const DownloaderTab = ({ analyzingProgress, onSeparate }) => {
                 setSelectedFormatId(finalFormats[finalFormats.length - 1].format_id);
             }
         }
-    }, [format, videoInfo]);
+    }, [format, videoInfo, lastVideoId]);
 
     // Save selected format to localStorage when it changes (only if checkbox is checked)
     useEffect(() => {

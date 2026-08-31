@@ -231,6 +231,7 @@ export const AudioPlayerProvider = ({ children }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components -- context + hook co-location is intentional
 export const useAudioPlayer = () => {
   const context = useContext(AudioPlayerContext);
   if (!context) {

@@ -285,7 +285,7 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
 
     // Close context menu on outside click
     useEffect(() => {
-        const handleClickOutside = (e) => {
+        const handleClickOutside = (_e) => {
             if (contextMenu) {
                 setContextMenu(null);
             }
@@ -611,6 +611,9 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                 sizeAbortRef.current.abort();
             }
         };
+        // `handleRefresh` is recreated every render; including it would refetch
+        // on every render instead of only when the tab becomes active.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isActive]);
 
     // Keyboard Shortcuts

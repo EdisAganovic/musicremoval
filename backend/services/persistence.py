@@ -21,6 +21,10 @@ from core.state import (
 from utils.file_ops import safe_makedirs
 
 
+# Counter for time-based periodic metadata cache flushes
+_metadata_save_counter = 0
+
+
 def init_data_directory():
     """
     Ensure all required directories and JSON files exist on app startup.
@@ -215,7 +219,8 @@ async def delete_active_download_async(task_id: str):
 # ============== Library Functions ==============
 
 def save_to_library(task_data):
-    """Saves a completed task to the local JSON library."""
+    """Saves a completed task to the local JSON library (does not mutate caller's dict)."""
+    task_data = dict(task_data)  # copy so we never mutate the caller's dict
     try:
         library = []
         if os.path.exists(LIBRARY_FILE) and os.path.getsize(LIBRARY_FILE) > 0:
@@ -238,6 +243,9 @@ def save_to_library(task_data):
                 if isinstance(item, dict) and item.get("result_files") and item["result_files"][0] == new_result_path:
                     existing_result_path_index = i
                     break
+
+        # Copy dict to avoid mutating caller object
+        task_data = dict(task_data)
 
         # Normalize paths in task_data before saving
         if "result_files" in task_data:
@@ -307,7 +315,7 @@ def get_full_library():
         changed = False
         for item in library:
             res_files = item.get("result_files", [])
-            if res_files and os.path.exists(res_files[0]):
+            if res_files and res_files[0] and os.path.exists(res_files[0]):
                 valid_items.append(item)
             else:
                 changed = True
@@ -620,8 +628,11 @@ def get_file_metadata_cached(file_path):
     # Save to cache
     metadata_cache[cache_key] = metadata
 
-    # Periodically save cache (every 100 entries)
-    if len(metadata_cache) % 100 == 0:
+    # Periodically save cache (time-based flush so deletions still get saved)
+    global _metadata_save_counter
+    _metadata_save_counter += 1
+    if _metadata_save_counter >= 100:
+        _metadata_save_counter = 0
         save_metadata_cache()
 
     return metadata

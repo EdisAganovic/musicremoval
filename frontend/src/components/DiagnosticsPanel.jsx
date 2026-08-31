@@ -32,7 +32,7 @@ const StatusBadge = ({ status }) => {
     return <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-gray-500/20 text-gray-400">N/A</span>;
 };
 
-const CollapsibleSection = ({ title, icon: Icon, iconColor, children, defaultOpen = true, status }) => {
+const CollapsibleSection = ({ title, icon: _Icon, iconColor, children, defaultOpen = true, status }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
         <div className="bg-dark-800/50 rounded-xl border border-white/5 overflow-hidden">

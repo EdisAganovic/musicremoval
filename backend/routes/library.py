@@ -13,10 +13,20 @@ from config import (
     tasks, get_full_library, save_to_library,
     get_file_metadata_cached, save_metadata_cache,
     METADATA_CACHE_FILE, LIBRARY_FILE, metadata_cache,
-    safe_remove
+    safe_remove, is_path_within_allowed_roots
 )
 
 router = APIRouter(prefix="/api", tags=["library"])
+
+# Allowed root directories that media/stream/open endpoints may access.
+# Everything outside these is rejected as a path-traversal attempt.
+ALLOWED_ROOTS = [
+    os.path.abspath("nomusic"),
+    os.path.abspath("download"),
+    os.path.abspath("uploads"),
+    os.path.abspath("projects"),
+    os.path.abspath("_temp"),
+]
 
 
 # In-memory library cache for instantaneous responses on repeated polling
@@ -361,12 +371,20 @@ async def get_library_folders():
 async def create_folder(payload: dict):
     """Create a new subfolder in download or nomusic directory."""
     category = payload.get("category", "download")
+    # Only allow known top-level categories to prevent path traversal via category
+    if category not in ("download", "nomusic", "uploads", "projects"):
+        raise HTTPException(status_code=400, detail="Invalid category")
+
     folder_name = payload.get("folder_name", "").strip()
     if not folder_name:
         raise HTTPException(status_code=400, detail="Folder name is required")
 
     clean_name = os.path.basename(folder_name)
     target_path = os.path.abspath(os.path.join(category, clean_name))
+
+    if not is_path_within_allowed_roots(target_path, ALLOWED_ROOTS + [os.path.abspath(".")]):
+        raise HTTPException(status_code=403, detail="Access to this path is not allowed")
+
     os.makedirs(target_path, exist_ok=True)
     invalidate_library_cache()
     return {"status": "created", "path": target_path, "name": clean_name}
@@ -398,6 +416,10 @@ async def stream_media(path: str):
             clean_path = rel_path
         else:
             raise HTTPException(status_code=404, detail=f"Media file not found: {clean_path}")
+
+    # SECURITY: reject any path that escapes the allowed media roots
+    if not is_path_within_allowed_roots(clean_path, ALLOWED_ROOTS + [os.path.abspath(".")]):
+        raise HTTPException(status_code=403, detail="Access to this path is not allowed")
 
     ext = os.path.splitext(clean_path)[1].lower()
     media_types = {
@@ -434,16 +456,22 @@ async def stream_media(path: str):
 async def open_file(payload: dict):
     """Open a file with default application."""
     path = payload.get("path")
+    if not path:
+        raise HTTPException(status_code=400, detail="Path is required")
 
-    if not path or not os.path.exists(path):
+    clean = os.path.abspath(os.path.normpath(path))
+    if not os.path.exists(clean) or not os.path.isfile(clean):
         raise HTTPException(status_code=404, detail="File not found")
+
+    if not is_path_within_allowed_roots(clean, ALLOWED_ROOTS + [os.path.abspath(".")]):
+        raise HTTPException(status_code=403, detail="Access to this path is not allowed")
 
     try:
         if os.name == 'nt':  # Windows
-            os.startfile(path)
+            os.startfile(clean)
         elif os.name == 'posix':  # macOS/Linux
-            subprocess.run(['open', path] if os.uname().sysname == 'Darwin' else ['xdg-open', path])
-        return {"status": "opened", "path": path}
+            subprocess.run(['open', clean] if os.uname().sysname == 'Darwin' else ['xdg-open', clean])
+        return {"status": "opened", "path": clean}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to open file: {str(e)}")
 
@@ -456,14 +484,18 @@ async def open_folder(payload: dict):
     if not path:
         raise HTTPException(status_code=400, detail="Path required")
 
-    # Resolve relative paths
+    # Resolve relative paths against allowed roots, not arbitrary parents
     if not os.path.isabs(path):
-        path = os.path.join(os.path.dirname(__file__), '..', path)
+        path = os.path.join(os.path.abspath("."), path)
+    path = os.path.abspath(os.path.normpath(path))
 
     # If the path points to a file, we want to open its parent directory
     if os.path.exists(path) and os.path.isfile(path):
         path = os.path.dirname(path)
-    
+
+    if not is_path_within_allowed_roots(path, ALLOWED_ROOTS + [os.path.abspath(".")]):
+        raise HTTPException(status_code=403, detail="Access to this path is not allowed")
+
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
 

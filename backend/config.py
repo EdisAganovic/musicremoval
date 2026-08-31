@@ -53,6 +53,7 @@ from utils.file_ops import (
 # Re-export from utils.validation
 from utils.validation import (
     safe_path,
+    is_path_within_allowed_roots,
     validate_url,
     validate_youtube_url,
     is_youtube_url,
@@ -148,6 +149,7 @@ __all__ = [
     "safe_get_file_size",
     # validation
     "safe_path",
+    "is_path_within_allowed_roots",
     "validate_url",
     "validate_youtube_url",
     "is_youtube_url",

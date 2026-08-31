@@ -190,6 +190,18 @@ async def stream_project_media(file: Optional[str] = None, path: Optional[str] =
         else:
             raise HTTPException(status_code=404, detail=f"Media file not found: {clean_path}")
 
+    # SECURITY: only serve files from allowed project directories
+    _allowed = [
+        os.path.abspath("nomusic"),
+        os.path.abspath("download"),
+        os.path.abspath("uploads"),
+        os.path.abspath("projects"),
+        os.path.abspath("."),
+    ]
+    clean_lower = clean_path.lower()
+    if not any(clean_lower.startswith(r.lower()) or clean_lower == r.lower() for r in _allowed):
+        raise HTTPException(status_code=403, detail="Access to this path is not allowed")
+
     ext = os.path.splitext(clean_path)[1].lower()
     media_types = {
         '.mp4': 'video/mp4',
@@ -276,7 +288,7 @@ async def create_project(
     """Creates a new Audio Studio Project workspace."""
     from modules.module_ffmpeg import FFMPEG_EXE, get_file_metadata, tracked_run
 
-    project_id = str(uuid.uuid4())[:8]
+    project_id = str(uuid.uuid4())[:12]
     p_dir = get_project_dir(project_id)
     stems_dir = os.path.join(p_dir, "stems")
     os.makedirs(stems_dir, exist_ok=True)
@@ -434,15 +446,6 @@ async def expand_full_duration(project_id: str):
     save_project_json(project_id, data)
     print(f"{Fore.GREEN}[Audio Studio] Expanded Project '{data.get('name')}' to full duration: {full_dur:.2f}s{Style.RESET_ALL}")
     return {"project": data, "duration": full_dur}
-
-
-@router.delete("/{project_id}")
-async def delete_project(project_id: str):
-    """Delete a project and all its stem assets."""
-    p_dir = get_project_dir(project_id)
-    if os.path.exists(p_dir):
-        shutil.rmtree(p_dir, ignore_errors=True)
-    return {"status": "deleted", "id": project_id}
 
 
 @router.delete("/{project_id}/track/{track_id}")

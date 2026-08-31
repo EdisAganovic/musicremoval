@@ -30,7 +30,7 @@ export default defineConfig([
         'warn',
         {
           argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_|[A-Z]',
+          varsIgnorePattern: '^_|[A-Z]|^(motion|AnimatePresence)$',
           caughtErrorsIgnorePattern: '^_|err|error',
           ignoreRestSiblings: true,
         },

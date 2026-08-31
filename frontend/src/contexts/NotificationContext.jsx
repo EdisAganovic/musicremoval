@@ -39,6 +39,7 @@ import { BACKEND_URL } from '../config';
 
 const NotificationContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components -- context + hook co-location is intentional
 export const useNotifications = () => {
     const context = useContext(NotificationContext);
     if (!context) {
