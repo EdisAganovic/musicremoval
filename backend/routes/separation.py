@@ -459,3 +459,11 @@ async def get_task_status(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
 
     return tasks[task_id]
+
+
+@router.post("/separation-queue/clear")
+async def clear_queue_route():
+    """Clear all pending tasks in the separation queue."""
+    from services.separation_service import clear_separation_queue
+    cleared = clear_separation_queue()
+    return {"status": "success", "cleared_tasks": cleared}

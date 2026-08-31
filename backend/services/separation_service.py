@@ -27,6 +27,23 @@ def get_separation_queue_length():
     return _separation_queue.qsize()
 
 
+def clear_separation_queue():
+    """Drains all pending items from the separation queue."""
+    cleared = 0
+    while not _separation_queue.empty():
+        try:
+            item = _separation_queue.get_nowait()
+            t_id = item.get("task_id")
+            if t_id and t_id in tasks:
+                tasks[t_id]["status"] = "cancelled"
+            _separation_queue.task_done()
+            cleared += 1
+        except queue.Empty:
+            break
+    save_tasks_sync()
+    return cleared
+
+
 def enqueue_separation(task_id: str, file_path: str, duration=None, model="both",
                        roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
                        tiger_target="dialogue_sfx", tiger_overlap=50,
