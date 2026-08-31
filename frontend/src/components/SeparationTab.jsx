@@ -265,6 +265,14 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
     setRemoveSilence(false);
   };
 
+  const handleCancelQueue = async () => {
+    try {
+      await axios.post(`${BACKEND_URL}/api/separation-queue/clear`);
+      toast.success("Separation queue cleared");
+    } catch (_) {}
+    handleReset();
+  };
+
   // Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -1367,9 +1375,20 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                         <CheckCircle className="w-4 h-4 mr-1" /> Finished
                       </span>
                     ) : (
-                      <span className="animate-pulse text-primary-400">
-                        {currentStep || "Initializing..."}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="animate-pulse text-primary-400 font-semibold">
+                          {currentStep || "Initializing..."}
+                        </span>
+                        {(status === "pending" || status === "processing" || status === "uploading") && (
+                          <button
+                            type="button"
+                            onClick={handleCancelQueue}
+                            className="px-2 py-0.5 text-[11px] font-bold text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500/30 border border-red-500/20 rounded-md transition-colors"
+                          >
+                            Cancel / Clear
+                          </button>
+                        )}
+                      </div>
                     )}
                   </span>
                 </div>

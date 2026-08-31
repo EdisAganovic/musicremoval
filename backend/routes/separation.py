@@ -83,7 +83,6 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
 @router.post("/separate")
 async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), roformer_model: str = Form("mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"), tiger_target: str = Form("dialogue_sfx"), tiger_overlap: int = Form(50), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: int = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False)):
     """Upload and separate vocals from an audio file."""
-    from modules.module_ffmpeg import get_file_metadata
     from colorama import Fore, Style
 
     upload_dir = "uploads"
@@ -93,7 +92,8 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    metadata = await asyncio.to_thread(get_file_metadata, file_path)
+    # Fast initial metadata, background worker will refine it
+    metadata = {"filename": file.filename, "is_video": True, "resolution": resolution}
 
     print(f"\n{Fore.CYAN}=== File Upload Separation ==={Style.RESET_ALL}")
     print(f"File: {file_path}")
@@ -102,7 +102,7 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
 
     task_id, batch_id = _create_separation_task(
         background_tasks, file_path, file.filename, metadata,
-        model, skip_video_encoding, "File uploaded",
+        model, skip_video_encoding, "File queued for separation",
         roformer_model=roformer_model,
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
         duration=duration,
@@ -116,7 +116,6 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
 @router.post("/separate-file")
 async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequest):
     """Separate vocals from an existing file on the server."""
-    from modules.module_ffmpeg import get_file_metadata
     from colorama import Fore, Style
 
     file_path = payload.file_path
@@ -133,15 +132,16 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
+    filename = os.path.basename(file_path)
+    metadata = {"filename": filename, "is_video": True, "resolution": resolution}
+
     print(f"\n{Fore.CYAN}=== Single File Separation ==={Style.RESET_ALL}")
     print(f"File: {file_path}")
     if duration:
         print(f"{Fore.YELLOW}Preview mode: limiting to first {duration}s{Style.RESET_ALL}")
 
-    metadata = await asyncio.to_thread(get_file_metadata, file_path)
-
     task_id, batch_id = _create_separation_task(
-        background_tasks, file_path, os.path.basename(file_path), metadata,
+        background_tasks, file_path, filename, metadata,
         model, skip_video_encoding, "File queued for separation",
         roformer_model=roformer_model,
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,

@@ -36,12 +36,29 @@ def clear_separation_queue():
             t_id = item.get("task_id")
             if t_id and t_id in tasks:
                 tasks[t_id]["status"] = "cancelled"
+                tasks[t_id]["current_step"] = "Cancelled by user"
             _separation_queue.task_done()
             cleared += 1
         except queue.Empty:
             break
     save_tasks_sync()
     return cleared
+
+
+def cleanup_stale_tasks_on_boot():
+    """Marks any leftover pending/processing tasks from a previous crashed/reloaded session as cancelled."""
+    modified = False
+    for t_id, t_data in list(tasks.items()):
+        if isinstance(t_data, dict) and t_data.get("status") in ["pending", "processing"]:
+            t_data["status"] = "cancelled"
+            t_data["current_step"] = "Cancelled (server restarted)"
+            modified = True
+    if modified:
+        save_tasks_sync()
+
+
+# Run startup cleanup
+cleanup_stale_tasks_on_boot()
 
 
 def enqueue_separation(task_id: str, file_path: str, duration=None, model="both",
@@ -167,6 +184,16 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model="both
 
         if not download_ffmpeg():
             raise Exception("FFmpeg download failed")
+
+        # Refine metadata in background worker
+        if task_id in tasks and not tasks[task_id].get("metadata", {}).get("duration"):
+            try:
+                from modules.module_ffmpeg import get_file_metadata
+                meta = get_file_metadata(file_path)
+                if meta:
+                    tasks[task_id]["metadata"] = meta
+            except Exception:
+                pass
 
         def on_progress(step, progress):
             if task_id in tasks:
