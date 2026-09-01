@@ -413,22 +413,36 @@ async def stream_media(path: str, request: Request = None):
         raise HTTPException(status_code=400, detail="Path parameter is required")
 
     # Clean up and normalize path (handle file:// prefix, urlencoded strings, etc.)
-    path_str = urllib.parse.unquote(path).strip().strip('"').strip("'")
-    if path_str.startswith("file:///"):
-        path_str = path_str[8:]
-    elif path_str.startswith("file://"):
-        path_str = path_str[7:]
+    raw_path = path.strip().strip('"').strip("'")
+    if raw_path.startswith("file:///"):
+        raw_path = raw_path[8:]
+    elif raw_path.startswith("file://"):
+        raw_path = raw_path[7:]
 
-    clean_path = os.path.abspath(os.path.normpath(path_str))
+    # Check directly first, then try unquoted if necessary
+    candidates = [raw_path]
+    try:
+        unquoted = urllib.parse.unquote(raw_path)
+        if unquoted != raw_path:
+            candidates.append(unquoted)
+    except Exception:
+        pass
 
-    # If file doesn't exist directly, check relative to project root or nomusic/download
-    if not os.path.exists(clean_path) or not os.path.isfile(clean_path):
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        rel_path = os.path.abspath(os.path.join(project_root, path_str))
-        if os.path.exists(rel_path) and os.path.isfile(rel_path):
-            clean_path = rel_path
-        else:
-            raise HTTPException(status_code=404, detail=f"Media file not found: {clean_path}")
+    clean_path = None
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    for cand in candidates:
+        cand_abs = os.path.abspath(os.path.normpath(cand))
+        if os.path.isfile(cand_abs):
+            clean_path = cand_abs
+            break
+        rel_cand = os.path.abspath(os.path.join(project_root, cand))
+        if os.path.isfile(rel_cand):
+            clean_path = rel_cand
+            break
+
+    if not clean_path:
+        raise HTTPException(status_code=404, detail=f"Media file not found: {raw_path}")
 
     # SECURITY: reject any path that escapes the allowed media roots
     if not is_path_within_allowed_roots(clean_path, ALLOWED_ROOTS + [os.path.abspath(".")]):
@@ -457,6 +471,9 @@ async def stream_media(path: str, request: Request = None):
         headers={
             "Accept-Ranges": "bytes",
             "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
             "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, Content-Type",
         }
     )

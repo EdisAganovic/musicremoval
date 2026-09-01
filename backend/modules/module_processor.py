@@ -625,7 +625,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             dialogue_sfx_path, roformer_music_path, temp_roformer_dir = separate_with_roformer(
                 temp_audio_wav_path, roformer_out_path, base_audio_name_no_ext,
                 model_filename=roformer_model,
-                pre_split_segments=shared_segments, want_instrumental=export_instrumental
+                pre_split_segments=shared_segments, want_instrumental=export_instrumental,
+                progress_callback=update_progress
             )
             r_end = time.time()
             timings['roformer'] = r_end - r_start
@@ -925,8 +926,10 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             clean_name = "_".join(raw_name.split("_")[1:])
         else:
             clean_name = raw_name
-            
-        base_filename = f"nomusic_{os.path.splitext(clean_name)[0]}"
+
+        raw_base = f"nomusic_{os.path.splitext(clean_name)[0]}"
+        from utils.helpers import get_unique_basename
+        base_filename = get_unique_basename(output_folder, raw_base, suffixes_to_check=["_vocals", "_instrumental", "_novocals", ""])
         
         output_start = time.time()
         try:

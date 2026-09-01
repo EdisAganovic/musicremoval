@@ -239,6 +239,7 @@ function AppContent() {
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
             <SeparationTab
+              isActive={activeTab === 'separation'}
               libraryFile={libraryFileToSeparate}
               initialFilePath={libraryFileToSeparate}
               onFileCleared={() => setLibraryFileToSeparate(null)}
@@ -259,7 +260,7 @@ function AppContent() {
             style={{ display: activeTab === 'studio' ? 'block' : 'none' }}
             className="glass-card p-4 md:p-6 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
-            <AudioStudioTab />
+            <AudioStudioTab isActive={activeTab === 'studio'} />
           </motion.div>
 
           {/* Downloader Tab */}
@@ -272,6 +273,7 @@ function AppContent() {
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
             <DownloaderTab
+              isActive={activeTab === 'downloader'}
               analyzingProgress={analyzingProgress}
               onSeparate={(filePath) => {
                 setLibraryFileToSeparate(filePath);

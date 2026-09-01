@@ -1,8 +1,80 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { libraryAPI, separationAPI } from '../api/index.js';
 import { BACKEND_URL } from '../config';
 import { useAudioPlayer } from '../contexts/AudioPlayerContext';
+
+const ROFORMER_NAMES = {
+    "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt": "Crowd BGM (ViperX)",
+    "mel_band_roformer_kim_ft_unwa.ckpt": "Kim FT Vocals",
+    "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt": "ViperX Vocals (SDR 11.43)",
+    "model_bs_roformer_ep_317_sdr_12.9755.ckpt": "BS-Roformer (SDR 12.97)",
+    "melband_roformer_instvoc_duality_v1.ckpt": "InstVoc Duality (Kim)",
+    "MDX23C-8KFFT-InstVoc_HQ.ckpt": "MDX23C InstVoc HQ",
+    "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt": "Karaoke (ViperX)",
+    "dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt": "De-Reverb",
+    "denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt": "Denoise & Clean",
+    "mel_band_roformer_bleed_suppressor_v1.ckpt": "Bleed Suppressor"
+};
+
+export const getModelDisplayInfo = (item) => {
+    if (!item?.model) return null;
+    const m = String(item.model).toLowerCase();
+    if (m === 'roformer' || m === 'bgm' || m === 'mel_band_roformer') {
+        const sub = item.roformer_model ? (ROFORMER_NAMES[item.roformer_model] || item.roformer_model.replace('.ckpt', '')) : 'Crowd BGM (ViperX)';
+        return {
+            category: 'ROFORMER',
+            exact: sub,
+            fullModel: item.roformer_model || 'mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt',
+            color: 'text-emerald-400',
+            bg: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+        };
+    }
+    if (m === 'tiger') {
+        const target = item.tiger_target ? `Target: ${item.tiger_target.toUpperCase()}` : 'DnR';
+        return {
+            category: 'TIGER-DNR',
+            exact: target,
+            fullModel: `TIGER-DnR (${item.tiger_target || 'speech'})`,
+            color: 'text-purple-400',
+            bg: 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+        };
+    }
+    if (m === 'demucs') {
+        return {
+            category: 'DEMUCS',
+            exact: 'HTDemucs v4',
+            fullModel: 'htdemucs',
+            color: 'text-orange-400',
+            bg: 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+        };
+    }
+    if (m === 'spleeter') {
+        return {
+            category: 'SPLEETER',
+            exact: '2 Stems',
+            fullModel: 'spleeter:2stems',
+            color: 'text-blue-400',
+            bg: 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+        };
+    }
+    if (m === 'both') {
+        return {
+            category: 'HYBRID',
+            exact: 'Demucs + Spleeter',
+            fullModel: 'Demucs + Spleeter',
+            color: 'text-teal-400',
+            bg: 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+        };
+    }
+    return {
+        category: String(item.model).toUpperCase(),
+        exact: '',
+        fullModel: String(item.model),
+        color: 'text-gray-400',
+        bg: 'bg-gray-500/10 border-gray-500/20 text-gray-400'
+    };
+};
 import { 
     Video, Music, FolderOpen, Folder, Trash2, AudioLines, Search, CheckSquare, 
     Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3, 
@@ -188,8 +260,9 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
     const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
 
     const handlePlayInBrowser = (item) => {
-        const filePath = item?.result_files?.[0];
+        const filePath = item?.result_files?.[0] || item?.file_path || item?.source_file || item?.path;
         if (!filePath) {
+            console.warn("[Library] Cannot play item - missing file path:", item);
             toast.error("File path not available");
             return;
         }
@@ -199,6 +272,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
         const isVocal = filePath.toLowerCase().includes('vocal');
         const isInstrumental = filePath.toLowerCase().includes('instrumental') || filePath.toLowerCase().includes('karaoke');
 
+        console.log("[Library] Triggering in-browser play:", { filePath, fileName });
+
         playTrack({
             url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(filePath)}`,
             title: fileName,
@@ -206,7 +281,7 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
             type: isVocal ? 'vocal' : isInstrumental ? 'instrumental' : 'audio',
             badge: ext.toUpperCase()
         });
-        toast.success(`Playing in browser: ${fileName}`);
+        toast.success(`Loading: ${fileName}`);
     };
 
     const fetchLibrary = async (isInitial = false) => {
@@ -1167,14 +1242,25 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                                 >
                                                     {item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
                                                 </span>
-                                                {item.model && (
-                                                    <span className={`text-[10px] uppercase tracking-wider font-bold ${item.model === 'spleeter' ? 'text-blue-400' :
-                                                        item.model === 'demucs' ? 'text-orange-400' :
-                                                            'text-emerald-400'
-                                                        }`}>
-                                                        {item.model}
-                                                    </span>
-                                                )}
+                                                {(() => {
+                                                    const modelInfo = getModelDisplayInfo(item);
+                                                    if (!modelInfo) return null;
+                                                    return (
+                                                        <div className="flex items-center gap-1.5 mt-0.5 max-w-full">
+                                                            <span className={`text-[10px] uppercase tracking-wider font-bold ${modelInfo.color}`}>
+                                                                {modelInfo.category}
+                                                            </span>
+                                                            {modelInfo.exact && (
+                                                                <span 
+                                                                    className="text-[10px] text-gray-300 font-medium bg-dark-700/90 px-1.5 py-0.5 rounded border border-white/10 truncate max-w-[240px]" 
+                                                                    title={`Exact Model: ${modelInfo.fullModel}`}
+                                                                >
+                                                                    {modelInfo.exact}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         </div>
                                     </td>
@@ -1605,4 +1691,4 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
     );
 };
 
-export default LibraryTab;
+export default memo(LibraryTab);

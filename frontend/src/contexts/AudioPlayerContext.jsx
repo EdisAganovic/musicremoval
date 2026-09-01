@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { BACKEND_URL } from '../config';
+import { toast } from 'react-hot-toast';
 
 const AudioPlayerContext = createContext(null);
 
@@ -13,20 +14,26 @@ export const AudioPlayerProvider = ({ children }) => {
   const [playbackRate, setPlaybackRateState] = useState(1);
   const [isLooping, setIsLooping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const audioRef = useRef(null);
 
-  // Initialize audio element
+  // Lazy-initialize a persistent Audio element
+  const audioRef = useRef(null);
+  if (!audioRef.current && typeof window !== 'undefined') {
+    const a = new Audio();
+    a.preload = "auto";
+    audioRef.current = a;
+  }
+
+  // Set up event listeners on the audio element
   useEffect(() => {
-    const audio = new Audio();
-    audio.crossOrigin = "anonymous";
-    audio.preload = "auto";
-    audioRef.current = audio;
+    const audio = audioRef.current;
+    if (!audio) return;
 
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
     };
 
     const handleLoadedMetadata = () => {
+      console.log(`[AudioPlayer] Metadata loaded, duration: ${audio.duration}s`);
       setDuration(audio.duration || 0);
       setIsLoading(false);
     };
@@ -39,6 +46,15 @@ export const AudioPlayerProvider = ({ children }) => {
       setIsLoading(false);
     };
 
+    const handlePlaying = () => {
+      setIsPlaying(true);
+      setIsLoading(false);
+    };
+
+    const handlePause = () => {
+      setIsPlaying(false);
+    };
+
     const handleEnded = () => {
       if (!audio.loop) {
         setIsPlaying(false);
@@ -46,25 +62,48 @@ export const AudioPlayerProvider = ({ children }) => {
       }
     };
 
-    const handleError = (e) => {
-      console.warn("Audio playback error event:", e);
+    const handleError = () => {
+      // Ignore harmless error events when audio is cleared/closed
+      const rawSrc = audio.getAttribute('src');
+      if (!rawSrc || !audio.src || audio.src === window.location.href) {
+        setIsLoading(false);
+        setIsPlaying(false);
+        return;
+      }
+
+      const mediaErr = audio.error;
+      let errMsg = "Media playback error";
+      if (mediaErr) {
+        switch (mediaErr.code) {
+          case 1: errMsg = "Playback aborted by client (Code 1)"; break;
+          case 2: errMsg = "Network error downloading audio (Code 2)"; break;
+          case 3: errMsg = "Audio decoding error (Code 3)"; break;
+          case 4: errMsg = "Audio format not supported or file not found (Code 4)"; break;
+          default: errMsg = `Error Code ${mediaErr.code}: ${mediaErr.message || ''}`; break;
+        }
+      }
+      console.error("[AudioPlayer] Error event:", errMsg, audio.error, "Current src:", audio.src);
       setIsLoading(false);
       setIsPlaying(false);
+      toast.error(`Audio error: ${errMsg}`);
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('waiting', handleWaiting);
     audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
 
     return () => {
-      audio.pause();
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('waiting', handleWaiting);
       audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
@@ -72,8 +111,11 @@ export const AudioPlayerProvider = ({ children }) => {
 
   // Play a track
   const playTrack = (track) => {
-    if (!audioRef.current || !track) return;
     const audio = audioRef.current;
+    if (!audio || !track) {
+      console.warn("[AudioPlayer] playTrack called with empty audio or track", track);
+      return;
+    }
 
     // Resolve URL cleanly
     let streamUrl = track.url;
@@ -81,6 +123,8 @@ export const AudioPlayerProvider = ({ children }) => {
       const cleanP = track.path.replace(/^file:\/\/\/?/, '');
       streamUrl = `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(cleanP)}`;
     }
+
+    console.log("[AudioPlayer] playTrack requested:", { title: track.title, streamUrl, path: track.path });
 
     const fullTrack = {
       ...track,
@@ -93,9 +137,12 @@ export const AudioPlayerProvider = ({ children }) => {
         audio.pause();
         setIsPlaying(false);
       } else {
-        audio.play().then(() => setIsPlaying(true)).catch((err) => {
-          console.warn("Playback resume notice:", err);
-        });
+        audio.play()
+          .then(() => setIsPlaying(true))
+          .catch((err) => {
+            console.warn("[AudioPlayer] Playback resume blocked:", err);
+            toast.error("Tap play button in bottom bar to start audio");
+          });
       }
       return;
     }
@@ -104,33 +151,58 @@ export const AudioPlayerProvider = ({ children }) => {
     setCurrentTrack(fullTrack);
     setIsLoading(true);
     setCurrentTime(0);
-    audio.src = streamUrl;
-    audio.playbackRate = playbackRate;
-    audio.loop = isLooping;
-    audio.volume = isMuted ? 0 : volume;
 
-    audio.play()
-      .then(() => {
-        setIsPlaying(true);
-        setIsLoading(false);
-      })
-      .catch((err) => {
-        console.warn("Auto-play notice:", err);
-        setIsLoading(false);
-        setIsPlaying(false);
-      });
+    try {
+      audio.pause();
+      audio.src = streamUrl;
+      audio.playbackRate = playbackRate;
+      audio.loop = isLooping;
+      audio.muted = isMuted;
+      audio.volume = isMuted ? 0 : (volume ?? 1);
+      audio.load();
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("[AudioPlayer] Playback started successfully:", streamUrl);
+            setIsPlaying(true);
+            setIsLoading(false);
+          })
+          .catch((err) => {
+            console.warn("[AudioPlayer] Auto-play was blocked or failed:", err);
+            setIsLoading(false);
+            setIsPlaying(false);
+            if (err.name === 'NotAllowedError') {
+              toast.error("Browser blocked autoplay. Tap play in the bottom bar to listen.");
+            } else {
+              toast.error(`Playback issue: ${err.message || 'Stream not ready'}`);
+            }
+          });
+      }
+    } catch (e) {
+      console.error("[AudioPlayer] Exception during playTrack:", e);
+      setIsLoading(false);
+      setIsPlaying(false);
+      toast.error(`Could not start playback: ${e.message}`);
+    }
   };
 
   const pauseTrack = () => {
-    if (audioRef.current && isPlaying) {
+    if (audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
     }
   };
 
   const resumeTrack = () => {
-    if (audioRef.current && !isPlaying && currentTrack) {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+    if (audioRef.current && currentTrack) {
+      audioRef.current.play()
+        .then(() => setIsPlaying(true))
+        .catch((err) => {
+          console.error("[AudioPlayer] Resume error:", err);
+          toast.error("Tap play button in player bar");
+        });
     }
   };
 
@@ -157,6 +229,7 @@ export const AudioPlayerProvider = ({ children }) => {
       audioRef.current.volume = clamped;
       if (clamped > 0 && isMuted) {
         setIsMuted(false);
+        audioRef.current.muted = false;
       }
     }
   };
@@ -165,6 +238,7 @@ export const AudioPlayerProvider = ({ children }) => {
     if (audioRef.current) {
       const newMuted = !isMuted;
       setIsMuted(newMuted);
+      audioRef.current.muted = newMuted;
       audioRef.current.volume = newMuted ? 0 : volume;
     }
   };
@@ -193,7 +267,8 @@ export const AudioPlayerProvider = ({ children }) => {
   const closePlayer = () => {
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.src = "";
+      audioRef.current.removeAttribute('src');
+      audioRef.current.load();
     }
     setCurrentTrack(null);
     setIsPlaying(false);

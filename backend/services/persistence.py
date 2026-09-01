@@ -104,6 +104,9 @@ async def load_tasks_async():
                 for k, v in loaded_tasks.items():
                     status = v.get("status")
                     if status not in ["completed", "failed", "cancelled"]:
+                        # Server restarted while task was in-flight; mark as cancelled so it doesn't block future downloads
+                        v["status"] = "cancelled"
+                        v["current_step"] = "Cancelled (interrupted by server restart)"
                         active_tasks[k] = v
                     elif v.get("created_at", 0) > now - 3600: # Keep recent for UI
                         active_tasks[k] = v

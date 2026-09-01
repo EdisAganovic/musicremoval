@@ -47,14 +47,14 @@
  *   - framer-motion: Animations
  *   - lucide-react: Icons
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
 import { useAudioPlayer } from '../contexts/AudioPlayerContext';
 import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X, AudioLines } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) => {
+const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress, onSeparate }) => {
     const [url, setUrl] = useState('');
     const [taskId, setTaskId] = useState(null);
     const [status, setStatus] = useState(null);
@@ -178,16 +178,30 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
                         });
                     }
 
-                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'error') {
+                    if (data.status === 'completed' || data.status === 'failed' || data.status === 'error' || data.status === 'cancelled') {
                         setTaskId(null);
+                        setCurrentTaskId(null);
+                        clearInterval(interval);
+
                         if (data.status === 'completed') {
+                            setStatus('completed');
                             const completedPath = data.result_files?.[0] || data.download_info?.filename || null;
                             if (completedPath) {
                                 setLastCompletedFile(completedPath);
+                                const fn = completedPath.split(/[\\/]/).pop();
+                                toast.success(`Downloaded: ${fn}`);
                                 if (autoSeparate) {
                                     onSeparate?.(completedPath);
                                 }
                             }
+                        } else if (data.status === 'failed' || data.status === 'error') {
+                            const errText = data.current_step || "Download failed. Please check the video URL.";
+                            setStatus(null);
+                            setError(errText);
+                            toast.error(errText);
+                        } else if (data.status === 'cancelled') {
+                            setStatus(null);
+                            toast.info("Download cancelled");
                         }
                     }
                 } catch (err) {
@@ -204,22 +218,17 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
                         return;
                     }
 
-                    // Show error after 30 consecutive failures (approx 6-10s at current rate)
-                    if (consecutiveErrors >= 30) {
+                    if (consecutiveErrors >= 10) {
                         setError("Connection lost to backend. Refresh page to reconnect.");
                         setStatus("error");
                         clearInterval(interval);
                     }
                 }
-            }, 200); // Poll every 200ms for fast downloads
+            }, 800); // Poll every 800ms for fast responsive updates without main-thread choking
         }
         return () => {
             clearInterval(interval);
         };
-        // `onSeparate` is an inline callback recreated each parent render; restarting
-        // this polling interval on every render would be wasteful, so it's intentionally
-        // excluded from the dependency array.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [taskId, status, autoSeparate]);
 
     // Queue polling effect
@@ -227,15 +236,15 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
         fetchSettings();
 
         const queueInterval = setInterval(async () => {
-            if (document.hidden) return;
+            if (document.hidden || !isActive) return;
             try {
                 await fetchQueue();
             } catch (err) {
                 // Keep interval running to auto-reconnect on server reload
             }
-        }, 2000);
+        }, 3000);
         return () => clearInterval(queueInterval);
-    }, []);
+    }, [isActive]);
 
     // Active downloads polling effect
     const fetchActiveDownloads = async () => {
@@ -249,15 +258,15 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
 
     useEffect(() => {
         const downloadsInterval = setInterval(async () => {
-            if (document.hidden) return;
+            if (document.hidden || !isActive) return;
             try {
                 await fetchActiveDownloads();
             } catch (err) {
                 // Keep interval running to auto-reconnect on server reload
             }
-        }, 1000);
+        }, 3000);
         return () => clearInterval(downloadsInterval);
-    }, []);
+    }, [isActive]);
 
     const handleAddToQueue = async () => {
         if (!url && !isPlaylist) return;
@@ -908,25 +917,23 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
 
                 {/* Action Buttons */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                    <button
+                        type="button"
                         onClick={handleAddToQueue}
                         disabled={!url || isAnalyzing}
                         title={!url ? "Please enter a URL first" : isAnalyzing ? "Analyzing..." : "Add to download queue"}
-                        className={`py-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center space-x-2 transition-all duration-300 overflow-hidden relative group border border-white/10
+                        className={`py-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center space-x-2 transition-all duration-150 transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden relative group border border-white/10 cursor-pointer
                             ${!url || isAnalyzing
-                                ? 'bg-dark-800 text-gray-600 cursor-not-allowed'
+                                ? 'bg-dark-800 text-gray-600 cursor-not-allowed hover:scale-100 active:scale-100'
                                 : 'bg-dark-800 hover:bg-dark-700 text-white'
                             }`}
                     >
                         <List className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                         <span>Add to Queue</span>
-                    </motion.button>
+                    </button>
 
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                    <button
+                        type="button"
                         onClick={handleDownload}
                         disabled={!url || (isPlaylist ? selectedPlaylistVideos.length === 0 : status === 'processing') || isAnalyzing}
                         title={
@@ -936,13 +943,13 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
                                         isAnalyzing ? "Analyzing..." :
                                             "Start download"
                         }
-                        className={`py-4 rounded-2xl font-bold text-lg shadow-2xl flex items-center justify-center space-x-2 transition-all duration-300 overflow-hidden relative group
+                        className={`py-4 rounded-2xl font-bold text-lg shadow-2xl flex items-center justify-center space-x-2 transition-all duration-150 transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden relative group cursor-pointer
                             ${!url || (isPlaylist ? selectedPlaylistVideos.length === 0 : status === 'processing') || isAnalyzing
-                                ? 'bg-dark-800 text-gray-600 cursor-not-allowed border border-white/5'
+                                ? 'bg-dark-800 text-gray-600 cursor-not-allowed border border-white/5 hover:scale-100 active:scale-100'
                                 : 'bg-gradient-to-tr from-red-600 to-red-500 text-white shadow-red-600/30 hover:shadow-red-600/50 hover:brightness-110'
                             }`}
                     >
-                        <div className="relative z-10 flex items-center space-x-2">
+                        <div className="relative z-10 flex items-center space-x-2 pointer-events-none">
                             {status === 'processing' && !isPlaylist ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
@@ -960,7 +967,7 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
                                 </>
                             )}
                         </div>
-                    </motion.button>
+                    </button>
                 </div>
             </motion.div>
 
@@ -1462,4 +1469,4 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
     );
 };
 
-export default DownloaderTab;
+export default memo(DownloaderTab);

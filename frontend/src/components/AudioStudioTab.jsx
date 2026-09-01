@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import axios from "axios";
 import { BACKEND_URL } from "../config";
 import { snapToGrid } from "./audiostudio/utils/audioMath";
@@ -18,7 +18,7 @@ import { SeparationPassModal } from "./audiostudio/modals/SeparationPassModal";
 import { ImportTrackModal } from "./audiostudio/modals/ImportTrackModal";
 import { ExportPreviewModal } from "./audiostudio/modals/ExportPreviewModal";
 
-export default function AudioStudioTab() {
+function AudioStudioTab({ isActive = true }) {
   // -------------------------------------------------------------
   // STATE MANAGEMENT
   // -------------------------------------------------------------
@@ -1030,3 +1030,5 @@ export default function AudioStudioTab() {
     </div>
   );
 }
+
+export default memo(AudioStudioTab);

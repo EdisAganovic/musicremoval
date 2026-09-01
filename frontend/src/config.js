@@ -8,8 +8,18 @@ export const APP_VERSION = "0.0.19";
 
 export const APP_NAME = "Audio Splitter Pro";
 
-// Same-origin: all /api and /projects calls are proxied by the Vite dev server
-// to the backend (see vite.config.js). This keeps the app working from LAN
-// devices without CORS/firewall issues. Override with VITE_BACKEND_URL for
-// production builds where no proxy is available.
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';
+// Dynamically target port 5170 on current host (e.g. localhost, 192.168.0.111)
+// Direct port 5170 streaming bypasses Vite proxy buffering for fast, reliable media playback over LAN.
+const computeBackendUrl = () => {
+  if (import.meta.env.VITE_BACKEND_URL !== undefined && import.meta.env.VITE_BACKEND_URL !== '') {
+    return import.meta.env.VITE_BACKEND_URL;
+  }
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    const protocol = window.location.protocol || 'http:';
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:5170`;
+  }
+  return 'http://localhost:5170';
+};
+
+export const BACKEND_URL = computeBackendUrl();

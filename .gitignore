@@ -78,6 +78,7 @@ log.txt
 cookies.txt
 data/cookies.txt
 **/cookies.txt
+*.bak
 .env
 .env.*
 !.env.example

@@ -179,21 +179,35 @@ async def stream_project_media(file: Optional[str] = None, path: Optional[str] =
     if not target:
         raise HTTPException(status_code=400, detail="Missing file parameter")
 
-    path_str = urllib.parse.unquote(target).strip().strip('"').strip("'")
-    if path_str.startswith("file:///"):
-        path_str = path_str[8:]
-    elif path_str.startswith("file://"):
-        path_str = path_str[7:]
+    raw_path = target.strip().strip('"').strip("'")
+    if raw_path.startswith("file:///"):
+        raw_path = raw_path[8:]
+    elif raw_path.startswith("file://"):
+        raw_path = raw_path[7:]
 
-    clean_path = os.path.abspath(os.path.normpath(path_str))
+    candidates = [raw_path]
+    try:
+        unquoted = urllib.parse.unquote(raw_path)
+        if unquoted != raw_path:
+            candidates.append(unquoted)
+    except Exception:
+        pass
 
-    if not os.path.exists(clean_path) or not os.path.isfile(clean_path):
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        rel_path = os.path.abspath(os.path.join(project_root, path_str))
-        if os.path.exists(rel_path) and os.path.isfile(rel_path):
-            clean_path = rel_path
-        else:
-            raise HTTPException(status_code=404, detail=f"Media file not found: {clean_path}")
+    clean_path = None
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+
+    for cand in candidates:
+        cand_abs = os.path.abspath(os.path.normpath(cand))
+        if os.path.isfile(cand_abs):
+            clean_path = cand_abs
+            break
+        rel_cand = os.path.abspath(os.path.join(project_root, cand))
+        if os.path.isfile(rel_cand):
+            clean_path = rel_cand
+            break
+
+    if not clean_path:
+        raise HTTPException(status_code=404, detail=f"Media file not found: {raw_path}")
 
     # SECURITY: only serve files from allowed project directories
     from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
@@ -231,6 +245,9 @@ async def stream_project_media(file: Optional[str] = None, path: Optional[str] =
         headers={
             "Accept-Ranges": "bytes",
             "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
             "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, Content-Type",
         }
     )

@@ -60,7 +60,6 @@ export function VideoPlayerPanel({
               <video
                 ref={videoRef}
                 src={`${BACKEND_URL}/api/project/stream-video?file=${encodeURIComponent(videoFile)}`}
-                crossOrigin="anonymous"
                 preload="auto"
                 muted
                 playsInline

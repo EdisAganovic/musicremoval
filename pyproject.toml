@@ -25,6 +25,16 @@ dependencies = [
     "scipy<1.14.0",
     "httpx>=0.24.0",
     "resampy",
+    "audio-separator>=0.47.0",
+    "onnxruntime-gpu==1.20.2",
+    "onnx",
+    "pydub",
+    "samplerate",
+    "ml-collections",
+    "beartype",
+    "einops",
+    "rotary-embedding-torch",
+    "julius",
 ]
 
 [project.scripts]
@@ -38,6 +48,7 @@ build-backend = "hatchling.build"
 packages = ["backend", "main.py"]
 
 [tool.uv]
+environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
 required-environments = ["sys_platform == 'win32'"]
 override-dependencies = [
     "tensorflow-io-gcs-filesystem==0.31.0; sys_platform == 'win32'",
@@ -46,6 +57,9 @@ override-dependencies = [
     "llvmlite==0.49.0",
     "librosa==0.11.0",
     "resampy==0.4.3",
+    "numpy==1.26.4",
+    "protobuf>=4.25.1",
+    "typing-extensions>=4.12.0",
 ]
 
 [[tool.uv.index]]

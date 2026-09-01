@@ -48,7 +48,7 @@
  *   - framer-motion: Animations
  *   - lucide-react: Icons
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import axios from "axios";
 import { BACKEND_URL } from '../config';
 import { useAudioPlayer } from '../contexts/AudioPlayerContext';
@@ -77,7 +77,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
-const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
+const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
   const activeLibraryFile = libraryFile || initialFilePath;
   const activeBatchId = externalBatchId || initialBatchId;
   const [file, setFile] = useState(null);
@@ -182,7 +182,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
   const [removeSilence, setRemoveSilence] = useState(false);
 
   // In-browser Audio Player
-  const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, closePlayer } = useAudioPlayer();
 
   const isVideoOutput = Boolean(
     metadata?.is_video ||
@@ -234,7 +234,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
     }
   }, [batchFiles, status]);
 
-  // Handle library file pre-load
+  // Handle library file pre-load - cleanly reset all prior processing/results
   useEffect(() => {
     if (activeLibraryFile) {
       setLibraryFilePath(activeLibraryFile);
@@ -245,12 +245,19 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       });
       setStatus("idle");
       setProgress(0);
+      setCurrentStep("");
+      setTaskId(null);
       setResultFiles([]);
+      setDetailedTimings(null);
+      setProcessingTime(null);
+      setInstrumentalFile(null);
+      setMetadata(null);
       setError(null);
+      closePlayer?.();
       onFileCleared?.();
       onClearInitialFile?.();
     }
-  }, [activeLibraryFile, onFileCleared, onClearInitialFile]);
+  }, [activeLibraryFile, onFileCleared, onClearInitialFile, closePlayer]);
 
   // Handle an already-running batch handed off from Library's bulk "Separate Selected"
   // action: jump straight into folder/batch mode and let the existing batch-status
@@ -285,10 +292,13 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
     setCurrentStep("");
     setError(null);
     setResultFiles([]);
+    setDetailedTimings(null);
+    setProcessingTime(null);
+    setInstrumentalFile(null);
     setMetadata(null);
     setSkipVideoEncoding(false);
-    setInstrumentalFile(null);
     setRemoveSilence(false);
+    closePlayer?.();
   };
 
   const handleCancelQueue = async () => {
@@ -442,7 +452,14 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       setError(null);
       setStatus("idle");
       setProgress(0);
+      setCurrentStep("");
+      setTaskId(null);
       setResultFiles([]);
+      setDetailedTimings(null);
+      setProcessingTime(null);
+      setInstrumentalFile(null);
+      setMetadata(null);
+      closePlayer?.();
     }
   };
 
@@ -552,6 +569,14 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
   const handleUpload = async () => {
     if (!file && !libraryFilePath) return;
 
+    // Reset previous results, timings, and player output before starting
+    setResultFiles([]);
+    setDetailedTimings(null);
+    setProcessingTime(null);
+    setInstrumentalFile(null);
+    setError(null);
+    closePlayer?.();
+
     try {
       if (libraryFilePath) {
         // Library file processing
@@ -639,7 +664,14 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       setError(null);
       setStatus("idle");
       setProgress(0);
+      setCurrentStep("");
+      setTaskId(null);
       setResultFiles([]);
+      setDetailedTimings(null);
+      setProcessingTime(null);
+      setInstrumentalFile(null);
+      setMetadata(null);
+      closePlayer?.();
     }
   };
 
@@ -1312,9 +1344,8 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       {/* Start Button - Folder Mode */}
       {processingMode === "folder" && batchFiles.length > 0 && (
         <div className="flex justify-center">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <button
+            type="button"
             onClick={handleStartBatchProcessing}
             disabled={status === "processing" || !batchFiles.some(f => f.selected)}
             title={
@@ -1323,14 +1354,14 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                   "Start batch processing"
             }
             className={`
-              relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-300 group
+              relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-150 transform hover:scale-105 active:scale-95 group cursor-pointer
               ${status === "processing" || !batchFiles.some(f => f.selected)
-                ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
+                ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50 hover:scale-100 active:scale-100"
                 : "bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-primary-500/25 hover:shadow-primary-500/40"
               }
             `}
           >
-            <span className="relative z-10 flex items-center space-x-3">
+            <span className="relative z-10 flex items-center space-x-3 pointer-events-none">
               {status === "processing" ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
@@ -1340,16 +1371,15 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                 {status === "processing" ? "Processing..." : `Start Batch (${batchFiles.filter(f => f.selected).length} files)`}
               </span>
             </span>
-          </motion.button>
+          </button>
         </div>
       )}
 
       {/* Start Button - Single File Mode */}
       {processingMode === "single" && (
         <div className="flex justify-center">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <button
+            type="button"
             onClick={handleUpload}
             disabled={!file || status === "uploading" || status === "processing" || status === "pending"}
             title={
@@ -1359,16 +1389,16 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                     "Start separation"
             }
             className={`
-              relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-300 group
+              relative overflow-hidden px-8 py-3 rounded-full font-bold text-base shadow-2xl transition-all duration-150 transform hover:scale-105 active:scale-95 group cursor-pointer
               ${!file ||
                 status === "uploading" ||
                 status === "processing"
-                ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50"
+                ? "bg-dark-700 text-gray-500 cursor-not-allowed opacity-50 hover:scale-100 active:scale-100"
                 : "bg-gradient-to-r from-primary-600 to-accent-600 text-white shadow-primary-500/25 hover:shadow-primary-500/40"
               }
             `}
           >
-            <span className="relative z-10 flex items-center space-x-3">
+            <span className="relative z-10 flex items-center space-x-3 pointer-events-none">
               {status === "processing" || status === "pending" || status === "uploading" ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
@@ -1378,7 +1408,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
                 {status === "processing" || status === "pending" ? "Processing..." : "Start Separation"}
               </span>
             </span>
-          </motion.button>
+          </button>
         </div>
       )}
 
@@ -1587,4 +1617,4 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
   );
 };
 
-export default SeparationTab;
+export default memo(SeparationTab);

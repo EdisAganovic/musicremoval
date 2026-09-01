@@ -139,6 +139,16 @@ async def get_yt_formats(payload: dict, request: Request):
         def info(self, msg):
             pass
         def warning(self, msg):
+            if any(ign.lower() in msg.lower() for ign in [
+                "skipping client",
+                "does not support cookies",
+                "po token",
+                "po-token-guide",
+                "sabr-only",
+                "missing a url",
+                "unsupported client"
+            ]):
+                return
             print(f"{Fore.YELLOW}[yt-dlp:warning] {msg}{Style.RESET_ALL}")
             log_console(f"[yt-dlp warning] {msg}", "warning")
         def error(self, msg):
@@ -239,7 +249,13 @@ async def get_yt_formats(payload: dict, request: Request):
                 'socket_timeout': 30,
                 'retries': 5,
                 'no_warnings': False,
+                'js_runtimes': {'deno': {}},
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android', 'ios', 'web', 'mweb'],
+                    }
+                },
             }
             if ffmpeg_dir:
                 opts['ffmpeg_location'] = ffmpeg_dir
@@ -356,29 +372,15 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    # Check for duplicates in library for matching format type (audio vs video)
-    from config import get_full_library
-    library = get_full_library()
-    for item in library:
-        item_url = item.get("url")
-        if item_url and (item_url == url or item_url.strip('/') == url.strip('/')):
-            res_files = item.get("result_files", [])
-            if res_files and all(os.path.exists(f) for f in res_files):
-                is_video_file = any(f.lower().endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.m4v')) for f in res_files)
-                if (format_type == 'video' and is_video_file) or (format_type == 'audio' and not is_video_file):
-                    return {
-                        "status": "duplicate",
-                        "message": f"URL already in library: {os.path.basename(res_files[0])}",
-                        "existing_file": res_files[0],
-                        "task_id": item.get("task_id")
-                    }
+    log_console(f"[Download API] Request received for URL: {url} | Format: {format_type} | format_id: {format_id}", "info")
 
-    # Check current active tasks
-    for tid, task in tasks.items():
+    # Check live active tasks to prevent duplicate concurrent runs on the exact same task
+    for tid in list(active_downloads.keys()):
+        task = tasks.get(tid, {})
         if task.get("url") == url and task.get("status") in ["processing", "downloading", "separating"]:
-            # If same format is already processing
             t_format = task.get("format", "audio")
             if t_format == format_type:
+                log_console(f"[Download API] Attaching to existing in-flight task {tid[:8]}", "info")
                 return {
                     "status": "processing",
                     "message": "URL is already being processed",
@@ -396,12 +398,16 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
         "current_step": "Initializing download",
         "result_files": [],
         "url": url,
+        "format": format_type,
         "type": "download",
         "created_at": time.time()
     }
+    active_downloads[task_id] = {"cancel_flag": False}
+    
     from services.persistence import save_tasks_sync
     save_tasks_sync()
     
+    log_console(f"[Download API] Enqueued task {task_id[:8]} for background execution", "info")
     background_tasks.add_task(run_yt_dlp, task_id, url, format_type, format_id, None, auto_separate, payload.get("subfolder"))
     return {"task_id": task_id}
 

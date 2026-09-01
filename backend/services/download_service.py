@@ -135,9 +135,21 @@ def run_yt_dlp(
                 pass
 
         def info(self, msg):
-            pass
+            if msg and not msg.startswith('[download]'):
+                print(f"{Fore.CYAN}[yt-dlp:info] {msg}{Style.RESET_ALL}")
+                log_console(f"[yt-dlp] {msg}", "info")
 
         def warning(self, msg):
+            if any(ign.lower() in msg.lower() for ign in [
+                "skipping client",
+                "does not support cookies",
+                "po token",
+                "po-token-guide",
+                "sabr-only",
+                "missing a url",
+                "unsupported client"
+            ]):
+                return
             print(f"{Fore.YELLOW}[yt-dlp:warning] {msg}{Style.RESET_ALL}")
             log_console(f"[yt-dlp warning] {msg}", "warning")
 
@@ -145,25 +157,32 @@ def run_yt_dlp(
             print(f"{Fore.RED}[yt-dlp:error] {msg}{Style.RESET_ALL}")
             log_console(f"[yt-dlp error] {msg}", "error")
 
-    def get_ydl_opts():
+    def get_ydl_opts(custom_outtmpl=None):
         cookies_path = os.path.join("data", "cookies.txt")
         from modules.module_ffmpeg import FFMPEG_EXE
         ffmpeg_dir = os.path.dirname(FFMPEG_EXE) if os.path.exists(FFMPEG_EXE) else None
 
         opts = {
-            'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
+            'outtmpl': custom_outtmpl or os.path.join(output_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_hook],
             'logger': YTDLPLogger(),
             'quiet': False,
             'no_warnings': False,
             'ignoreerrors': False,
             'noplaylist': True,
+            'overwrites': True,
             'socket_timeout': 30,
             'retries': 5,
             'fragment_retries': 5,
+            'js_runtimes': {'deno': {}},
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             # Download DASH/HLS fragments in parallel
             'concurrent_fragment_downloads': 4,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['tv_embedded', 'android', 'ios', 'web'],
+                }
+            },
         }
 
         if ffmpeg_dir:
@@ -200,13 +219,15 @@ def run_yt_dlp(
         task_start_time = time.time()
         ydl_opts = get_ydl_opts()
         success = False
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             active_downloads[task_id]["ydl"] = ydl
-            tasks[task_id]["current_step"] = "Extracting video info..."
+            tasks[task_id]["current_step"] = "Extracting and downloading..."
             tasks[task_id]["progress"] = 10
+            
+            # Single-pass extract and download
             info = ydl.extract_info(url, download=True)
-            success = True
-
+            
             if active_downloads.get(task_id, {}).get("cancel_flag", False):
                 raise Exception("Download cancelled by user")
             
@@ -215,10 +236,10 @@ def run_yt_dlp(
 
             video_title = info.get('title', 'Unknown')
             log_prefix = f"[{video_title[:40]}]" if video_title != 'Unknown' else f"[{task_id[:8]}]"
-            log_console(f"{log_prefix} Extraction complete", "info")
-            tasks[task_id]["current_step"] = "Starting download..."
-            tasks[task_id]["progress"] = 15
-            log_console(f"{log_prefix} Starting download, progress=15%", "info")
+            log_console(f"{log_prefix} Download complete, processing metadata...", "info")
+            tasks[task_id]["current_step"] = "Processing download..."
+            tasks[task_id]["progress"] = 90
+            success = True
             
             # Determine actual output file accurately
             actual_filename = None

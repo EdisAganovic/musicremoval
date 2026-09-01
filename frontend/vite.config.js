@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: true, // Listen on all network interfaces (0.0.0.0)
     port: 5173,
+    cors: true,
     open: false,
     // Proxy API + media to the backend so the browser only talks to ONE origin (5173).
     // This makes the app work from LAN devices without CORS/firewall/hostname issues.
@@ -21,4 +22,17 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-motion': ['framer-motion'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-utils': ['axios', 'react-hot-toast']
+        }
+      }
+    }
+  }
 });
