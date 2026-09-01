@@ -173,38 +173,43 @@ async def get_yt_formats(payload: dict):
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         return ydl.extract_info(url, download=False)
 
-                info = await asyncio.to_thread(get_playlist_info)
-                videos = []
-                entries = info.get('entries', []) if info.get('_type') in ['playlist', 'multi_video'] else [info]
-                entries = list(entries)
+                try:
+                    info = await asyncio.to_thread(get_playlist_info)
+                    if info:
+                        videos = []
+                        entries = info.get('entries', []) if info.get('_type') in ['playlist', 'multi_video'] else [info]
+                        entries = list(entries)
 
-                for entry in entries:
-                    if entry:
-                        title = entry.get('title', 'Unknown')
-                        if not title or title.lower() in ['[private video]', '[deleted video]', 'private video', 'deleted video']:
-                            continue
-                        
-                        # Safe thumbnail resolution
-                        thumb = entry.get('thumbnail', '')
-                        if not thumb:
-                            thumbnails_list = entry.get('thumbnails') or []
-                            thumb = next((t.get('url', '') for t in thumbnails_list if isinstance(t, dict) and t.get('url')), '')
+                        for entry in entries:
+                            if entry:
+                                title = entry.get('title', 'Unknown')
+                                if not title or title.lower() in ['[private video]', '[deleted video]', 'private video', 'deleted video']:
+                                    continue
+                                
+                                # Safe thumbnail resolution
+                                thumb = entry.get('thumbnail', '')
+                                if not thumb:
+                                    thumbnails_list = entry.get('thumbnails') or []
+                                    thumb = next((t.get('url', '') for t in thumbnails_list if isinstance(t, dict) and t.get('url')), '')
 
-                        videos.append({
-                            "id": entry.get('id', ''),
-                            "title": title,
-                            "thumbnail": thumb,
-                            "duration": format_duration(entry.get('duration', 0)),
-                            "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
-                        })
+                                videos.append({
+                                    "id": entry.get('id', ''),
+                                    "title": title,
+                                    "thumbnail": thumb,
+                                    "duration": format_duration(entry.get('duration', 0)),
+                                    "url": entry.get('url', f"https://www.youtube.com/watch?v={entry.get('id', '')}")
+                                })
 
-                return {
-                    "is_playlist": True,
-                    "title": info.get("title", "Playlist"),
-                    "thumbnail": info.get("thumbnail", ""),
-                    "video_count": len(videos),
-                    "videos": videos
-                }
+                        if len(videos) > 0 and info.get('_type') in ['playlist', 'multi_video']:
+                            return {
+                                "is_playlist": True,
+                                "title": info.get("title", "Playlist"),
+                                "thumbnail": info.get("thumbnail", ""),
+                                "video_count": len(videos),
+                                "videos": videos
+                            }
+                except Exception as pl_err:
+                    log_console(f"Playlist extraction failed or playlist nonexistent ({pl_err}), falling back to single video analysis.", "warning")
 
         # ── Single video / non-YouTube URL ───────────────────────────────────
         def get_video_info():
@@ -221,7 +226,6 @@ async def get_yt_formats(payload: dict):
             }
             if ffmpeg_dir:
                 opts['ffmpeg_location'] = ffmpeg_dir
-            import os
             cookies_path = os.path.join("data", "cookies.txt")
             if os.path.exists(cookies_path):
                 opts['cookiefile'] = cookies_path
