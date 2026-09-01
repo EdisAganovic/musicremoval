@@ -84,17 +84,24 @@ def is_playlist_url(url):
     return False
 
 
-def check_and_update_ytdlp():
+_last_ytdlp_update_check = 0
+
+def check_and_update_ytdlp(force=False):
     """
     Checks for yt-dlp updates and installs or upgrades it.
-    Uses sys.executable to ensure we use the current environment's python.
+    Throttled to avoid repeated pip upgrade overhead on every download call.
     """
+    global _last_ytdlp_update_check
+    now = time.time()
+    if not force and _last_ytdlp_update_check > 0 and (now - _last_ytdlp_update_check) < 21600:
+        return True
+
     print(f"{Fore.CYAN}Checking for yt-dlp updates...{Style.RESET_ALL}")
     try:
         # Get current yt-dlp version using python -m yt_dlp
         version_cmd = [sys.executable, "-m", "yt_dlp", "--version"]
         try:
-            version_result = tracked_run(version_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            version_result = tracked_run(version_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=10)
             print(f"{Fore.CYAN}Current yt-dlp version: {version_result.stdout.strip()}{Style.RESET_ALL}")
         except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
             print(f"{Fore.YELLOW}yt-dlp module not ready or version check failed: {e}{Style.RESET_ALL}")
@@ -108,22 +115,20 @@ def check_and_update_ytdlp():
         else:
             update_cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
             
-        print(f"{Fore.MAGENTA}Executing: {' '.join(update_cmd)}{Style.RESET_ALL}")
-        
         # Use a timeout for the update to prevent hanging
-        result = tracked_run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=60)
+        result = tracked_run(update_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
+        _last_ytdlp_update_check = now
         
         if "Requirement already satisfied" in result.stdout:
             print(f"{Fore.GREEN}yt-dlp is up to date.{Style.RESET_ALL}")
         else:
             print(f"{Fore.GREEN}yt-dlp has been installed/updated successfully.{Style.RESET_ALL}")
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"{Fore.RED}Error updating yt-dlp: {e}{Style.RESET_ALL}")
-        return False
     except Exception as e:
-        print(f"{Fore.RED}Unexpected error during yt-dlp update: {e}{Style.RESET_ALL}")
-        return False
+        # Don't hard-fail if update check fails (e.g. offline or file locked)
+        print(f"{Fore.YELLOW}yt-dlp update check bypassed: {e}{Style.RESET_ALL}")
+        _last_ytdlp_update_check = now
+        return True
 
 def download_video(url, filename=None, cookies_file=None):
     """
@@ -131,10 +136,10 @@ def download_video(url, filename=None, cookies_file=None):
     Returns the path to the downloaded file.
     """
     url = url.split('&')[0]
-    if not check_and_update_ytdlp():
-        return None
+    check_and_update_ytdlp()
 
-    download_folder = "download"
+    from core.constants import DOWNLOAD_DIR
+    download_folder = DOWNLOAD_DIR
     os.makedirs(download_folder, exist_ok=True)
 
     try:
@@ -153,9 +158,11 @@ def download_video(url, filename=None, cookies_file=None):
             sys.executable, "-m", "yt_dlp",
             "--get-filename",
             "--ignore-errors",
-            "--fragment-retries", "infinite",
-            "--retry-sleep", "fragment:exp=1:300",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "--socket-timeout", "30",
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "fragment:exp=1:30",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "-o", output_template,
         ]
         if cookies_file and os.path.exists(cookies_file):
@@ -164,7 +171,7 @@ def download_video(url, filename=None, cookies_file=None):
         get_filename_cmd.append(url)
 
         print(f"{Fore.MAGENTA}Determining filename...{Style.RESET_ALL}")
-        result = tracked_run(get_filename_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+        result = tracked_run(get_filename_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=45)
 
         if result.returncode != 0:
             print(f"\n{Fore.RED}An error occurred while trying to get video metadata (Exit Code: {result.returncode}).{Style.RESET_ALL}")
@@ -179,7 +186,7 @@ def download_video(url, filename=None, cookies_file=None):
             if cookies_file and os.path.exists(cookies_file):
                 list_formats_cmd.extend(["--cookies", cookies_file])
             
-            list_result = tracked_run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+            list_result = tracked_run(list_formats_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=30)
             if list_result.stdout:
                 print(list_result.stdout)
             if list_result.stderr:
@@ -209,9 +216,11 @@ def download_video(url, filename=None, cookies_file=None):
         base_cmd = [
             sys.executable, "-m", "yt_dlp",
             "--ignore-errors",
-            "--fragment-retries", "infinite",
-            "--retry-sleep", "fragment:exp=1:300",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "--socket-timeout", "30",
+            "--retries", "5",
+            "--fragment-retries", "5",
+            "--retry-sleep", "fragment:exp=1:30",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "-o", output_template,
         ]
         

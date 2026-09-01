@@ -4,6 +4,13 @@ Pydantic Models for the backend API.
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 
+from core.constants import (
+    DEFAULT_MODEL,
+    DEFAULT_ROFORMER_MODEL,
+    DEFAULT_TIGER_TARGET,
+    DEFAULT_TIGER_OVERLAP,
+)
+
 
 class QueueItem(BaseModel):
     queue_id: str
@@ -74,10 +81,10 @@ class FileActionRequest(BaseModel):
 
 class SeparateRequest(BaseModel):
     file_path: str
-    model: str = "both"
-    roformer_model: Optional[str] = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
-    tiger_target: Optional[str] = "dialogue_sfx"
-    tiger_overlap: Optional[int] = 50
+    model: str = DEFAULT_MODEL
+    roformer_model: Optional[str] = DEFAULT_ROFORMER_MODEL
+    tiger_target: Optional[str] = DEFAULT_TIGER_TARGET
+    tiger_overlap: Optional[int] = DEFAULT_TIGER_OVERLAP
     skip_video_encoding: bool = False
     super_keyframe: bool = False
     resolution: Optional[str] = "1080p"
@@ -107,10 +114,10 @@ class FolderQueueRemoveRequest(BaseModel):
 
 class FolderQueueProcessRequest(BaseModel):
     queue_id: str
-    model: str = "both"
-    roformer_model: Optional[str] = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
-    tiger_target: Optional[str] = "dialogue_sfx"
-    tiger_overlap: Optional[int] = 50
+    model: str = DEFAULT_MODEL
+    roformer_model: Optional[str] = DEFAULT_ROFORMER_MODEL
+    tiger_target: Optional[str] = DEFAULT_TIGER_TARGET
+    tiger_overlap: Optional[int] = DEFAULT_TIGER_OVERLAP
     selected_files: Optional[List[str]] = None
     duration: Optional[int] = None
     skip_video_encoding: bool = False

@@ -8,6 +8,12 @@ import threading
 from colorama import Fore, Style
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 from services.persistence import save_tasks_sync
+from core.constants import (
+    DEFAULT_MODEL,
+    DEFAULT_ROFORMER_MODEL,
+    DEFAULT_TIGER_TARGET,
+    DEFAULT_TIGER_OVERLAP,
+)
 
 # Thread-safe FIFO separation queue
 _separation_queue = queue.Queue()
@@ -61,9 +67,9 @@ def cleanup_stale_tasks_on_boot():
 cleanup_stale_tasks_on_boot()
 
 
-def enqueue_separation(task_id: str, file_path: str, duration=None, model="both",
-                       roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
-                       tiger_target="dialogue_sfx", tiger_overlap=50,
+def enqueue_separation(task_id: str, file_path: str, duration=None, model=DEFAULT_MODEL,
+                       roformer_model=DEFAULT_ROFORMER_MODEL,
+                       tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP,
                        skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
     """
     Adds a separation task to the FIFO queue and ensures the background worker is running.
@@ -142,9 +148,9 @@ def _separation_worker_loop():
                 file_path=item["file_path"],
                 duration=item["duration"],
                 model=item["model"],
-                roformer_model=item.get("roformer_model", "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"),
-                tiger_target=item.get("tiger_target", "dialogue_sfx"),
-                tiger_overlap=item.get("tiger_overlap", 50),
+                roformer_model=item.get("roformer_model", DEFAULT_ROFORMER_MODEL),
+                tiger_target=item.get("tiger_target", DEFAULT_TIGER_TARGET),
+                tiger_overlap=item.get("tiger_overlap", DEFAULT_TIGER_OVERLAP),
                 skip_video_encoding=item.get("skip_video_encoding", False),
                 super_keyframe=item.get("super_keyframe", False),
                 resolution=item.get("resolution", "1080p"),
@@ -159,9 +165,9 @@ def _separation_worker_loop():
             save_tasks_sync()
 
 
-def _execute_separation(task_id: str, file_path: str, duration=None, model="both",
-                        roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
-                        tiger_target="dialogue_sfx", tiger_overlap=50,
+def _execute_separation(task_id: str, file_path: str, duration=None, model=DEFAULT_MODEL,
+                        roformer_model=DEFAULT_ROFORMER_MODEL,
+                        tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP,
                         skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
     """
     Internal execution of vocal separation on a single file.
@@ -255,7 +261,8 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model="both
                         file_item["current_step"] = "Complete"
 
             # Find output files - relative to project root
-            output_dir = os.path.abspath('nomusic')
+            from core.constants import NOMUSIC_DIR
+            output_dir = NOMUSIC_DIR
 
             # Support both audio and video filenames by stripping UUID if present
             raw_name = filename
@@ -310,7 +317,8 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model="both
             )
         else:
             tasks[task_id]["status"] = "failed"
-            tasks[task_id]["current_step"] = "Separation failed"
+            tasks[task_id]["current_step"] = "Separation failed (process_file returned False)"
+            log_console(f"Separation failed for {filename} (model={model})", "error")
 
             # Update parent batch counters
             batch_id = tasks[task_id].get("batch_id")
@@ -331,8 +339,13 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model="both
             add_notification("error", "Separation Failed", f"Failed to process {filename}")
 
     except Exception as e:
-        error_msg = str(e)
+        import traceback
+        tb = traceback.format_exc()
+        error_msg = str(e) or "Unknown separation error"
+        print(f"{Fore.RED}Separation error for {file_path}:\n{tb}{Style.RESET_ALL}")
+        log_console(f"Separation error for {filename}: {error_msg}\n{tb}", "error")
         tasks[task_id]["status"] = "failed"
+        tasks[task_id]["error"] = error_msg
         tasks[task_id]["current_step"] = f"Error: {error_msg[:100]}"
 
         # Update parent batch counters

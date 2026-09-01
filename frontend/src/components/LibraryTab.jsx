@@ -226,8 +226,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                 libraryAPI.getFolders()
             ]);
 
-            if (libRes.status === 'fulfilled') {
-                setItems(libRes.value?.data || []);
+            if (libRes.status === 'fulfilled' && libRes.value?.data) {
+                setItems(Array.isArray(libRes.value.data) ? libRes.value.data : []);
             }
             if (foldRes.status === 'fulfilled' && foldRes.value?.data) {
                 setDiskFolders(foldRes.value.data);
@@ -250,8 +250,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                 libraryAPI.get(),
                 libraryAPI.getFolders()
             ]);
-            if (libRes.status === 'fulfilled') {
-                setItems(libRes.value?.data || []);
+            if (libRes.status === 'fulfilled' && libRes.value?.data) {
+                setItems(Array.isArray(libRes.value.data) ? libRes.value.data : []);
             }
             if (foldRes.status === 'fulfilled' && foldRes.value?.data) {
                 setDiskFolders(foldRes.value.data);
@@ -1206,12 +1206,17 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                                 <PlayCircle className="w-3.5 h-3.5" />
                                             </button>
                                             {/* Show Separate button only for files from download folder */}
-                                            {!item.result_files?.[0].toLowerCase().includes('nomusic') && (
+                                            {!((item.result_files?.[0] || item.source_file || item.file_path || '').toLowerCase().includes('nomusic')) && (
                                                 <button
                                                     className="p-1.5 bg-emerald-600/5 hover:bg-emerald-600/20 text-emerald-400 rounded-lg transition-all border border-emerald-500/20 hover:border-emerald-500/40"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        onSeparate?.(item.result_files?.[0]);
+                                                        const targetPath = item.result_files?.[0] || item.source_file || item.file_path;
+                                                        if (targetPath) {
+                                                            onSeparate?.(targetPath);
+                                                        } else {
+                                                            toast.error("File path not found");
+                                                        }
                                                     }}
                                                     title="Separate vocals"
                                                 >
@@ -1467,10 +1472,15 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                         <FolderOpen className="w-4 h-4" />
                         Open Folder
                     </button>
-                    {!contextMenu.item?.result_files?.[0]?.toLowerCase().includes('nomusic') && (
+                    {!((contextMenu.item?.result_files?.[0] || contextMenu.item?.source_file || contextMenu.item?.file_path || '').toLowerCase().includes('nomusic')) && (
                         <button
                             onClick={() => {
-                                onSeparate?.(contextMenu.item?.result_files?.[0]);
+                                const targetPath = contextMenu.item?.result_files?.[0] || contextMenu.item?.source_file || contextMenu.item?.file_path;
+                                if (targetPath) {
+                                    onSeparate?.(targetPath);
+                                } else {
+                                    toast.error("File path not found");
+                                }
                                 setContextMenu(null);
                             }}
                             className="w-full px-3 py-2 text-left text-sm text-emerald-400 hover:bg-emerald-600/10 flex items-center gap-2"

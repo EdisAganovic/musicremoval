@@ -264,11 +264,10 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 if e.stderr:
                     print(f"{Fore.RED}Demucs Error Output:\n{e.stderr}{Style.RESET_ALL}")
 
-                print(f"{Fore.YELLOW}Creating silence fallback for: {base_audio_name_no_ext}{Style.RESET_ALL}")
-                demucs_vocal_wav_path = os.path.join(demucs_base_out_path, "htdemucs", base_audio_name_no_ext, "vocals.wav")
-                os.makedirs(os.path.dirname(demucs_vocal_wav_path), exist_ok=True)
-                silence_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-i", temp_audio_wav_path, "-af", "volume=0", demucs_vocal_wav_path]
-                tracked_run(silence_cmd, check=True)
+                # Propagate the failure instead of writing a silence track that would
+                # later be mistaken for a successful (but silent) separation.
+                demucs_vocal_wav_path = None
+                raise
 
             print(f"\n{Fore.GREEN}[OK] Demucs separation complete.\n{Style.RESET_ALL}")
 

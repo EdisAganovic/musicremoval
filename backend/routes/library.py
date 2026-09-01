@@ -15,14 +15,15 @@ from config import (
     METADATA_CACHE_FILE, LIBRARY_FILE, metadata_cache,
     safe_remove, is_path_within_allowed_roots
 )
+from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
 
 router = APIRouter(prefix="/api", tags=["library"])
 
 # Allowed root directories that media/stream/open endpoints may access.
 # Everything outside these is rejected as a path-traversal attempt.
 ALLOWED_ROOTS = [
-    os.path.abspath("nomusic"),
-    os.path.abspath("download"),
+    NOMUSIC_DIR,
+    DOWNLOAD_DIR,
     os.path.abspath("uploads"),
     os.path.abspath("projects"),
     os.path.abspath("_temp"),
@@ -104,8 +105,8 @@ async def get_library(force: bool = False):
         new_items_added = 0
         metadata_changed = False
 
-        # 1. Fast scan download folder
-        download_files = _fast_scan_dir_files("download", VIDEO_EXTENSIONS)
+        # 1. Fast scan download folder (audio AND video)
+        download_files = _fast_scan_dir_files(DOWNLOAD_DIR, VIDEO_EXTENSIONS | AUDIO_EXTENSIONS)
         for file_path, filename in download_files:
             abs_norm = os.path.abspath(os.path.normpath(file_path))
             if abs_norm in existing_files or abs_norm in active_task_files:
@@ -138,7 +139,7 @@ async def get_library(force: bool = False):
             })
 
         # 2. Fast scan nomusic folder
-        nomusic_files = _fast_scan_dir_files("nomusic", NOMUSIC_EXTENSIONS)
+        nomusic_files = _fast_scan_dir_files(NOMUSIC_DIR, NOMUSIC_EXTENSIONS)
         for file_path, filename in nomusic_files:
             abs_norm = os.path.abspath(os.path.normpath(file_path))
             if abs_norm in existing_files or abs_norm in active_task_files:
@@ -362,8 +363,8 @@ async def get_library_folders():
         return sorted(subdirs, key=lambda s: s.lower())
 
     return {
-        "download": scan_subdirs("download"),
-        "nomusic": scan_subdirs("nomusic")
+        "download": scan_subdirs(DOWNLOAD_DIR),
+        "nomusic": scan_subdirs(NOMUSIC_DIR)
     }
 
 
@@ -375,12 +376,21 @@ async def create_folder(payload: dict):
     if category not in ("download", "nomusic", "uploads", "projects"):
         raise HTTPException(status_code=400, detail="Invalid category")
 
+    # Map category names to absolute paths
+    category_paths = {
+        "download": DOWNLOAD_DIR,
+        "nomusic": NOMUSIC_DIR,
+        "uploads": os.path.abspath("uploads"),
+        "projects": os.path.abspath("projects"),
+    }
+    base_dir = category_paths.get(category, os.path.abspath(category))
+
     folder_name = payload.get("folder_name", "").strip()
     if not folder_name:
         raise HTTPException(status_code=400, detail="Folder name is required")
 
     clean_name = os.path.basename(folder_name)
-    target_path = os.path.abspath(os.path.join(category, clean_name))
+    target_path = os.path.join(base_dir, clean_name)
 
     if not is_path_within_allowed_roots(target_path, ALLOWED_ROOTS + [os.path.abspath(".")]):
         raise HTTPException(status_code=403, detail="Access to this path is not allowed")
@@ -444,9 +454,6 @@ async def stream_media(path: str):
         headers={
             "Accept-Ranges": "bytes",
             "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
             "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, Content-Type",
         }
     )

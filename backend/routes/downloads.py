@@ -24,7 +24,7 @@ from utils.helpers import format_duration
 from utils.validation import is_youtube_url
 
 def normalize_youtube_url(url: str) -> str:
-    """Normalizes youtube.com and youtu.be URLs, removing tracking parameters."""
+    """Normalizes youtube.com and youtu.be URLs, removing tracking/search parameters."""
     if not url:
         return url
     url = url.strip()
@@ -36,33 +36,43 @@ def normalize_youtube_url(url: str) -> str:
     elif not url.startswith(("http://", "https://")):
         url = f"https://{url}"
 
+    import re
     try:
         parsed = urllib.parse.urlparse(url)
         netloc = parsed.netloc.lower()
+        query = urllib.parse.parse_qs(parsed.query)
+
         if netloc in ["youtu.be", "www.youtu.be"]:
             video_id = parsed.path.strip("/")
-            new_url = f"https://www.youtube.com/watch?v={video_id}"
-            
-            # Preserve playlist parameter if it exists
-            query = urllib.parse.parse_qs(parsed.query)
             params = []
             if "list" in query:
                 params.append(f"list={query['list'][0]}")
             if "t" in query:
                 params.append(f"t={query['t'][0]}")
+            new_url = f"https://www.youtube.com/watch?v={video_id}"
             if params:
                 new_url += "&" + "&".join(params)
-            url = new_url
-        elif "youtube.com" in netloc and parsed.path.startswith("/shorts/"):
-            video_id = parsed.path.replace("/shorts/", "").strip("/")
-            url = f"https://www.youtube.com/watch?v={video_id}"
+            return new_url
+        elif any(d in netloc for d in ["youtube.com", "m.youtube.com", "music.youtube.com"]):
+            if parsed.path.startswith("/shorts/"):
+                video_id = parsed.path.replace("/shorts/", "").strip("/").split("/")[0]
+                return f"https://www.youtube.com/watch?v={video_id}"
+            elif parsed.path == "/watch" or parsed.path.startswith("/watch"):
+                video_id = query.get("v", [""])[0]
+                if video_id:
+                    params = [f"v={video_id}"]
+                    if "list" in query:
+                        params.append(f"list={query['list'][0]}")
+                    if "t" in query:
+                        params.append(f"t={query['t'][0]}")
+                    return f"https://www.youtube.com/watch?{'&'.join(params)}"
     except Exception:
         pass
     
-    # Strip tracking parameter `si` from any URL to avoid yt-dlp issues
-    if "si=" in url:
-        import re
-        url = re.sub(r'([?&])si=[^&]*(&|$)', r'\1', url).rstrip('?&')
+    # Generic parameter strip for other tracking params
+    for param in ["si", "pp", "feature", "fbclid", "igshid", "utm_source", "utm_medium", "utm_campaign"]:
+        url = re.sub(rf'([?&]){param}=[^&]*(&|$)', r'\1', url)
+    url = url.rstrip('?&')
     return url
 
 router = APIRouter(prefix="/api", tags=["downloads"])
@@ -149,6 +159,10 @@ async def get_yt_formats(payload: dict):
                     'ignoreerrors': True,
                     'noplaylist': False,
                     'extract_flat': 'in_playlist',
+                    'socket_timeout': 30,
+                    'retries': 5,
+                    'no_warnings': True,
+                    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 }
                 import os
                 cookies_path = os.path.join("data", "cookies.txt")
@@ -194,10 +208,19 @@ async def get_yt_formats(payload: dict):
 
         # ── Single video / non-YouTube URL ───────────────────────────────────
         def get_video_info():
+            from modules.module_ffmpeg import FFMPEG_EXE
+            ffmpeg_dir = os.path.dirname(FFMPEG_EXE) if os.path.exists(FFMPEG_EXE) else None
+
             opts = {
                 'quiet': True,
                 'noplaylist': True,
+                'socket_timeout': 30,
+                'retries': 5,
+                'no_warnings': True,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             }
+            if ffmpeg_dir:
+                opts['ffmpeg_location'] = ffmpeg_dir
             import os
             cookies_path = os.path.join("data", "cookies.txt")
             if os.path.exists(cookies_path):
@@ -312,7 +335,7 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    # Check for duplicates in library
+    # Check for duplicates in library for matching format type (audio vs video)
     from config import get_full_library
     library = get_full_library()
     for item in library:
@@ -320,21 +343,26 @@ async def download_video(background_tasks: BackgroundTasks, payload: dict):
         if item_url and (item_url == url or item_url.strip('/') == url.strip('/')):
             res_files = item.get("result_files", [])
             if res_files and all(os.path.exists(f) for f in res_files):
-                return {
-                    "status": "duplicate",
-                    "message": f"URL already in library: {os.path.basename(res_files[0])}",
-                    "existing_file": res_files[0],
-                    "task_id": item.get("task_id")
-                }
+                is_video_file = any(f.lower().endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.m4v')) for f in res_files)
+                if (format_type == 'video' and is_video_file) or (format_type == 'audio' and not is_video_file):
+                    return {
+                        "status": "duplicate",
+                        "message": f"URL already in library: {os.path.basename(res_files[0])}",
+                        "existing_file": res_files[0],
+                        "task_id": item.get("task_id")
+                    }
 
     # Check current active tasks
     for tid, task in tasks.items():
         if task.get("url") == url and task.get("status") in ["processing", "downloading", "separating"]:
-            return {
-                "status": "processing",
-                "message": "URL is already being processed",
-                "task_id": tid
-            }
+            # If same format is already processing
+            t_format = task.get("format", "audio")
+            if t_format == format_type:
+                return {
+                    "status": "processing",
+                    "message": "URL is already being processed",
+                    "task_id": tid
+                }
 
     task_id = str(uuid.uuid4())
     
@@ -440,6 +468,16 @@ async def add_to_queue(background_tasks: BackgroundTasks, payload: QueueAddReque
     download_queue.append(queue_item)
     save_queue()
 
+    # Reset stale queue_processing flag if nothing is actually downloading
+    if state.queue_processing:
+        actually_downloading = any(
+            item.get("status") == "downloading"
+            for item in download_queue
+        )
+        if not actually_downloading:
+            print(f"[Queue] Resetting stale queue_processing flag in /queue/add")
+            state.queue_processing = False
+
     asyncio.create_task(process_queue())
 
     return {"queue_id": queue_item["queue_id"], "status": "queued"}
@@ -471,6 +509,17 @@ async def add_to_queue_batch(background_tasks: BackgroundTasks, payload: QueueBa
             added_count += 1
 
     save_queue()
+
+    # Reset stale queue_processing flag if nothing is actually downloading
+    if state.queue_processing:
+        actually_downloading = any(
+            item.get("status") == "downloading"
+            for item in download_queue
+        )
+        if not actually_downloading:
+            print(f"[Queue] Resetting stale queue_processing flag in add-batch")
+            state.queue_processing = False
+
     asyncio.create_task(process_queue())
 
     return {"added": added_count, "status": "queued"}
@@ -509,6 +558,15 @@ async def clear_queue():
 @router.post("/queue/start")
 async def start_queue(background_tasks: BackgroundTasks):
     """Start processing the queue."""
+    # Reset stale queue_processing flag if nothing is actually downloading
+    if state.queue_processing:
+        actually_downloading = any(
+            item.get("status") == "downloading"
+            for item in download_queue
+        )
+        if not actually_downloading:
+            print(f"[Queue] Resetting stale queue_processing flag (was True but nothing downloading)")
+            state.queue_processing = False
     background_tasks.add_task(process_queue)
     return {"status": "started"}
 

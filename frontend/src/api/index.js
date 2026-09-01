@@ -109,7 +109,7 @@ export const queueAPI = {
 
 // Library API endpoints
 export const libraryAPI = {
-  get: () => api.get("/library"),
+  get: (config) => api.get("/library", config),
   openFile: (path) => api.post("/open-file", { path }),
   openFolder: (folderName) => {
     // Convert folder name to full path
@@ -131,7 +131,7 @@ export const libraryAPI = {
     api.post("/rename-file", { task_id: taskId, new_name: newName }),
   move: (payload) => api.post("/library/move", payload),
   createFolder: (payload) => api.post("/library/create-folder", payload),
-  getFolders: () => api.get("/library/folders"),
+  getFolders: (config) => api.get("/library/folders", config),
 };
 
 // Notifications API endpoints

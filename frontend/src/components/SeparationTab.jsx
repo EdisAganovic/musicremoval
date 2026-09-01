@@ -77,7 +77,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
-const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearInitialFile: _onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
+const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
   const activeLibraryFile = libraryFile || initialFilePath;
   const activeBatchId = externalBatchId || initialBatchId;
   const [file, setFile] = useState(null);
@@ -117,6 +117,24 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       name: "🎬 Mel-Band Roformer Crowd & BGM",
       desc: "Best for Cartoons, Anime & Movies (Preserves Speech, Shouts & Foley)",
       badge: "Recommended"
+    },
+    {
+      id: "mel_band_roformer_kim_ft_unwa.ckpt",
+      name: "🎤 Mel-Band Roformer Vocals (Kim)",
+      desc: "Standard Song Vocal Extraction (Cleanest isolated vocals in modern music)",
+      badge: "Kim FT"
+    },
+    {
+      id: "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt",
+      name: "💎 Mel-Band Roformer Vocals (ViperX)",
+      desc: "High-Fidelity Music Vocal Isolation (Minimal artifacts, rich high-end)",
+      badge: "SDR 11.43"
+    },
+    {
+      id: "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+      name: "⚡ BS-Roformer Vocals (ViperX)",
+      desc: "Bit-Stream Roformer (Top-tier SDR benchmark score for clean vocals)",
+      badge: "SDR 12.97"
     },
     {
       id: "melband_roformer_instvoc_duality_v1.ckpt",
@@ -229,6 +247,8 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       setProgress(0);
       setResultFiles([]);
       setError(null);
+      onFileCleared?.();
+      onClearInitialFile?.();
     }
   }, [activeLibraryFile]);
 
@@ -418,6 +438,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
+      setLibraryFilePath(null);
       setError(null);
       setStatus("idle");
       setProgress(0);
@@ -594,7 +615,9 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       setStatus("processing");
     } catch (err) {
       console.error("Separation failed:", err);
-      setError("Failed to start processing. Check backend connection.");
+      const errMsg = err.response?.data?.detail || "Failed to start processing. Check backend connection.";
+      setError(errMsg);
+      toast.error(errMsg);
       setStatus("error");
     }
   };
@@ -612,8 +635,11 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
     setDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       setFile(e.dataTransfer.files[0]);
+      setLibraryFilePath(null);
       setError(null);
       setStatus("idle");
+      setProgress(0);
+      setResultFiles([]);
     }
   };
 

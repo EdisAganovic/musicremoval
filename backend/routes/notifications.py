@@ -16,6 +16,7 @@ from config import (
     console_logs, notifications, MAX_LOGS, MAX_NOTIFICATIONS,
     save_notifications, tasks, get_full_library
 )
+from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
 
 router = APIRouter(prefix="/api", tags=["notifications"])
 
@@ -221,8 +222,8 @@ async def get_system_info():
     dynamic_info_task = loop.run_in_executor(_diag_executor, get_dynamic_info)
     
     # 2. Folder sizes and Library stats (slow)
-    nomusic_size_task = loop.run_in_executor(_diag_executor, get_folder_size, "nomusic")
-    download_size_task = loop.run_in_executor(_diag_executor, get_folder_size, "download")
+    nomusic_size_task = loop.run_in_executor(_diag_executor, get_folder_size, NOMUSIC_DIR)
+    download_size_task = loop.run_in_executor(_diag_executor, get_folder_size, DOWNLOAD_DIR)
     library_stats_task = loop.run_in_executor(_diag_executor, get_library_stats)
 
     # Wait for everything
@@ -245,8 +246,8 @@ async def get_system_info():
         },
         "storage": {
             **dynamic_info["storage"],
-            "output_folder": os.path.abspath("nomusic"),
-            "download_folder": os.path.abspath("download"),
+            "output_folder": NOMUSIC_DIR,
+            "download_folder": DOWNLOAD_DIR,
             "output_size": f"{nomusic_size / (1024**2):.1f} MB",
             "download_size": f"{download_size / (1024**2):.1f} MB"
         },

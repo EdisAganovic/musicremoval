@@ -1,0 +1,488 @@
+{
+    "bf1fa2ba-5834-409f-b4c6-e6e9b7ea8116": {
+        "task_id": "bf1fa2ba-5834-409f-b4c6-e6e9b7ea8116",
+        "status": "completed",
+        "progress": 100,
+        "current_step": "Download complete",
+        "result_files": [
+            "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Giannis Ploutarhos - Afieromeno.mp3"
+        ],
+        "url": "https://www.youtube.com/watch?v=6Ye0NOn7nrI",
+        "type": "download",
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "3:52",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "download_info": {
+            "title": "Nikos Vertis - An eisai ena asteri (Official Videoclip)",
+            "duration": 289,
+            "thumbnail": "https://i.ytimg.com/vi/6Ye0NOn7nrI/maxresdefault.jpg"
+        }
+    },
+    "c03d126d-d21c-403b-bd95-e3fba5cddaf7": {
+        "task_id": "c03d126d-d21c-403b-bd95-e3fba5cddaf7",
+        "status": "completed",
+        "progress": 100,
+        "current_step": "Download complete",
+        "result_files": [
+            "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3"
+        ],
+        "url": "https://www.youtube.com/watch?v=6Ye0NOn7nrI",
+        "type": "download",
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "download_info": {
+            "title": "Nikos Vertis - An eisai ena asteri (Official Videoclip)",
+            "duration": 289,
+            "thumbnail": "https://i.ytimg.com/vi/6Ye0NOn7nrI/maxresdefault.jpg"
+        }
+    },
+    "5e05660e-b4cf-48b8-91d6-751501ab3641": {
+        "batch": true,
+        "batch_id": "5e05660e-b4cf-48b8-91d6-751501ab3641",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "d6d00061-97b8-4639-9373-dd305cf542eb",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 10,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 10
+    },
+    "d6d00061-97b8-4639-9373-dd305cf542eb": {
+        "task_id": "d6d00061-97b8-4639-9373-dd305cf542eb",
+        "batch_id": "5e05660e-b4cf-48b8-91d6-751501ab3641",
+        "status": "failed",
+        "progress": 10,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788212989.9323983,
+        "start_time": 1788212989.9411113
+    },
+    "5581b14c-9297-4b61-9e4b-bace07034be6": {
+        "batch": true,
+        "batch_id": "5581b14c-9297-4b61-9e4b-bace07034be6",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "8a05490b-01a0-49fb-a7ba-17be4ebc3d73",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 50,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 50
+    },
+    "8a05490b-01a0-49fb-a7ba-17be4ebc3d73": {
+        "task_id": "8a05490b-01a0-49fb-a7ba-17be4ebc3d73",
+        "batch_id": "5581b14c-9297-4b61-9e4b-bace07034be6",
+        "status": "failed",
+        "progress": 50,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788212994.1714852,
+        "start_time": 1788212994.1742873
+    },
+    "cd223cb2-168c-4cf9-aceb-cc86ec2fcfcb": {
+        "batch": true,
+        "batch_id": "cd223cb2-168c-4cf9-aceb-cc86ec2fcfcb",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "35506266-4abc-464b-bf83-1fd133a8bee5",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 15,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 15
+    },
+    "35506266-4abc-464b-bf83-1fd133a8bee5": {
+        "task_id": "35506266-4abc-464b-bf83-1fd133a8bee5",
+        "batch_id": "cd223cb2-168c-4cf9-aceb-cc86ec2fcfcb",
+        "status": "failed",
+        "progress": 15,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213116.0739799,
+        "start_time": 1788213116.0767028
+    },
+    "fa6051d9-0760-4625-9d94-7764e2bf5818": {
+        "batch": true,
+        "batch_id": "fa6051d9-0760-4625-9d94-7764e2bf5818",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "c19e2e30-605e-463c-bbda-72699981bd42",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 15,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 15
+    },
+    "c19e2e30-605e-463c-bbda-72699981bd42": {
+        "task_id": "c19e2e30-605e-463c-bbda-72699981bd42",
+        "batch_id": "fa6051d9-0760-4625-9d94-7764e2bf5818",
+        "status": "failed",
+        "progress": 15,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213120.2674506,
+        "start_time": 1788213120.2728765
+    },
+    "4501624d-5d42-4af7-b7ea-4a4570027537": {
+        "batch": true,
+        "batch_id": "4501624d-5d42-4af7-b7ea-4a4570027537",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "448621c1-87bb-4aa5-941e-bd75dfde1901",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 50,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 50
+    },
+    "448621c1-87bb-4aa5-941e-bd75dfde1901": {
+        "task_id": "448621c1-87bb-4aa5-941e-bd75dfde1901",
+        "batch_id": "4501624d-5d42-4af7-b7ea-4a4570027537",
+        "status": "failed",
+        "progress": 50,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213124.5141447,
+        "start_time": 1788213124.5162072
+    },
+    "1f7f51f8-dac4-41a9-9313-f67886a9ec3e": {
+        "batch": true,
+        "batch_id": "1f7f51f8-dac4-41a9-9313-f67886a9ec3e",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "85136d40-c8f6-4f75-88d1-19760fecff0c",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 15,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 15
+    },
+    "85136d40-c8f6-4f75-88d1-19760fecff0c": {
+        "task_id": "85136d40-c8f6-4f75-88d1-19760fecff0c",
+        "batch_id": "1f7f51f8-dac4-41a9-9313-f67886a9ec3e",
+        "status": "failed",
+        "progress": 15,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213164.5879683,
+        "start_time": 1788213164.5966196
+    },
+    "ef121808-3e90-4bb2-b8ef-fcdce4b88613": {
+        "batch": true,
+        "batch_id": "ef121808-3e90-4bb2-b8ef-fcdce4b88613",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "d83d7ef4-dd9d-4b16-a680-ed2dca4c4c30",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 15,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 15
+    },
+    "d83d7ef4-dd9d-4b16-a680-ed2dca4c4c30": {
+        "task_id": "d83d7ef4-dd9d-4b16-a680-ed2dca4c4c30",
+        "batch_id": "ef121808-3e90-4bb2-b8ef-fcdce4b88613",
+        "status": "failed",
+        "progress": 15,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213168.7229898,
+        "start_time": 1788213168.7259893
+    },
+    "d13a6d8a-fdd0-45c9-af56-70bddd002f05": {
+        "batch": true,
+        "batch_id": "d13a6d8a-fdd0-45c9-af56-70bddd002f05",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "ec973089-e58c-4e27-a860-c898a48e99ff",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 50,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 50
+    },
+    "ec973089-e58c-4e27-a860-c898a48e99ff": {
+        "task_id": "ec973089-e58c-4e27-a860-c898a48e99ff",
+        "batch_id": "d13a6d8a-fdd0-45c9-af56-70bddd002f05",
+        "status": "failed",
+        "progress": 50,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213172.9713051,
+        "start_time": 1788213172.974289
+    },
+    "7ec2af43-6f3d-46bb-a4a3-1dd5702b04c1": {
+        "batch": true,
+        "batch_id": "7ec2af43-6f3d-46bb-a4a3-1dd5702b04c1",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "6ace8377-9acf-45ba-8581-a863a21a372c",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 15,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 15
+    },
+    "6ace8377-9acf-45ba-8581-a863a21a372c": {
+        "task_id": "6ace8377-9acf-45ba-8581-a863a21a372c",
+        "batch_id": "7ec2af43-6f3d-46bb-a4a3-1dd5702b04c1",
+        "status": "failed",
+        "progress": 15,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213247.0528245,
+        "start_time": 1788213247.062009
+    },
+    "43bb0595-395f-4597-b494-aecdc7d1017b": {
+        "batch": true,
+        "batch_id": "43bb0595-395f-4597-b494-aecdc7d1017b",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "c510fa5a-a262-48d8-a5b4-6dffb3a5f9ff",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 15,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 15
+    },
+    "c510fa5a-a262-48d8-a5b4-6dffb3a5f9ff": {
+        "task_id": "c510fa5a-a262-48d8-a5b4-6dffb3a5f9ff",
+        "batch_id": "43bb0595-395f-4597-b494-aecdc7d1017b",
+        "status": "failed",
+        "progress": 15,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213251.2557874,
+        "start_time": 1788213251.2587051
+    },
+    "ffc34dd3-57f9-433b-a8f7-25eb22c41eaa": {
+        "batch": true,
+        "batch_id": "ffc34dd3-57f9-433b-a8f7-25eb22c41eaa",
+        "total_files": 1,
+        "processed": 1,
+        "success": 0,
+        "failed": 1,
+        "files": [
+            {
+                "task_id": "b4b383e8-086b-48a2-8ae5-33d2a6d15655",
+                "file": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "filename": "Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+                "status": "failed",
+                "progress": 50,
+                "current_step": "Failed"
+            }
+        ],
+        "status": "failed",
+        "current_step": "Batch finished",
+        "progress": 50
+    },
+    "b4b383e8-086b-48a2-8ae5-33d2a6d15655": {
+        "task_id": "b4b383e8-086b-48a2-8ae5-33d2a6d15655",
+        "batch_id": "ffc34dd3-57f9-433b-a8f7-25eb22c41eaa",
+        "status": "failed",
+        "progress": 50,
+        "current_step": "Separation failed",
+        "result_files": [],
+        "metadata": {
+            "resolution": "N/A",
+            "duration": "4:48",
+            "video_codec": "N/A",
+            "audio_codec": "mp3",
+            "is_video": false
+        },
+        "file_path": "D:\\PYTHON_PROJEKTI_2025\\demucspleeter\\download\\Nikos Vertis - An eisai ena asteri (Official Videoclip).mp3",
+        "type": "separation",
+        "created_at": 1788213255.40487,
+        "start_time": 1788213255.406752
+    }
+}

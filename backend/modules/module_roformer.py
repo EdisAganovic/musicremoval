@@ -11,6 +11,7 @@ import tempfile
 from colorama import Fore, Style
 from tqdm import tqdm
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE, split_audio_into_segments
+from core.constants import DEFAULT_ROFORMER_MODEL
 
 try:
     from services.process_manager import tracked_run
@@ -20,7 +21,7 @@ except ImportError:
 
 # Directory to cache downloaded model weights
 MODEL_CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "pretrained_models", "audio_separator_models"))
-DEFAULT_BGM_MODEL = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
+DEFAULT_BGM_MODEL = DEFAULT_ROFORMER_MODEL
 
 
 def separate_with_roformer(

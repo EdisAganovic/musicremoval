@@ -25,6 +25,11 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Background
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from colorama import Fore, Style
+from core.constants import (
+    DEFAULT_ROFORMER_MODEL,
+    DEFAULT_TIGER_TARGET,
+    DEFAULT_TIGER_OVERLAP,
+)
 
 # Project directory
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -76,9 +81,9 @@ class ProjectSaveRequest(BaseModel):
 class RunPassRequest(BaseModel):
     pass_name: str
     model: str  # "tiger", "roformer", "demucs", "spleeter"
-    roformer_model: Optional[str] = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
-    tiger_target: Optional[str] = "dialogue_sfx"
-    tiger_overlap: Optional[int] = 50
+    roformer_model: Optional[str] = DEFAULT_ROFORMER_MODEL
+    tiger_target: Optional[str] = DEFAULT_TIGER_TARGET
+    tiger_overlap: Optional[int] = DEFAULT_TIGER_OVERLAP
     demucs_stems: Optional[int] = 4  # 2 or 4
     spleeter_stems: Optional[int] = 2  # 2, 4, or 5
 
@@ -191,9 +196,10 @@ async def stream_project_media(file: Optional[str] = None, path: Optional[str] =
             raise HTTPException(status_code=404, detail=f"Media file not found: {clean_path}")
 
     # SECURITY: only serve files from allowed project directories
+    from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
     _allowed = [
-        os.path.abspath("nomusic"),
-        os.path.abspath("download"),
+        NOMUSIC_DIR,
+        DOWNLOAD_DIR,
         os.path.abspath("uploads"),
         os.path.abspath("projects"),
         os.path.abspath("."),
@@ -225,9 +231,6 @@ async def stream_project_media(file: Optional[str] = None, path: Optional[str] =
         headers={
             "Accept-Ranges": "bytes",
             "Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
             "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, Content-Type",
         }
     )
@@ -1001,9 +1004,10 @@ def _mux_video_sync(project_id: str) -> dict:
     mix_wav = render_project_mixdown(project_id)
 
     # Output filename in nomusic/
-    os.makedirs("nomusic", exist_ok=True)
+    from core.constants import NOMUSIC_DIR
+    os.makedirs(NOMUSIC_DIR, exist_ok=True)
     base_name = os.path.splitext(data.get("source_name", "output"))[0]
-    out_video = os.path.abspath(os.path.join("nomusic", f"remuxed_{base_name}.mp4"))
+    out_video = os.path.abspath(os.path.join(NOMUSIC_DIR, f"remuxed_{base_name}.mp4"))
 
     from modules.module_ffmpeg import FFMPEG_EXE, tracked_run
     # Remux video stream directly with FDK-AAC audio

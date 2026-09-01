@@ -29,11 +29,13 @@ def init_data_directory():
     """
     Ensure all required directories and JSON files exist on app startup.
     """
+    from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
+
     # 1. Create required working directories
     required_dirs = [
         "data",
-        "download",
-        "nomusic",
+        DOWNLOAD_DIR,
+        NOMUSIC_DIR,
         "uploads",
         "_temp",
         "_processing_intermediates",

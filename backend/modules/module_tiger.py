@@ -17,6 +17,7 @@ from colorama import Fore, Style
 # Ensure look2hear can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import look2hear.models
+from core.constants import DEFAULT_TIGER_TARGET, DEFAULT_TIGER_OVERLAP
 
 MODEL_CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "pretrained_models", "tiger_dnr_torch"))
 _TIGER_MODEL_INSTANCE = None
@@ -43,8 +44,8 @@ def separate_with_tiger(
     temp_audio_wav_path: str,
     output_base_dir: str,
     base_audio_name_no_ext: str,
-    tiger_target: str = "dialogue_sfx",
-    tiger_overlap: int = 50,
+    tiger_target: str = DEFAULT_TIGER_TARGET,
+    tiger_overlap: int = DEFAULT_TIGER_OVERLAP,
     progress_callback = None,
     want_instrumental: bool = False
 ):

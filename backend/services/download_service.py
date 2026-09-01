@@ -3,6 +3,7 @@ Download service - handles downloads via yt-dlp (YouTube, Facebook, and more).
 """
 import os
 import sys
+import time
 import asyncio
 from typing import Optional
 from colorama import Fore, Style
@@ -31,6 +32,7 @@ def run_yt_dlp(
     """Download video/audio from any yt-dlp supported platform."""
     import yt_dlp
 
+    print(f"\n{Fore.CYAN}[Downloader] >>> Starting run_yt_dlp for task {task_id[:8]}... URL: {url} | Format: {format_type}{Style.RESET_ALL}")
     tasks[task_id] = {
         "task_id": task_id,
         "status": "processing",
@@ -43,14 +45,16 @@ def run_yt_dlp(
 
     active_downloads[task_id] = {"cancel_flag": False, "ydl": None}
 
+    from core.constants import DOWNLOAD_DIR
+
     # Build output directory (optionally inside a subfolder)
     if subfolder:
         # Sanitize subfolder name to prevent path traversal and strip channel @ prefix
         import re
         safe_subfolder = re.sub(r'[\\/:*?"<>|]', '_', subfolder).lstrip('@').strip('. ')
-        output_dir = os.path.join("download", safe_subfolder)
+        output_dir = os.path.join(DOWNLOAD_DIR, safe_subfolder)
     else:
-        output_dir = "download"
+        output_dir = DOWNLOAD_DIR
     os.makedirs(output_dir, exist_ok=True)
     log_console(f"Output directory: {os.path.abspath(output_dir)}", "info")
 
@@ -126,6 +130,9 @@ def run_yt_dlp(
 
     def get_ydl_opts():
         cookies_path = os.path.join("data", "cookies.txt")
+        from modules.module_ffmpeg import FFMPEG_EXE
+        ffmpeg_dir = os.path.dirname(FFMPEG_EXE) if os.path.exists(FFMPEG_EXE) else None
+
         opts = {
             'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_hook],
@@ -133,11 +140,16 @@ def run_yt_dlp(
             'no_warnings': True,
             'ignoreerrors': True,
             'noplaylist': True,
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            # Download DASH/HLS fragments (common for higher-res YouTube video) in
-            # parallel instead of one at a time - same video/CDN, just faster.
+            'socket_timeout': 30,
+            'retries': 5,
+            'fragment_retries': 5,
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            # Download DASH/HLS fragments in parallel
             'concurrent_fragment_downloads': 4,
         }
+
+        if ffmpeg_dir:
+            opts['ffmpeg_location'] = ffmpeg_dir
 
         if os.path.exists(cookies_path):
             opts['cookiefile'] = cookies_path
@@ -167,6 +179,7 @@ def run_yt_dlp(
         return opts
 
     try:
+        task_start_time = time.time()
         ydl_opts = get_ydl_opts()
         success = False
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -176,7 +189,6 @@ def run_yt_dlp(
             info = ydl.extract_info(url, download=True)
             success = True
 
-            
             if active_downloads.get(task_id, {}).get("cancel_flag", False):
                 raise Exception("Download cancelled by user")
             
@@ -190,36 +202,45 @@ def run_yt_dlp(
             tasks[task_id]["progress"] = 15
             log_console(f"{log_prefix} Starting download, progress=15%", "info")
             
-            filename = ydl.prepare_filename(info)
+            # Determine actual output file accurately
+            actual_filename = None
+            req_downloads = info.get('requested_downloads') or []
+            for rd in req_downloads:
+                rd_path = rd.get('filepath') or rd.get('_filename')
+                if rd_path and os.path.exists(rd_path):
+                    actual_filename = rd_path
+                    break
 
-            # Handle audio conversion result
-            if format_type == 'audio':
-                base = os.path.splitext(filename)[0]
-                filename = f"{base}.mp3"
-                tasks[task_id]["current_step"] = "Converting to MP3..."
-
-            # Determine actual output file - yt-dlp may merge to a different ext
-            # e.g. prepare_filename gives .webm but merged output is .mp4
-            actual_filename = filename
-            if not os.path.exists(actual_filename):
-                base_no_ext = os.path.splitext(filename)[0]
-                # Try common merged extensions
-                for try_ext in ['.mp4', '.mkv', '.webm', '.mp3', '.m4a']:
-                    candidate = base_no_ext + try_ext
-                    if os.path.exists(candidate):
-                        actual_filename = candidate
-                        break
+            if not actual_filename or not os.path.exists(actual_filename):
+                filename = ydl.prepare_filename(info)
+                if format_type == 'audio':
+                    base = os.path.splitext(filename)[0]
+                    filename = f"{base}.mp3"
+                if os.path.exists(filename):
+                    actual_filename = filename
                 else:
-                    # Last resort: find the most recently modified media file in output_dir
-                    media_exts = {'.mp4', '.mkv', '.webm', '.mp3', '.m4a', '.wav', '.flac'}
-                    candidates = []
-                    for f in os.listdir(output_dir):
-                        fpath = os.path.join(output_dir, f)
-                        if os.path.isfile(fpath) and os.path.splitext(f)[1].lower() in media_exts:
-                            candidates.append((os.path.getmtime(fpath), fpath))
-                    if candidates:
-                        candidates.sort(reverse=True)
-                        actual_filename = candidates[0][1]
+                    base_no_ext = os.path.splitext(filename)[0]
+                    for try_ext in ['.mp3', '.m4a', '.mp4', '.mkv', '.webm', '.wav', '.opus']:
+                        candidate = base_no_ext + try_ext
+                        if os.path.exists(candidate):
+                            actual_filename = candidate
+                            break
+
+            if not actual_filename or not os.path.exists(actual_filename):
+                media_exts = {'.mp4', '.mkv', '.webm', '.mp3', '.m4a', '.wav', '.flac', '.opus'}
+                candidates = []
+                for f in os.listdir(output_dir):
+                    fpath = os.path.join(output_dir, f)
+                    if os.path.isfile(fpath) and os.path.splitext(f)[1].lower() in media_exts:
+                        mtime = os.path.getmtime(fpath)
+                        if mtime >= task_start_time - 10:
+                            candidates.append((mtime, fpath))
+                if candidates:
+                    candidates.sort(reverse=True)
+                    actual_filename = candidates[0][1]
+
+            if not actual_filename or not os.path.exists(actual_filename):
+                raise Exception("Downloaded file could not be found on disk")
                     
             if os.path.exists(actual_filename):
                 filename = actual_filename
@@ -314,7 +335,8 @@ def run_yt_dlp(
                             tasks[task_id]["timings"] = phase_timings
 
                             # Discover generated separated files in nomusic/ folder
-                            output_dir = os.path.abspath('nomusic')
+                            from core.constants import NOMUSIC_DIR
+                            output_dir = NOMUSIC_DIR
                             raw_name = os.path.basename(filename)
                             clean_name_base = os.path.splitext(raw_name)[0]
 
@@ -364,6 +386,8 @@ def run_yt_dlp(
                 add_notification("error", "Download Failed", f"Could not find downloaded file: {filename}")
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         error_msg = str(e)
         if "cancelled" in error_msg.lower():
             tasks[task_id]["status"] = "cancelled"
@@ -374,5 +398,7 @@ def run_yt_dlp(
             tasks[task_id]["current_step"] = f"Error: {error_msg[:100]}"
             add_notification("error", "Download Failed", error_msg[:200])
         log_console(f"Download error for {url}: {error_msg}", "error")
+        from services.persistence import save_tasks_sync
+        save_tasks_sync()
     finally:
         active_downloads.pop(task_id, None)

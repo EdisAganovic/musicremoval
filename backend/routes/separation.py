@@ -6,19 +6,27 @@ import time
 import uuid
 import asyncio
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File, HTTPException, Form
-from typing import List
+from typing import List, Optional
 
 from config import tasks, add_notification, log_console, get_full_library, save_to_library
 from models import SeparateRequest, FolderScanRequest, FileListScanRequest, FolderQueueProcessRequest
 from services.separation_service import enqueue_separation, run_separation
+from core.constants import (
+    DEFAULT_MODEL,
+    DEFAULT_ROFORMER_MODEL,
+    DEFAULT_TIGER_TARGET,
+    DEFAULT_TIGER_OVERLAP,
+    DOWNLOAD_DIR,
+    NOMUSIC_DIR,
+)
 
 router = APIRouter(prefix="/api", tags=["separation"])
 
 
 def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, filename: str,
                              metadata: dict, model: str, skip_video_encoding: bool, current_step: str,
-                             roformer_model: str = "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
-                             tiger_target: str = "dialogue_sfx", tiger_overlap: int = 50,
+                             roformer_model: str = DEFAULT_ROFORMER_MODEL,
+                             tiger_target: str = DEFAULT_TIGER_TARGET, tiger_overlap: int = DEFAULT_TIGER_OVERLAP,
                              duration: int = None, export_instrumental: bool = False, remove_silence: bool = False,
                              super_keyframe: bool = False, resolution: str = "1080p"):
     """
@@ -81,7 +89,7 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
 
 
 @router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form("both"), roformer_model: str = Form("mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"), tiger_target: str = Form("dialogue_sfx"), tiger_overlap: int = Form(50), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: int = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False)):
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL), roformer_model: str = Form(DEFAULT_ROFORMER_MODEL), tiger_target: str = Form(DEFAULT_TIGER_TARGET), tiger_overlap: int = Form(DEFAULT_TIGER_OVERLAP), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: Optional[int] = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False)):
     """Upload and separate vocals from an audio file."""
     from colorama import Fore, Style
 
@@ -118,19 +126,31 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
     """Separate vocals from an existing file on the server."""
     from colorama import Fore, Style
 
-    file_path = payload.file_path
+    raw_path = payload.file_path or ""
+    resolved_path = os.path.abspath(os.path.normpath(raw_path)) if raw_path else ""
+
+    if not resolved_path or not os.path.exists(resolved_path):
+        # Fallback check in DOWNLOAD_DIR and NOMUSIC_DIR
+        base_name = os.path.basename(raw_path)
+        dl_candidate = os.path.join(DOWNLOAD_DIR, base_name)
+        nomusic_candidate = os.path.join(NOMUSIC_DIR, base_name)
+        if os.path.exists(dl_candidate):
+            resolved_path = dl_candidate
+        elif os.path.exists(nomusic_candidate):
+            resolved_path = nomusic_candidate
+        else:
+            raise HTTPException(status_code=404, detail=f"File not found: {raw_path}")
+
+    file_path = resolved_path
     model = payload.model
-    roformer_model = payload.roformer_model or "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt"
-    tiger_target = payload.tiger_target or "dialogue_sfx"
-    tiger_overlap = payload.tiger_overlap or 50
+    roformer_model = payload.roformer_model or DEFAULT_ROFORMER_MODEL
+    tiger_target = payload.tiger_target or DEFAULT_TIGER_TARGET
+    tiger_overlap = payload.tiger_overlap or DEFAULT_TIGER_OVERLAP
     skip_video_encoding = payload.skip_video_encoding
     super_keyframe = payload.super_keyframe
     resolution = payload.resolution or "1080p"
     duration = payload.duration
     export_instrumental = payload.export_instrumental
-
-    if not file_path or not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
 
     filename = os.path.basename(file_path)
     metadata = {"filename": filename, "is_video": True, "resolution": resolution}
@@ -395,9 +415,9 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             file_path=file_path,
             duration=payload.duration if hasattr(payload, 'duration') else None,
             model=payload.model,
-            roformer_model=payload.roformer_model or "mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt",
-            tiger_target=payload.tiger_target or "dialogue_sfx",
-            tiger_overlap=payload.tiger_overlap or 50,
+            roformer_model=payload.roformer_model or DEFAULT_ROFORMER_MODEL,
+            tiger_target=payload.tiger_target or DEFAULT_TIGER_TARGET,
+            tiger_overlap=payload.tiger_overlap or DEFAULT_TIGER_OVERLAP,
             skip_video_encoding=payload.skip_video_encoding,
             super_keyframe=payload.super_keyframe,
             resolution=payload.resolution or "1080p",

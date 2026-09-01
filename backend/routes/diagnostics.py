@@ -230,16 +230,17 @@ def _check_demucs_import():
 
 def _check_disk_and_dirs():
     """Check disk space and key directories (fast)."""
+    from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
     disk = {
         "project_root": _get_disk_space(os.getcwd()),
-        "download_dir": _get_disk_space(os.path.join(os.getcwd(), "download")),
-        "nomusic_dir": _get_disk_space(os.path.join(os.getcwd(), "nomusic")),
+        "download_dir": _get_disk_space(DOWNLOAD_DIR),
+        "nomusic_dir": _get_disk_space(NOMUSIC_DIR),
         "temp_dir": _get_disk_space(tempfile.gettempdir()),
     }
 
     key_dirs = {
-        "download": os.path.join(os.getcwd(), "download"),
-        "nomusic": os.path.join(os.getcwd(), "nomusic"),
+        "download": DOWNLOAD_DIR,
+        "nomusic": NOMUSIC_DIR,
         "uploads": os.path.join(os.getcwd(), "uploads"),
         "_temp": os.path.join(os.getcwd(), "_temp"),
         "_processing_intermediates": os.path.join(os.getcwd(), "_processing_intermediates"),

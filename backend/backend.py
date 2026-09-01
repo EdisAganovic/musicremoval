@@ -36,7 +36,7 @@ init(autoreset=True)
 app = FastAPI(
     title="Audio Splitter Pro API",
     description="API for vocal separation, audio studio, and media downloading",
-    version="0.0.16"
+    version="0.0.19"
 )
 
 # Enable CORS for React frontend

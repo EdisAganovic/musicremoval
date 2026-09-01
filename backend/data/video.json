@@ -1,0 +1,16 @@
+{
+    "video": {
+        "codec": "copy",
+        "bitrate": null
+    },
+    "audio": {
+        "codec": "aac",
+        "bitrate": "192k"
+    },
+    "output": {
+        "format": "mp4"
+    },
+    "processing": {
+        "demucs_workers": 2
+    }
+}

@@ -298,13 +298,25 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
     };
 
     const handleConfirmPlaylistDownload = async () => {
-        // User confirmed - add selected videos to queue
-        try {
-            const videosToAdd = playlistVideos.filter(v =>
-                selectedPlaylistVideos.includes(v.id)
-            );
+        console.log('[Downloader] handleConfirmPlaylistDownload called');
+        console.log('[Downloader] playlistVideos:', playlistVideos);
+        console.log('[Downloader] selectedPlaylistVideos:', selectedPlaylistVideos);
+        const videosToAdd = playlistVideos.filter(v =>
+            selectedPlaylistVideos.includes(v.id)
+        );
+        console.log('[Downloader] videosToAdd:', videosToAdd);
+        // Immediately close the confirmation modal so UI updates without delay
+        setShowPlaylistConfirm(false);
+        setPlaylistConfirmData(null);
 
-            await axios.post(`${BACKEND_URL}/api/queue/add-batch`, {
+        if (videosToAdd.length === 0) {
+            console.error('[Downloader] No videos to add! selectedPlaylistVideos IDs do not match any playlistVideos IDs.');
+            setError('No videos selected to download.');
+            return;
+        }
+
+        try {
+            const payload = {
                 videos: videosToAdd.map(v => ({
                     url: v.url || `https://www.youtube.com/watch?v=${v.id}`,
                     title: v.title
@@ -313,15 +325,20 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
                 format_id: selectedFormatId,
                 auto_separate: autoSeparate,
                 subfolder: subfolder.trim() || null
-            });
+            };
+            console.log('[Downloader] Posting to /api/queue/add-batch with payload:', JSON.stringify(payload, null, 2));
+            const batchRes = await axios.post(`${BACKEND_URL}/api/queue/add-batch`, payload);
+            console.log('[Downloader] add-batch response:', batchRes.data);
 
             // Start queue processing immediately
             try {
-                await axios.post(`${BACKEND_URL}/api/queue/start`);
-            } catch (_) {}
+                console.log('[Downloader] Posting to /api/queue/start');
+                const startRes = await axios.post(`${BACKEND_URL}/api/queue/start`);
+                console.log('[Downloader] queue/start response:', startRes.data);
+            } catch (startErr) {
+                console.error('[Downloader] queue/start failed:', startErr);
+            }
 
-            setShowPlaylistConfirm(false);
-            setPlaylistConfirmData(null);
             setUrl('');
             setPlaylistVideos([]);
             setSelectedPlaylistVideos([]);
@@ -329,8 +346,8 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
             setIsPlaylist(false);
             fetchQueue();
         } catch (err) {
-            setError('Failed to add playlist to queue.');
-            setShowPlaylistConfirm(false);
+            console.error('[Downloader] add-batch failed:', err);
+            setError(err?.response?.data?.detail || 'Failed to add playlist to queue.');
         }
     };
 
@@ -487,11 +504,13 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
     const [downloadingTitle, setDownloadingTitle] = useState('');
 
     const handleDownload = async () => {
-        if (!url) return;
+        console.log('[Downloader] handleDownload clicked. url:', url, 'isPlaylist:', isPlaylist, 'playlistVideos.length:', playlistVideos.length, 'selectedPlaylistVideos:', selectedPlaylistVideos);
+        if (!url) { console.log('[Downloader] No URL, returning early'); return; }
 
-        // If analyzing or displaying a playlist, add all selected items to queue
+        // If displaying a playlist, directly add selected items to queue and start (skip confirmation modal)
         if (isPlaylist && playlistVideos.length > 0) {
-            handleAddToQueue();
+            console.log('[Downloader] Playlist mode — calling handleConfirmPlaylistDownload directly');
+            handleConfirmPlaylistDownload();
             return;
         }
 
@@ -1381,9 +1400,9 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center space-x-2">
-                                                        {item.status === 'completed' && item.result_files?.[0] && (
+                                                        {item.status === 'completed' && (item.result_files?.[0] || item.file_path || item.filename) && (
                                                             <button
-                                                                onClick={() => onSeparate?.(item.result_files[0])}
+                                                                onClick={() => onSeparate?.(item.result_files?.[0] || item.file_path || item.filename)}
                                                                 className="p-1.5 bg-emerald-600/10 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-all flex items-center space-x-1 text-xs font-bold"
                                                                 title="Open in Separation Tab"
                                                             >

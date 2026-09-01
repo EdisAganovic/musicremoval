@@ -57,10 +57,17 @@ except ImportError:
     tracked_run = subprocess.run
 
 from module_cuda import check_gpu_cuda_support
+from core.constants import (
+    DEFAULT_MODEL,
+    DEFAULT_ROFORMER_MODEL,
+    DEFAULT_TIGER_TARGET,
+    DEFAULT_TIGER_OVERLAP,
+)
 from module_ffmpeg import (
     get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg,
     get_audio_tracks, get_file_metadata, resolve_h264_video_codec,
-    execute_super_keyframe_nvenc_export, get_resolution_scale_filter
+    execute_super_keyframe_nvenc_export, get_resolution_scale_filter,
+    check_fdk_aac_codec
 )
 from module_spleeter import separate_with_spleeter
 from module_demucs import separate_with_demucs
@@ -299,7 +306,8 @@ def is_file_processed(input_file):
     Check if the input file has already been processed and the output exists in the 'nomusic' folder.
     Returns the path to the existing output file if found, otherwise None.
     """
-    output_folder = "nomusic"
+    from core.constants import NOMUSIC_DIR
+    output_folder = NOMUSIC_DIR
     if not os.path.exists(output_folder):
         return None
 
@@ -408,7 +416,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
         return None
 
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model="both", roformer_model="mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt", tiger_target="dialogue_sfx", tiger_overlap=50, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p"):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model=DEFAULT_MODEL, roformer_model=DEFAULT_ROFORMER_MODEL, tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p"):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -668,7 +676,10 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             print(f"{Fore.CYAN}Using {demucs_workers} Demucs parallel segment worker(s).{Style.RESET_ALL}")
 
             # Both models return (path_to_vocal_wav, path_to_instrumental_wav_or_None, temp_segments_dir)
-            if model == "spleeter" or model == "both":
+            use_spleeter = model in ["spleeter", "both"] or str(model).startswith("spleeter")
+            use_demucs = model in ["demucs", "both"] or "demucs" in str(model)
+
+            if use_spleeter:
                 print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
                 s_start = time.time()
                 update_progress("Running Spleeter", 20 if model == "both" else 15)
@@ -682,7 +693,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             else:
                 print(f"{Fore.YELLOW}Skipping Spleeter based on model selection.{Style.RESET_ALL}")
 
-            if model == "demucs" or model == "both":
+            if use_demucs:
                 print(f"{Fore.CYAN}Starting Demucs separation...{Style.RESET_ALL}")
                 d_start = time.time()
                 update_progress("Running Demucs", 50 if model == "both" else 15)
@@ -696,7 +707,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             else:
                 print(f"{Fore.YELLOW}Skipping Demucs based on model selection.{Style.RESET_ALL}")
 
-            # Step 4: Logic for Alinging and Mixing the results
+            # Step 4: Logic for Aligning and Mixing the results
             print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals...{Style.RESET_ALL}\n")
 
             spleeter_input_exists = spleeter_vocal_wav_path and os.path.exists(spleeter_vocal_wav_path) and os.path.getsize(spleeter_vocal_wav_path) > 0
@@ -705,64 +716,72 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             if not spleeter_input_exists and not demucs_input_exists:
                 print(f"{Fore.RED}Error: Neither Spleeter nor Demucs vocal files were successfully generated.{Style.RESET_ALL}")
                 return False, timings, None
-            
-            # Branching logic for when only one model succeeds
-            elif not spleeter_input_exists:
-                print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly.{Style.RESET_ALL}")
-                try:
-                    # Copy Demucs WAV to our vocal mixture path (still WAV)
-                    shutil.copy2(demucs_vocal_wav_path, vocal_mixture_wav_path)
-                    print(f"{Fore.GREEN}Demucs vocals ready for mixing.{Style.RESET_ALL}")
-                except Exception as e:
-                    print(f"{Fore.RED}Error copying Demucs vocals: {e}{Style.RESET_ALL}")
-                    return False, timings, None
-            elif not demucs_input_exists:
-                print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
-                try:
-                    shutil.copy2(spleeter_vocal_wav_path, vocal_mixture_wav_path)
-                    print(f"{Fore.GREEN}[OK] Spleeter vocals ready for mixing.{Style.RESET_ALL}")
-                except Exception as e:
-                    print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
-                    return False, timings, None
-            else:
+
+            # ALLOW single-model runs: only Spleeter or only Demucs is perfectly valid,
+            # so initialize the alignment flag up-front to avoid a NameError when only
+            # one model produced a track (this was crashing the demucs-only / spleeter-only
+            # flows even when separation itself succeeded).
+            aligned_spleeter, aligned_demucs = None, None
+            both_ran = spleeter_input_exists and demucs_input_exists
+
+            if both_ran:
                 # When both exist, perform cross-correlation alignment to fix any millisecond offsets
                 print(f"{Fore.CYAN}Starting alignment and mixing...{Style.RESET_ALL}")
                 mix_start = time.time()
                 update_progress("Aligning audio tracks", 80)
                 aligned_spleeter, aligned_demucs = align_audio_tracks(spleeter_vocal_wav_path, demucs_vocal_wav_path, aligned_spleeter_vocals_path, aligned_demucs_vocals_path)
-
-            if aligned_spleeter and aligned_demucs:
-                # Mix both aligned tracks into a temporary file
-                temp_mixed_wav_path = tempfile.NamedTemporaryFile(suffix="_mixed.wav", delete=False, dir=TEMP_DIR)
-                temp_mixed_wav_path.close()
-                temp_files_to_cleanup.append(temp_mixed_wav_path.name)
-
+            elif spleeter_input_exists:
+                # Only Spleeter ran - copy its vocals directly (no alignment/mixing needed)
+                print(f"{Fore.YELLOW}Only Spleeter vocals found. Using Spleeter vocals directly.{Style.RESET_ALL}")
                 try:
-                    # Equal weight mix (0.5 each)
-                    update_progress("Mixing vocals", 90)
-                    mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, vocal_mixture_wav_path, volume1=0.5, volume2=0.5)
-                    
-                    if mixed_result:
-                        print(f"\n{Fore.GREEN}[OK] Vocals combined successfully.{Style.RESET_ALL}")
-                    else:
-                        print(f"{Fore.RED}Error: Mixing of aligned vocal tracks failed.{Style.RESET_ALL}")
-                        return False, timings, None
-                except subprocess.CalledProcessError as e:
-                    print(f"{Fore.RED}Error with mixed audio conversion: {e}{Style.RESET_ALL}")
+                    shutil.copy2(spleeter_vocal_wav_path, vocal_mixture_wav_path)
+                    print(f"{Fore.GREEN}[OK] Spleeter vocals ready for output.{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.RED}Error copying Spleeter vocals: {e}{Style.RESET_ALL}")
                     return False, timings, None
-                finally:
-                    if os.path.exists(temp_mixed_wav_path.name):
-                        try:
-                            os.remove(temp_mixed_wav_path.name)
-                        except OSError:
-                            pass
             else:
-                print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
-                return False, timings, None
-            
-            mix_end = time.time()
-            timings['mixing'] = mix_end - mix_start
-            print(f"{Fore.GREEN}Alignment and mixing took {timings['mixing']:.2f}s{Style.RESET_ALL}")
+                # Only Demucs ran - copy its vocals directly (no alignment/mixing needed)
+                print(f"{Fore.YELLOW}Only Demucs vocals found. Using Demucs vocals directly.{Style.RESET_ALL}")
+                try:
+                    shutil.copy2(demucs_vocal_wav_path, vocal_mixture_wav_path)
+                    print(f"{Fore.GREEN}[OK] Demucs vocals ready for output.{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.RED}Error copying Demucs vocals: {e}{Style.RESET_ALL}")
+                    return False, timings, None
+
+            if both_ran:
+                if aligned_spleeter and aligned_demucs:
+                    # Mix both aligned tracks into a temporary file
+                    temp_mixed_wav_path = tempfile.NamedTemporaryFile(suffix="_mixed.wav", delete=False, dir=TEMP_DIR)
+                    temp_mixed_wav_path.close()
+                    temp_files_to_cleanup.append(temp_mixed_wav_path.name)
+
+                    try:
+                        # Equal weight mix (0.5 each)
+                        update_progress("Mixing vocals", 90)
+                        mixed_result = mix_audio_tracks(aligned_spleeter, aligned_demucs, vocal_mixture_wav_path, volume1=0.5, volume2=0.5)
+
+                        if mixed_result:
+                            print(f"\n{Fore.GREEN}[OK] Vocals combined successfully.{Style.RESET_ALL}")
+                        else:
+                            print(f"{Fore.RED}Error: Mixing of aligned vocal tracks failed.{Style.RESET_ALL}")
+                            return False, timings, None
+                    except subprocess.CalledProcessError as e:
+                        print(f"{Fore.RED}Error with mixed audio conversion: {e}{Style.RESET_ALL}")
+                        return False, timings, None
+                    finally:
+                        if os.path.exists(temp_mixed_wav_path.name):
+                            try:
+                                os.remove(temp_mixed_wav_path.name)
+                            except OSError:
+                                pass
+
+                    mix_end = time.time()
+                    timings['mixing'] = mix_end - mix_start
+                    print(f"{Fore.GREEN}Alignment and mixing took {timings['mixing']:.2f}s{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.RED}Error: Alignment failed. Cannot combine vocal tracks.{Style.RESET_ALL}")
+                    return False, timings, None
 
         # Pick the instrumental/karaoke source, if requested. Unlike vocals (which
         # get cross-correlation-aligned and blended when both models ran), we don't
@@ -873,19 +892,24 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 print(f"{Fore.YELLOW}Warning: Silence removal encountered an error: {e}. Continuing with original audio.{Style.RESET_ALL}")
 
         # Step 5: Convert final mixture to ultimate output format
-        temp_combined_vocals_aac_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False, dir=TEMP_DIR)
-        final_mixture_aac_path = temp_combined_vocals_aac_file.name
-        temp_combined_vocals_aac_file.close()
+        # For audio-only, we skip the AAC intermediate and go WAV→final directly (single pass)
+        # For video, we still need AAC for muxing
+        combined_vocals_aac_path = None
+        if not is_audio_only:
+            temp_combined_vocals_aac_file = tempfile.NamedTemporaryFile(suffix=".aac", delete=False, dir=TEMP_DIR)
+            final_mixture_aac_path = temp_combined_vocals_aac_file.name
+            temp_combined_vocals_aac_file.close()
 
-        update_progress("Finalizing audio format", 95)
-        success = convert_audio_with_ffmpeg(vocal_mixture_wav_path, final_mixture_aac_path, normalize_audio=True)
-        if not success:
-            print(f"{Fore.RED}Error finalizing output audio format.{Style.RESET_ALL}")
-            return False, timings, None
-            
-        combined_vocals_aac_path = final_mixture_aac_path
+            update_progress("Finalizing audio format", 95)
+            success = convert_audio_with_ffmpeg(vocal_mixture_wav_path, final_mixture_aac_path, normalize_audio=True)
+            if not success:
+                print(f"{Fore.RED}Error finalizing output audio format.{Style.RESET_ALL}")
+                return False, timings, None
+                
+            combined_vocals_aac_path = final_mixture_aac_path
 
-        output_folder = "nomusic"
+        from core.constants import NOMUSIC_DIR
+        output_folder = NOMUSIC_DIR
         os.makedirs(output_folder, exist_ok=True)
 
         video_settings = settings.get('video', {})
@@ -922,11 +946,14 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 output_audio = os.path.join(output_folder, f"{base_filename}_vocals.{audio_output_format}")
                 print(f"{Fore.CYAN}Output audio file: {output_audio}{Style.RESET_ALL}")
                 
+                # Go directly from WAV to final format with loudnorm in a single pass
+                # (no intermediate AAC — avoids wasteful lossy→lossy transcode)
                 final_ffmpeg_cmd = [
                     FFMPEG_EXE,
                     "-loglevel", "error",
                     "-y",
-                    "-i", combined_vocals_aac_path,
+                    "-i", vocal_mixture_wav_path,
+                    "-af", "loudnorm=I=-23:TP=-2:LRA=7",
                 ]
                 
                 if audio_output_format == "flac":
@@ -937,10 +964,18 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                     final_ffmpeg_cmd.extend(["-c:a", "libmp3lame"])
                     if audio_bitrate:
                         final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+                    else:
+                        final_ffmpeg_cmd.extend(["-b:a", "192k"])
                 elif audio_output_format == "m4a":
-                    final_ffmpeg_cmd.extend(["-c:a", audio_codec if audio_codec != "libmp3lame" else "aac"])
+                    # Use libfdk_aac if available for best quality
+                    if check_fdk_aac_codec():
+                        final_ffmpeg_cmd.extend(["-c:a", "libfdk_aac"])
+                    else:
+                        final_ffmpeg_cmd.extend(["-c:a", "aac"])
                     if audio_bitrate:
                         final_ffmpeg_cmd.extend(["-b:a", audio_bitrate])
+                    else:
+                        final_ffmpeg_cmd.extend(["-b:a", "192k"])
                 else:
                     final_ffmpeg_cmd.extend(["-c:a", audio_codec])
                     if audio_bitrate:

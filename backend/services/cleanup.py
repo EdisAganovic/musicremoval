@@ -41,7 +41,8 @@ def cleanup_temp_files():
     print(f"\n{Fore.CYAN}=== Cleaning up temporary files ==={Style.RESET_ALL}")
 
     # Cleanup incomplete downloads
-    download_dir = os.path.join(os.path.dirname(__file__), '..', 'download')
+    from core.constants import DOWNLOAD_DIR
+    download_dir = DOWNLOAD_DIR
     if os.path.exists(download_dir):
         orphan_count = 0
         for f in os.listdir(download_dir):
