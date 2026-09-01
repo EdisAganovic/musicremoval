@@ -128,6 +128,23 @@ def run_yt_dlp(
             tasks[task_id]["current_step"] = progress_state["current_step"]
             log_console("Download finished, processing...", "info")
 
+    class YTDLPLogger:
+        def debug(self, msg):
+            # Strip noisy progress debug lines from filling logs
+            if not msg.startswith('[debug] ') and not msg.startswith('[download]'):
+                pass
+
+        def info(self, msg):
+            pass
+
+        def warning(self, msg):
+            print(f"{Fore.YELLOW}[yt-dlp:warning] {msg}{Style.RESET_ALL}")
+            log_console(f"[yt-dlp warning] {msg}", "warning")
+
+        def error(self, msg):
+            print(f"{Fore.RED}[yt-dlp:error] {msg}{Style.RESET_ALL}")
+            log_console(f"[yt-dlp error] {msg}", "error")
+
     def get_ydl_opts():
         cookies_path = os.path.join("data", "cookies.txt")
         from modules.module_ffmpeg import FFMPEG_EXE
@@ -136,9 +153,10 @@ def run_yt_dlp(
         opts = {
             'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
             'progress_hooks': [progress_hook],
+            'logger': YTDLPLogger(),
             'quiet': False,
-            'no_warnings': True,
-            'ignoreerrors': True,
+            'no_warnings': False,
+            'ignoreerrors': False,
             'noplaylist': True,
             'socket_timeout': 30,
             'retries': 5,

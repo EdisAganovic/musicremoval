@@ -129,6 +129,18 @@ async def get_yt_formats(payload: dict):
 
     yt_url = is_youtube_url(url)
 
+    class YTDLPAnalyzeLogger:
+        def debug(self, msg):
+            pass
+        def info(self, msg):
+            pass
+        def warning(self, msg):
+            print(f"{Fore.YELLOW}[yt-dlp:warning] {msg}{Style.RESET_ALL}")
+            log_console(f"[yt-dlp warning] {msg}", "warning")
+        def error(self, msg):
+            print(f"{Fore.RED}[yt-dlp:error] {msg}{Style.RESET_ALL}")
+            log_console(f"[yt-dlp error] {msg}", "error")
+
     try:
         # ── YouTube playlist / channel handling ──────────────────────────────
         if yt_url and check_playlist:
@@ -155,16 +167,16 @@ async def get_yt_formats(payload: dict):
                 log_console(f"Fetching playlist/channel info: {url}", "info")
 
                 ydl_opts = {
-                    'quiet': True,
+                    'logger': YTDLPAnalyzeLogger(),
+                    'quiet': False,
                     'ignoreerrors': True,
                     'noplaylist': False,
                     'extract_flat': 'in_playlist',
                     'socket_timeout': 30,
                     'retries': 5,
-                    'no_warnings': True,
+                    'no_warnings': False,
                     'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 }
-                import os
                 cookies_path = os.path.join("data", "cookies.txt")
                 if os.path.exists(cookies_path):
                     ydl_opts['cookiefile'] = cookies_path
@@ -217,11 +229,12 @@ async def get_yt_formats(payload: dict):
             ffmpeg_dir = os.path.dirname(FFMPEG_EXE) if os.path.exists(FFMPEG_EXE) else None
 
             opts = {
-                'quiet': True,
+                'logger': YTDLPAnalyzeLogger(),
+                'quiet': False,
                 'noplaylist': True,
                 'socket_timeout': 30,
                 'retries': 5,
-                'no_warnings': True,
+                'no_warnings': False,
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             }
             if ffmpeg_dir:
