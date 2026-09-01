@@ -3,10 +3,11 @@
  * Centralized API communication for the application
  */
 import axios from "axios";
+import { BACKEND_URL } from "../config";
 
-// Get base URL from environment or default to localhost
+// Get base URL from environment or default to dynamic backend URL
 const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5170/api";
+  import.meta.env.VITE_API_BASE_URL || `${BACKEND_URL}/api`;
 
 // Create axios instance with default config
 const api = axios.create({
