@@ -5,7 +5,7 @@
 A professional AI-powered vocal separation and audio workstation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
 ![Version](https://img.shields.io/badge/version-0.0.19-emerald)
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.129+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
 
@@ -87,7 +87,7 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 
 ### Prerequisites
 
-1. **Python 3.10+** with `uv` package manager
+1. **Python 3.11+** with `uv` package manager
 2. **NVIDIA GPU** (recommended) with CUDA toolkit for GPU acceleration
 3. **Node.js 18+** for frontend development
 
@@ -694,4 +694,4 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 _**Built with ❤️ using FastAPI, React, and AI**_
 
-_Environment: Python 3.10+ (UV) + Deno 2.5 + Vite/React 18_
+_Environment: Python 3.11+ (UV) + Deno 2.5 + Vite/React 18_

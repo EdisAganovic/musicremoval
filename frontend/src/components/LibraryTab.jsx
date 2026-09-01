@@ -271,8 +271,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                 signal: sizeAbortRef.current.signal
             });
             setFolderSizes({
-                download: response.data.storage.download_size,
-                nomusic: response.data.storage.output_size
+                download: response.data?.storage?.download_size ?? '0 MB',
+                nomusic: response.data?.storage?.output_size ?? '0 MB'
             });
         } catch (err) {
             // Silently ignore abort errors (expected when switching tabs)

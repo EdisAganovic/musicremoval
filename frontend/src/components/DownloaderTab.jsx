@@ -475,7 +475,10 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
             });
             const finalFormats = filtered.length > 0 ? filtered : allFormats;
             setAvailableFormats(finalFormats);
-            if (finalFormats.length > 0 && !lastVideoId) {
+            // Always keep the selection valid for the CURRENT tab: re-select when
+            // there is no remembered format, or when the current selection is not
+            // part of this tab's format list (e.g. switching video -> audio).
+            if (finalFormats.length > 0 && (!lastVideoId || !finalFormats.some(f => f.format_id === selectedFormatId))) {
                 setSelectedFormatId(finalFormats[finalFormats.length - 1].format_id);
             }
         }
@@ -515,6 +518,21 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
         }
 
         console.log('[Downloader] handleDownload called with url:', url, 'format:', format, 'format_id:', selectedFormatId);
+        // Safety guard: never send a format_id that does not match the current tab.
+        // A stale video format_id sent with format=audio makes yt-dlp download a
+        // video-only stream, which then fails audio postprocessing.
+        let effectiveFormatId = selectedFormatId;
+        if (videoInfo && !videoInfo.is_playlist && Array.isArray(videoInfo.formats)) {
+            const validForTab = videoInfo.formats
+                .filter(f => format === 'audio'
+                    ? (f.vcodec === 'none' || (!f.vcodec && f.acodec && f.acodec !== 'none'))
+                    : (f.vcodec && f.vcodec !== 'none'))
+                .map(f => f.format_id);
+            if (effectiveFormatId && !validForTab.includes(effectiveFormatId)) {
+                console.warn(`[Downloader] format_id ${effectiveFormatId} invalid for ${format} tab — using best`);
+                effectiveFormatId = '';
+            }
+        }
         setStatus('processing');
         setProgress(0);
         setCurrentStep('Starting download...');
@@ -528,7 +546,7 @@ const DownloaderTab = ({ analyzingProgress: _analyzingProgress, onSeparate }) =>
             const response = await axios.post(`${BACKEND_URL}/api/download`, {
                 url,
                 format,
-                format_id: selectedFormatId,
+                format_id: effectiveFormatId,
                 subfolder: subfolder.trim() || null,
                 auto_separate: autoSeparate
             });

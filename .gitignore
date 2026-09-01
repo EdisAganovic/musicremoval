@@ -86,3 +86,5 @@ data/cookies.txt
 GEMINI.MD
 scratch/
 projects/
+.reasonix/
+reasonix.toml

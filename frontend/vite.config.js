@@ -8,5 +8,17 @@ export default defineConfig({
     host: true, // Listen on all network interfaces (0.0.0.0)
     port: 5173,
     open: false,
+    // Proxy API + media to the backend so the browser only talks to ONE origin (5173).
+    // This makes the app work from LAN devices without CORS/firewall/hostname issues.
+    proxy: {
+      "/api": {
+        target: "http://localhost:5170",
+        changeOrigin: true,
+      },
+      "/projects": {
+        target: "http://localhost:5170",
+        changeOrigin: true,
+      },
+    },
   },
 });

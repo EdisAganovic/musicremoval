@@ -6,8 +6,9 @@ import time
 import uuid
 import asyncio
 import urllib.parse
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from typing import List, Dict
+from colorama import Fore, Style
 
 from config import (
     tasks, active_downloads, download_queue,
@@ -117,7 +118,7 @@ async def get_all_downloads():
 
 
 @router.post("/yt-formats")
-async def get_yt_formats(payload: dict):
+async def get_yt_formats(payload: dict, request: Request):
     """Fetches available formats for any URL supported by yt-dlp (YouTube, Facebook, etc)."""
     import yt_dlp
 
@@ -126,6 +127,9 @@ async def get_yt_formats(payload: dict):
 
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
+
+    client_ip = request.client.host if request.client else "unknown"
+    log_console(f"Analyze request received: {url} (from {client_ip})", "info")
 
     yt_url = is_youtube_url(url)
 

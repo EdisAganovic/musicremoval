@@ -5,7 +5,7 @@ import os
 import hashlib
 import json
 import subprocess
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse
 from typing import List
 
@@ -13,7 +13,7 @@ from config import (
     tasks, get_full_library, save_to_library,
     get_file_metadata_cached, save_metadata_cache,
     METADATA_CACHE_FILE, LIBRARY_FILE, metadata_cache,
-    safe_remove, is_path_within_allowed_roots
+    safe_remove, is_path_within_allowed_roots, log_console
 )
 from core.constants import DOWNLOAD_DIR, NOMUSIC_DIR
 
@@ -402,9 +402,12 @@ async def create_folder(payload: dict):
 
 @router.get("/media/stream")
 @router.get("/stream-audio")
-async def stream_media(path: str):
+async def stream_media(path: str, request: Request = None):
     """Stream audio or video files directly to the browser for in-app playback with HTTP Range support."""
     import urllib.parse
+
+    client_ip = request.client.host if request and request.client else "unknown"
+    log_console(f"Stream request: {path[:120]} (from {client_ip})", "info")
 
     if not path:
         raise HTTPException(status_code=400, detail="Path parameter is required")

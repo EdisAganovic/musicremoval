@@ -8,9 +8,8 @@ export const APP_VERSION = "0.0.19";
 
 export const APP_NAME = "Audio Splitter Pro";
 
-// Use dynamic hostname if running in browser, so devices on the same LAN connect to the right backend
-const defaultBackendHost = typeof window !== 'undefined' && window.location.hostname
-    ? `http://${window.location.hostname}:5170`
-    : 'http://localhost:5170';
-
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || defaultBackendHost;
+// Same-origin: all /api and /projects calls are proxied by the Vite dev server
+// to the backend (see vite.config.js). This keeps the app working from LAN
+// devices without CORS/firewall issues. Override with VITE_BACKEND_URL for
+// production builds where no proxy is available.
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || '';

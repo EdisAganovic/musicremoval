@@ -3,7 +3,7 @@ name = "demucspleeter"
 version = "0.0.19"
 description = "AI-powered vocal separation using Demucs and Spleeter with YouTube downloader"
 readme = "README.md"
-requires-python = ">=3.10.0, <3.11.0"
+requires-python = ">=3.11.0, <3.12.0"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -41,6 +41,11 @@ packages = ["backend", "main.py"]
 required-environments = ["sys_platform == 'win32'"]
 override-dependencies = [
     "tensorflow-io-gcs-filesystem==0.31.0; sys_platform == 'win32'",
+    "httpx>=0.24.0",
+    "numba==0.67.0",
+    "llvmlite==0.49.0",
+    "librosa==0.11.0",
+    "resampy==0.4.3",
 ]
 
 [[tool.uv.index]]

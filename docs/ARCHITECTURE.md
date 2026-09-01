@@ -659,7 +659,7 @@ For detailed changelogs, see:
 
 ## Environment & Dependencies
 
-- **Python**: 3.10+ (UV managed)
+- **Python**: 3.11+ (UV managed)
 - **Backend Version**: 0.0.11 (pyproject.toml)
 - **Frontend Version**: 0.0.11 (package.json)
 - **Node.js**: Vite/React frontend
