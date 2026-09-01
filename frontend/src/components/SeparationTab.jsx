@@ -250,7 +250,7 @@ const SeparationTab = ({ libraryFile, initialFilePath, onFileCleared, onClearIni
       onFileCleared?.();
       onClearInitialFile?.();
     }
-  }, [activeLibraryFile]);
+  }, [activeLibraryFile, onFileCleared, onClearInitialFile]);
 
   // Handle an already-running batch handed off from Library's bulk "Separate Selected"
   // action: jump straight into folder/batch mode and let the existing batch-status
