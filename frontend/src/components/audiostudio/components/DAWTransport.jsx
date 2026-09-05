@@ -33,7 +33,8 @@ export function DAWTransport({
   masterVolume,
   setMasterVolume,
   vuLevelsRef,
-  activeTracks
+  activeTracks,
+  isActive = true
 }) {
   return (
     <div className="px-5 py-2 bg-[#0d1326] border-b border-gray-800/80 flex flex-wrap items-center justify-between gap-4 select-none">
@@ -193,7 +194,7 @@ export function DAWTransport({
         </div>
 
         {/* VU Meter */}
-        <VuMeter levelsRef={vuLevelsRef} />
+        <VuMeter levelsRef={vuLevelsRef} isActive={isActive} isPlaying={isPlaying} />
       </div>
     </div>
   );

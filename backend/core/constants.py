@@ -8,12 +8,14 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 DOWNLOAD_DIR = os.path.join(_PROJECT_ROOT, "download")
 NOMUSIC_DIR = os.path.join(_PROJECT_ROOT, "nomusic")
 
-# File paths for data persistence
-LIBRARY_FILE = "data/library.json"
-QUEUE_FILE = "data/download_queue.json"
-NOTIFICATIONS_FILE = "data/notifications.json"
-METADATA_CACHE_FILE = "data/metadata_cache.json"
-TASKS_FILE = "data/tasks.json"
+# File paths for data persistence. Keep these anchored to the project so
+# launching the backend from a different working directory cannot split state.
+DATA_DIR = os.path.join(_PROJECT_ROOT, "data")
+LIBRARY_FILE = os.path.join(DATA_DIR, "library.json")
+QUEUE_FILE = os.path.join(DATA_DIR, "download_queue.json")
+NOTIFICATIONS_FILE = os.path.join(DATA_DIR, "notifications.json")
+METADATA_CACHE_FILE = os.path.join(DATA_DIR, "metadata_cache.json")
+TASKS_FILE = os.path.join(DATA_DIR, "tasks.json")
 
 # Settings
 MAX_LOGS = 500

@@ -26,7 +26,7 @@
  *   - ./components/*: Tab content components
  *   - ./contexts/NotificationContext: Notification state
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import SeparationTab from './components/SeparationTab';
 import DownloaderTab from './components/DownloaderTab';
 import LibraryTab from './components/LibraryTab';
@@ -53,6 +53,7 @@ function AppContent() {
   const [analyzingProgress, setAnalyzingProgress] = useState({ current: 0, total: 0 });
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const consoleEndRef = useRef(null);
+  const visibleConsoleLogs = useMemo(() => consoleLogs.slice(-500), [consoleLogs]);
 
   // Parse console logs for playlist progress
   useEffect(() => {
@@ -122,7 +123,7 @@ function AppContent() {
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (showConsole && consoleEndRef.current) {
-      consoleEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      consoleEndRef.current.scrollIntoView({ block: 'end' });
     }
   }, [consoleLogs, showConsole]);
 
@@ -131,6 +132,15 @@ function AppContent() {
     visible: { opacity: 1, transition: { duration: 0.15 } },
     exit: { opacity: 0, transition: { duration: 0.1 } }
   };
+
+  const getTabPanelProps = (tab) => ({
+    'aria-hidden': activeTab !== tab,
+    inert: activeTab !== tab ? '' : undefined,
+    style: {
+      display: activeTab === tab ? 'block' : 'none',
+      pointerEvents: activeTab === tab ? 'auto' : 'none'
+    }
+  });
 
   return (
     <div className="min-h-screen text-gray-200 font-sans p-2 md:p-4 selection:bg-primary-500/30">
@@ -235,7 +245,7 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: activeTab === 'separation' ? 1 : 0 }}
             transition={{ duration: 0.15 }}
-            style={{ display: activeTab === 'separation' ? 'block' : 'none' }}
+            {...getTabPanelProps('separation')}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
             <SeparationTab
@@ -257,7 +267,7 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: activeTab === 'studio' ? 1 : 0 }}
             transition={{ duration: 0.15 }}
-            style={{ display: activeTab === 'studio' ? 'block' : 'none' }}
+            {...getTabPanelProps('studio')}
             className="glass-card p-4 md:p-6 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
             <AudioStudioTab isActive={activeTab === 'studio'} />
@@ -269,7 +279,7 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: activeTab === 'downloader' ? 1 : 0 }}
             transition={{ duration: 0.15 }}
-            style={{ display: activeTab === 'downloader' ? 'block' : 'none' }}
+            {...getTabPanelProps('downloader')}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
             <DownloaderTab
@@ -288,7 +298,7 @@ function AppContent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: activeTab === 'library' ? 1 : 0 }}
             transition={{ duration: 0.15 }}
-            style={{ display: activeTab === 'library' ? 'block' : 'none' }}
+            {...getTabPanelProps('library')}
             className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
           >
             <LibraryTab
@@ -363,9 +373,14 @@ function AppContent() {
                   </div>
                 ) : (
                   <>
-                    {consoleLogs.map((log, idx) => (
+                    {consoleLogs.length > visibleConsoleLogs.length && (
+                      <div className="text-gray-500 text-center py-2">
+                        Showing latest {visibleConsoleLogs.length} of {consoleLogs.length} logs
+                      </div>
+                    )}
+                    {visibleConsoleLogs.map((log, idx) => (
                       <div
-                        key={idx}
+                        key={`${consoleLogs.length - visibleConsoleLogs.length + idx}-${log.message}`}
                         className={`whitespace-pre-wrap break-words ${log.level === 'error' ? 'text-red-400 bg-red-900/20' :
                           log.level === 'warning' ? 'text-yellow-400 bg-yellow-900/20' :
                             log.level === 'success' ? 'text-emerald-400 bg-emerald-900/20' :

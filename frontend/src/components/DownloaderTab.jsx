@@ -51,8 +51,9 @@ import { useState, useEffect, memo } from 'react';
 import axios from 'axios';
 import { BACKEND_URL } from '../config';
 import { useAudioPlayer } from '../contexts/AudioPlayerContext';
-import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X, AudioLines } from 'lucide-react';
+import { Download, Youtube, CheckCircle, AlertCircle, Video, Music, Loader2, Link, Search, List, Trash2, Play, Pause, X, AudioLines, Folder } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-hot-toast';
 
 const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress, onSeparate }) => {
     const [url, setUrl] = useState('');
@@ -96,6 +97,21 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
 
     const { playTrack } = useAudioPlayer();
 
+    const getQueueFolder = (item) => {
+        if (item.subfolder) return item.subfolder;
+
+        const filePath = item.result_files?.[0] || item.file_path || item.filename;
+        if (!filePath) return null;
+
+        const normalized = filePath.replace(/\\/g, '/');
+        const marker = '/download/';
+        const folderPath = normalized.toLowerCase().indexOf(marker);
+        if (folderPath === -1) return null;
+
+        const pathParts = normalized.slice(folderPath + marker.length).split('/').filter(Boolean);
+        return pathParts.length > 1 ? pathParts[0] : null;
+    };
+
     // Playlist confirmation modal
     const [showPlaylistConfirm, setShowPlaylistConfirm] = useState(false);
     const [playlistConfirmData, setPlaylistConfirmData] = useState(null);
@@ -124,6 +140,8 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
 
     // Keyboard Shortcuts
     useEffect(() => {
+        if (!isActive) return;
+
         const handleKeyDown = (e) => {
             if (e.key === 'Escape' && !isAnalyzing && status !== 'processing') {
                 setUrl('');
@@ -135,7 +153,7 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isAnalyzing, status]);
+    }, [isActive, isAnalyzing, status]);
 
     // Polling effect
     useEffect(() => {
@@ -1170,7 +1188,7 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
 
             {/* Playlist Confirmation Modal */}
             <AnimatePresence>
-                {showPlaylistConfirm && playlistConfirmData && (
+                {isActive && showPlaylistConfirm && playlistConfirmData && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -1413,6 +1431,15 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
                                                                     <span className="px-1.5 py-0.5 bg-emerald-600/20 text-emerald-400 rounded text-[10px] font-bold">SEND TO SEPARATION</span>
                                                                 )}
                                                             </div>
+                                                            {getQueueFolder(item) && (
+                                                                <div
+                                                                    className="flex items-center gap-1 text-[10px] text-amber-300 mt-0.5 truncate"
+                                                                    title={`Saved in folder: ${getQueueFolder(item)}`}
+                                                                >
+                                                                    <Folder className="w-3 h-3 flex-shrink-0" />
+                                                                    <span className="truncate">{getQueueFolder(item)}</span>
+                                                                </div>
+                                                            )}
                                                             {item.status === 'downloading' && (
                                                                 <div className="mt-2 h-1.5 bg-dark-800 rounded-full overflow-hidden">
                                                                     <motion.div

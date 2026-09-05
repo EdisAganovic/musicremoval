@@ -3,7 +3,7 @@ import axios from "axios";
 import { BACKEND_URL } from "../../../config";
 import { makeHannCurve, calcVuLevel, generatePeaks } from "../utils/audioMath";
 
-export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
+export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration, isActive = true }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(30);
@@ -26,6 +26,9 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
   const isPlayingRef = useRef(false);
   const animationFrameRef = useRef(null);
   const updatePlayheadRef = useRef(null);
+  const currentTimeRef = useRef(0);
+  const lastReactTimeUpdateRef = useRef(0);
+  const analyserBuffersRef = useRef({ l: null, r: null, fftSize: 0 });
 
   // Initialize Web Audio Context & Master Chain
   const initAudioEngine = useCallback(() => {
@@ -263,6 +266,7 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
     if (audioCtxRef.current) {
       const elapsed = audioCtxRef.current.currentTime - startTimeRef.current;
       pauseOffsetRef.current += elapsed;
+      currentTimeRef.current = pauseOffsetRef.current;
       setCurrentTime(pauseOffsetRef.current);
     }
 
@@ -287,6 +291,7 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
     }
 
     pauseOffsetRef.current = 0;
+    currentTimeRef.current = 0;
     setCurrentTime(0);
     stopAllSources();
 
@@ -297,6 +302,31 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
 
     vuLevelsRef.current = { l: 0, r: 0 };
   }, [stopAllSources, videoRef]);
+
+  useEffect(() => {
+    if (isActive) return;
+
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    stopAllSources();
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+    }
+
+    if (audioCtxRef.current?.state === "running") {
+      audioCtxRef.current.suspend().catch(() => {});
+    }
+
+    vuLevelsRef.current = { l: 0, r: 0 };
+    currentTimeRef.current = pauseOffsetRef.current;
+  }, [isActive, stopAllSources, videoRef]);
 
   // Update playhead RAF loop
   const updatePlayhead = useCallback(() => {
@@ -309,22 +339,38 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
       if (isLoopingRef && isLoopingRef.current) {
         pauseOffsetRef.current = 0;
         startTimeRef.current = audioCtxRef.current.currentTime;
+        currentTimeRef.current = 0;
         setCurrentTime(0);
+        lastReactTimeUpdateRef.current = performance.now();
         if (videoRef.current) videoRef.current.currentTime = 0;
       } else {
         pausePlayback();
+        currentTimeRef.current = projDuration;
         setCurrentTime(projDuration);
         pauseOffsetRef.current = 0;
         return;
       }
     } else {
-      setCurrentTime(current);
+      currentTimeRef.current = current;
+      const nowMs = performance.now();
+      if (nowMs - lastReactTimeUpdateRef.current >= 66) {
+        setCurrentTime(current);
+        lastReactTimeUpdateRef.current = nowMs;
+      }
     }
 
     // VU Meter calculations
     if (analyserL.current && analyserR.current) {
-      const pcmL = new Float32Array(analyserL.current.fftSize);
-      const pcmR = new Float32Array(analyserR.current.fftSize);
+      const fftSize = analyserL.current.fftSize;
+      if (analyserBuffersRef.current.fftSize !== fftSize) {
+        analyserBuffersRef.current = {
+          l: new Float32Array(fftSize),
+          r: new Float32Array(fftSize),
+          fftSize
+        };
+      }
+      const pcmL = analyserBuffersRef.current.l;
+      const pcmR = analyserBuffersRef.current.r;
       analyserL.current.getFloatTimeDomainData(pcmL);
       analyserR.current.getFloatTimeDomainData(pcmR);
       vuLevelsRef.current = {
@@ -344,6 +390,7 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
 
   // Start Playback
   const startPlayback = useCallback((tracks) => {
+    if (!isActive) return;
     if (!tracks || tracks.length === 0) return;
     const ctx = initAudioEngine();
     if (ctx.state === "suspended") {
@@ -390,13 +437,15 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
     if (updatePlayheadRef.current) {
       animationFrameRef.current = requestAnimationFrame(updatePlayheadRef.current);
     }
-  }, [initAudioEngine, stopAllSources, applyCutsAutomationToGainNode, videoRef]);
+  }, [isActive, initAudioEngine, stopAllSources, applyCutsAutomationToGainNode, videoRef]);
 
   // Seek to absolute time
   const seekTo = useCallback((targetTime, tracks) => {
     const projDur = getProjectDuration();
     const clampedTime = Math.max(0, Math.min(projDur, targetTime));
     pauseOffsetRef.current = clampedTime;
+    currentTimeRef.current = clampedTime;
+    lastReactTimeUpdateRef.current = performance.now();
     setCurrentTime(clampedTime);
 
     if (videoRef.current) {
@@ -429,6 +478,7 @@ export function useAudioEngine({ videoRef, isLoopingRef, getProjectDuration }) {
     trackAudioBuffers,
     trackPeakData,
     vuLevelsRef,
+    currentTimeRef,
     pauseOffsetRef,
     isPlayingRef,
     initAudioEngine,

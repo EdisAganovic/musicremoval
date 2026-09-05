@@ -1,11 +1,12 @@
-import React, { useRef, useEffect } from "react";
+import React, { memo, useRef, useEffect } from "react";
 import { Scissors, Trash2, VolumeX } from "lucide-react";
 import { roundTo } from "../utils/audioMath";
 
-export function TrackWaveform({
+function TrackWaveformComponent({
   track,
   duration,
-  currentTime,
+  currentTimeRef,
+  isPlaying,
   peakData,
   selectedCut,
   setSelectedCut,
@@ -23,6 +24,26 @@ export function TrackWaveform({
   applySilenceCut
 }) {
   const canvasRef = useRef(null);
+  const playheadRef = useRef(null);
+
+  useEffect(() => {
+    const updatePlayhead = () => {
+      if (!playheadRef.current) return;
+      const pct = ((currentTimeRef?.current || 0) / (duration || 30)) * 100;
+      playheadRef.current.style.left = `${pct}%`;
+    };
+
+    updatePlayhead();
+    if (!isPlaying) return;
+
+    let raf;
+    const tick = () => {
+      updatePlayhead();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [currentTimeRef, duration, isPlaying]);
 
   // Render Canvas Waveform
   useEffect(() => {
@@ -37,14 +58,7 @@ export function TrackWaveform({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
-    const activePeaks = (peakData && peakData.min && peakData.min.length > 0)
-      ? peakData
-      : (track.peaks && track.peaks.min && track.peaks.min.length > 0
-          ? {
-              min: new Float32Array(track.peaks.min),
-              max: new Float32Array(track.peaks.max)
-            }
-          : null);
+    const activePeaks = (peakData && peakData.min && peakData.min.length > 0) ? peakData : null;
 
     if (!activePeaks || !activePeaks.min || activePeaks.min.length === 0) {
       // Background grid lines
@@ -78,7 +92,7 @@ export function TrackWaveform({
 
       ctx.fillRect(x, topY, barWidth, barHeight);
     }
-  }, [peakData, track.peaks, track.color]);
+  }, [peakData, track.color]);
 
   return (
     <div
@@ -448,9 +462,12 @@ export function TrackWaveform({
 
       {/* Master Playhead Needle */}
       <div
+        ref={playheadRef}
         className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,1)] z-40 pointer-events-none"
-        style={{ left: `${(currentTime / (duration || 30)) * 100}%` }}
+        style={{ left: 0 }}
       />
     </div>
   );
 }
+
+export const TrackWaveform = memo(TrackWaveformComponent);

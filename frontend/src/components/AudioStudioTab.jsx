@@ -85,12 +85,18 @@ function AudioStudioTab({ isActive = true }) {
   const saveSeqRef = useRef(0);
   const onApplyHistoryRef = useRef(null);
   const historyHookRef = useRef(null);
+  const hasLoadedInitialDataRef = useRef(false);
+  const isActiveRef = useRef(isActive);
 
   const showNotification = useCallback((msg) => {
     setNotificationMsg(msg);
     if (notifyTimerRef.current) clearTimeout(notifyTimerRef.current);
     notifyTimerRef.current = setTimeout(() => setNotificationMsg(null), 3000);
   }, []);
+
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
 
   const getProjectDuration = useCallback(() => {
     return activeProject?.duration || 30;
@@ -107,6 +113,7 @@ function AudioStudioTab({ isActive = true }) {
     setMasterVolume,
     trackPeakData,
     vuLevelsRef,
+    currentTimeRef,
     pauseOffsetRef,
     isPlayingRef,
     populateTrackPeaks,
@@ -117,7 +124,7 @@ function AudioStudioTab({ isActive = true }) {
     stopPlayback,
     seekTo,
     setTrackPan
-  } = useAudioEngine({ videoRef, isLoopingRef, getProjectDuration });
+  } = useAudioEngine({ videoRef, isLoopingRef, getProjectDuration, isActive });
 
   const historyHook = useProjectHistory({
     onApplyHistory: (tracks) => onApplyHistoryRef.current?.(tracks),
@@ -174,13 +181,14 @@ function AudioStudioTab({ isActive = true }) {
       setActiveProject(proj);
       historyHook.resetHistory(proj.tracks || []);
 
-      if (proj.tracks && proj.tracks.length > 0) {
+      if (isActive && proj.tracks && proj.tracks.length > 0) {
         // Instantly populate waveform peaks for 0ms rendering
         populateTrackPeaks(proj.tracks);
 
-        // Preload Web Audio buffers for playback in background
-        for (const t of proj.tracks) {
-          await loadTrackAudio(t);
+        // Preload Web Audio buffers in small batches so opening larger projects stays responsive.
+        const batchSize = 3;
+        for (let i = 0; i < proj.tracks.length && isActiveRef.current; i += batchSize) {
+          await Promise.all(proj.tracks.slice(i, i + batchSize).map((t) => loadTrackAudio(t)));
         }
       }
       showNotification(`📁 Opened project: ${proj.name}`);
@@ -189,7 +197,7 @@ function AudioStudioTab({ isActive = true }) {
     } finally {
       setLoading(false);
     }
-  }, [stopPlayback, historyHook, populateTrackPeaks, loadTrackAudio, showNotification]);
+  }, [isActive, stopPlayback, historyHook, populateTrackPeaks, loadTrackAudio, showNotification]);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -226,14 +234,28 @@ function AudioStudioTab({ isActive = true }) {
   }, []);
 
   useEffect(() => {
+    if (!isActive || hasLoadedInitialDataRef.current) return;
+
+    hasLoadedInitialDataRef.current = true;
     fetchProjects();
     fetchLibrary();
-  }, [fetchProjects, fetchLibrary]);
+  }, [isActive, fetchProjects, fetchLibrary]);
+
+  useEffect(() => {
+    if (!isActive) {
+      pausePlayback();
+      setDragSelection(null);
+      setSelectedCut(null);
+      setHoverTime(null);
+    }
+  }, [isActive, pausePlayback]);
 
   // -------------------------------------------------------------
   // GLOBAL KEYBOARD SHORTCUTS
   // -------------------------------------------------------------
   useEffect(() => {
+    if (!isActive) return;
+
     const handleKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName?.toLowerCase();
       if (activeTag === "input" || activeTag === "textarea" || activeTag === "select") return;
@@ -865,6 +887,7 @@ function AudioStudioTab({ isActive = true }) {
         setMasterVolume={setMasterVolume}
         vuLevelsRef={vuLevelsRef}
         activeTracks={activeProject?.tracks || []}
+        isActive={isActive}
       />
 
       {/* Center Studio Workspace */}
@@ -932,7 +955,8 @@ function AudioStudioTab({ isActive = true }) {
                     <TrackWaveform
                       track={track}
                       duration={duration}
-                      currentTime={currentTime}
+                      currentTimeRef={currentTimeRef}
+                      isPlaying={isPlaying}
                       peakData={trackPeakData.current[track.id]}
                       selectedCut={selectedCut}
                       setSelectedCut={setSelectedCut}

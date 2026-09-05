@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { BACKEND_URL } from '../config';
 import { toast } from 'react-hot-toast';
 
@@ -15,17 +15,20 @@ export const AudioPlayerProvider = ({ children }) => {
   const [isLooping, setIsLooping] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Lazy-initialize a persistent Audio element
   const audioRef = useRef(null);
-  if (!audioRef.current && typeof window !== 'undefined') {
-    const a = new Audio();
-    a.preload = "auto";
-    audioRef.current = a;
-  }
+
+  const getAudioElement = useCallback(() => {
+    if (!audioRef.current && typeof window !== 'undefined') {
+      const audio = new Audio();
+      audio.preload = "auto";
+      audioRef.current = audio;
+    }
+    return audioRef.current;
+  }, []);
 
   // Set up event listeners on the audio element
   useEffect(() => {
-    const audio = audioRef.current;
+    const audio = getAudioElement();
     if (!audio) return;
 
     const handleTimeUpdate = () => {
@@ -107,11 +110,11 @@ export const AudioPlayerProvider = ({ children }) => {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
     };
-  }, []);
+  }, [getAudioElement]);
 
   // Play a track
   const playTrack = (track) => {
-    const audio = audioRef.current;
+    const audio = getAudioElement();
     if (!audio || !track) {
       console.warn("[AudioPlayer] playTrack called with empty audio or track", track);
       return;

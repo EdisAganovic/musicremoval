@@ -197,7 +197,8 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
         return allSubs;
     }, [selectedFolder, folderTree]);
 
-    // Filter and sort items: show ONLY root files when at root level, or specific folder items when inside
+    // Filter and sort items: show only root files at root level, or specific
+    // folder items when a subfolder is selected.
     const filteredItems = useMemo(() => {
         return items.filter(item => {
             const filePath = (item.result_files?.[0] || '').toLowerCase();
@@ -211,7 +212,7 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
             }
 
             if (selectedFolder.subfolder === null) {
-                // Root only: only show files directly in root
+                // Root only: only show files directly in root.
                 if (subfolder !== '(Direct Files)') return false;
             } else {
                 // Inside specific subfolder
@@ -1242,6 +1243,19 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                                 >
                                                     {item.result_files?.[0]?.split(/[\\/]/).pop() || 'Untitled'}
                                                 </span>
+                                                {(() => {
+                                                    const { subfolder } = getFolderInfo(item);
+                                                    if (subfolder === '(Direct Files)') return null;
+                                                    return (
+                                                        <div
+                                                            className="flex items-center gap-1 mt-0.5 max-w-full text-[10px] text-amber-300"
+                                                            title={`Located in folder: ${subfolder}`}
+                                                        >
+                                                            <Folder className="w-3 h-3 flex-shrink-0" />
+                                                            <span className="truncate">{subfolder}</span>
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {(() => {
                                                     const modelInfo = getModelDisplayInfo(item);
                                                     if (!modelInfo) return null;
