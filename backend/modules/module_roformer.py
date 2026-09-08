@@ -90,8 +90,10 @@ def separate_with_roformer(
     if progress_callback:
         progress_callback("Initializing Roformer BGM Engine", 20)
 
+    use_native_fp16 = False
     try:
         import torch
+        use_native_fp16 = torch.cuda.is_available()
         torch_lib = os.path.join(os.path.dirname(torch.__file__), "lib")
         if os.path.exists(torch_lib):
             if hasattr(os, "add_dll_directory"):
@@ -132,7 +134,10 @@ def separate_with_roformer(
         separator = Separator(
             output_dir=out_dir,
             output_format="WAV",
-            model_file_dir=MODEL_CACHE_DIR
+            model_file_dir=MODEL_CACHE_DIR,
+            # Native FP16 roughly doubled warm Roformer throughput on the RTX 5070 Ti.
+            # Keep the CPU path in FP32 for compatibility.
+            use_native_fp16=use_native_fp16,
         )
         if cb:
             cb(f"{label}: Loading Model", start_p)
