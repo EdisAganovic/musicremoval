@@ -91,9 +91,11 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
     const [queueProcessing, setQueueProcessing] = useState(false);
     const [autoSeparate, setAutoSeparate] = useState(false);
     const [showQueue, setShowQueue] = useState(true);
+    const [showV2Queue, setShowV2Queue] = useState(false);
     const [currentTaskId, setCurrentTaskId] = useState(null);
     const [randomDelay, setRandomDelay] = useState(true);
     const [lastCompletedFile, setLastCompletedFile] = useState(null);
+    const downloaderVersion = 'v2';
 
     const { playTrack } = useAudioPlayer();
 
@@ -311,7 +313,7 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
             await axios.post(`${BACKEND_URL}/api/queue/add`, {
                 url,
                 format,
-                format_id: selectedFormatId,
+                format_id: format === 'audio' ? null : selectedFormatId,
                 auto_separate: autoSeparate,
                 subfolder: subfolder.trim() || null,
                 title: videoInfo?.title || ''
@@ -349,7 +351,7 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
                     title: v.title
                 })),
                 format,
-                format_id: selectedFormatId,
+                format_id: format === 'audio' ? null : selectedFormatId,
                 auto_separate: autoSeparate,
                 subfolder: subfolder.trim() || null
             };
@@ -545,11 +547,10 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
         }
 
         console.log('[Downloader] handleDownload called with url:', url, 'format:', format, 'format_id:', selectedFormatId);
-        // Safety guard: never send a format_id that does not match the current tab.
-        // A stale video format_id sent with format=audio makes yt-dlp download a
-        // video-only stream, which then fails audio postprocessing.
-        let effectiveFormatId = selectedFormatId;
-        if (videoInfo && !videoInfo.is_playlist && Array.isArray(videoInfo.formats)) {
+        // Audio mode always lets yt-dlp choose the best audio stream.  This
+        // avoids accidentally passing a combined/video-only stream ID.
+        let effectiveFormatId = format === 'audio' ? null : selectedFormatId;
+        if (format !== 'audio' && videoInfo && !videoInfo.is_playlist && Array.isArray(videoInfo.formats)) {
             const validForTab = videoInfo.formats
                 .filter(f => format === 'audio'
                     ? (f.vcodec === 'none' || (!f.vcodec && f.acodec && f.acodec !== 'none'))
@@ -652,6 +653,38 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
         } catch (err) { }
     };
 
+    if (downloaderVersion === 'v2') {
+        const isWorking = isAnalyzing || status === 'processing';
+        const pendingCount = queue.filter(item => item.status === 'pending').length;
+
+        return (
+            <div className="space-y-3 max-w-5xl mx-auto pb-40">
+                <section className="rounded-2xl border border-white/10 bg-dark-900/60 p-3 shadow-xl">
+                    <div className="flex gap-2 rounded-xl bg-dark-800 p-1">
+                        <div className="flex items-center pl-3 text-gray-400"><Link className="h-4 w-4" /></div>
+                        <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url && !isAnalyzing && handleAnalyze()} placeholder="Paste a YouTube or supported video link" className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-white outline-none placeholder:text-gray-600" />
+                        <button onClick={handleAnalyze} disabled={!url || isAnalyzing} className="flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-xs font-black text-white disabled:opacity-40">{isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}{isAnalyzing ? 'Analyzing' : 'Analyze'}</button>
+                    </div>
+                </section>
+
+                {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+
+                <div>
+                    <section className="rounded-2xl border border-white/10 bg-dark-900/60 p-4 shadow-xl">
+                        <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-500">Download setup</p>
+                        {videoInfo ? <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-stretch"><div className="flex min-w-0 flex-1 gap-3 rounded-xl bg-dark-800/70 p-3">{videoInfo.thumbnail && <img src={videoInfo.thumbnail} alt="" className="h-14 w-20 shrink-0 rounded-lg object-cover" />}<div className="min-w-0"><p className="truncate text-sm font-bold text-white">{videoInfo.title}</p><p className="mt-1 text-xs text-gray-500">{isPlaylist ? `${playlistVideos.length} videos in playlist` : 'Ready to download'}</p></div></div><div className="grid shrink-0 grid-cols-2 gap-1 rounded-xl bg-dark-800 p-1 sm:w-52 sm:grid-cols-1"><button onClick={() => setFormat('audio')} className={`rounded-lg px-3 py-2 text-xs font-bold ${format === 'audio' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'}`}><Music className="mr-1 inline h-4 w-4" />MP3 Audio</button><button onClick={() => setFormat('video')} className={`rounded-lg px-3 py-2 text-xs font-bold ${format === 'video' ? 'bg-primary-600 text-white' : 'text-gray-400 hover:text-white'}`}><Video className="mr-1 inline h-4 w-4" />MP4 Video</button></div></div> : <div className="mb-4 rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-gray-500">Analyze a link to see its title and download choices.</div>}
+                        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">{format === 'audio' ? <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">Best available audio will be downloaded and converted to MP3.</p> : <select value={selectedFormatId} onChange={(e) => setSelectedFormatId(e.target.value)} className="w-full rounded-lg border border-white/10 bg-dark-800 px-3 py-2 text-xs text-white outline-none">{availableFormats.map((item, index) => <option key={`${item.format_id}-${index}`} value={item.format_id}>{item.label}</option>)}</select>}<label className="flex items-center gap-2 rounded-lg bg-dark-800 px-3 py-2 text-xs text-gray-300"><input type="checkbox" checked={autoSeparate} onChange={(e) => setAutoSeparate(e.target.checked)} className="accent-primary-500" />Send to Separation</label></div>
+                        <div className="mt-3 grid gap-2 border-t border-white/5 pt-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]"><input value={subfolder} onChange={(e) => setSubfolder(e.target.value)} placeholder="Optional download subfolder" className="min-w-0 rounded-lg border border-white/10 bg-dark-800 px-3 py-2 text-xs text-white outline-none" /><button onClick={handleDownload} disabled={!url || isWorking || (isPlaylist && selectedPlaylistVideos.length === 0)} className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-r from-red-600 to-primary-600 px-4 py-2 text-sm font-black text-white shadow-lg shadow-red-500/15 transition hover:brightness-110 disabled:opacity-40">{isWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}{isWorking ? 'Downloading…' : isPlaylist ? `Download ${selectedPlaylistVideos.length} videos` : 'Download now'}</button><button onClick={handleAddToQueue} disabled={!url || isWorking} className="flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-white/10 bg-dark-800 px-4 py-2 text-sm font-bold text-gray-200 transition hover:border-primary-500/40 hover:bg-dark-700 hover:text-white disabled:opacity-40"><List className="h-4 w-4" />Add to queue</button></div>
+                        {(status === 'processing' || status === 'completed') && <div className="mt-3 rounded-xl bg-dark-800 p-3"><div className="mb-2 flex justify-between text-xs text-gray-400"><span>{currentStep}</span><span>{Math.round(progress)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-dark-700"><div className="h-full bg-gradient-to-r from-primary-500 to-emerald-400" style={{ width: `${progress}%` }} /></div></div>}
+                    </section>
+                </div>
+
+                {status === 'completed' && lastCompletedFile && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4"><div><p className="font-bold text-white">Download complete</p><p className="max-w-md truncate text-xs text-emerald-300">{lastCompletedFile.split(/[\\/]/).pop()}</p></div><div className="flex gap-2"><button onClick={() => playTrack({ url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(lastCompletedFile)}`, title: lastCompletedFile.split(/[\\/]/).pop(), path: lastCompletedFile, type: 'audio', badge: 'DOWNLOAD' })} className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-black text-dark-950">Play</button><button onClick={() => onSeparate?.(lastCompletedFile)} className="rounded-lg bg-primary-600 px-3 py-2 text-xs font-bold text-white">Open in Separation</button></div></div>}
+
+                <section className="rounded-2xl border border-white/10 bg-dark-900/60 shadow-xl"><div className="flex flex-wrap items-center justify-between gap-2 p-3"><div><p className="font-bold text-white">Queue</p><p className="text-xs text-gray-500">{queue.length} items · {queueProcessing ? 'Processing' : `${pendingCount} pending`}</p></div><div className="flex flex-wrap gap-2"><button onClick={handleClearQueue} disabled={!queue.length} className="rounded-lg bg-dark-800 px-3 py-2 text-xs font-bold text-gray-300 hover:text-white disabled:opacity-40">Clear completed</button><button onClick={queueProcessing ? handleStopQueue : handleStartQueue} disabled={!queueProcessing && !pendingCount} className="rounded-lg bg-dark-800 px-3 py-2 text-xs font-bold text-gray-300 disabled:opacity-40">{queueProcessing ? 'Pause' : 'Start'}</button><button onClick={() => setShowV2Queue(!showV2Queue)} className="rounded-lg bg-dark-800 px-3 py-2 text-xs font-bold text-gray-300">{showV2Queue ? 'Hide items' : 'View items'}</button></div></div>{showV2Queue && <div className="border-t border-white/5">{queue.map((item, index) => <div key={item.queue_id || index} className="flex items-center justify-between gap-3 border-b border-white/5 px-4 py-2.5 last:border-b-0"><div className="min-w-0"><p className="truncate text-xs font-medium text-white">{item.title || item.url}</p><p className="text-[10px] text-gray-500">{item.format_type} · {item.status}</p></div>{item.status === 'pending' && <button onClick={() => handleRemoveFromQueue(item.queue_id)} className="text-xs text-red-400">Remove</button>}</div>)}</div>}</section>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 max-w-3xl mx-auto">
@@ -828,24 +861,29 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
                                             <h4 className="text-white font-bold truncate leading-tight flex-1">{videoInfo.title}</h4>
                                         </div>
 
-                                        {/* Format Selection Dropdown */}
-                                        <div className="mt-3 space-y-2">
-                                            <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black">Choose Resolution / Quality</label>
-                                            <select
-                                                value={selectedFormatId}
-                                                onChange={(e) => setSelectedFormatId(e.target.value)}
-                                                className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
-                                            >
-                                                {availableFormats.map((f, idx) => (
-                                                    <option key={`format-${f.format_id || idx}-${idx}`} value={f.format_id}>
-                                                        {f.label} {f.filesize ? `(${(f.filesize / 1024 / 1024).toFixed(1)} MB)` : ''}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                        {format === 'audio' ? (
+                                            <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                                                Best available audio will be downloaded and converted to MP3.
+                                            </div>
+                                        ) : (
+                                            <div className="mt-3 space-y-2">
+                                                <label className="text-[10px] uppercase tracking-widest text-gray-500 font-black">Choose Resolution / Quality</label>
+                                                <select
+                                                    value={selectedFormatId}
+                                                    onChange={(e) => setSelectedFormatId(e.target.value)}
+                                                    className="w-full bg-dark-900 text-white text-xs border border-white/10 rounded-lg px-3 py-2 outline-none focus:border-red-500/50 transition-colors"
+                                                >
+                                                    {availableFormats.map((f, idx) => (
+                                                        <option key={`format-${f.format_id || idx}-${idx}`} value={f.format_id}>
+                                                            {f.label} {f.filesize ? `(${(f.filesize / 1024 / 1024).toFixed(1)} MB)` : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
 
-                                        {/* Remember Format Checkbox */}
-                                        <div className="mt-3 flex items-center space-x-2">
+                                        {/* Remembered format only applies to video selections. */}
+                                        {format === 'video' && <div className="mt-3 flex items-center space-x-2">
                                             <input
                                                 type="checkbox"
                                                 id="remember-format"
@@ -870,7 +908,7 @@ const DownloaderTab = ({ isActive = true, analyzingProgress: _analyzingProgress,
                                             })() && (
                                                     <CheckCircle className="w-3 h-3 text-emerald-400" />
                                                 )}
-                                        </div>
+                                        </div>}
                                     </div>
                                 </div>
                             )}

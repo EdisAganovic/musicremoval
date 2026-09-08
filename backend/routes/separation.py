@@ -28,7 +28,7 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
                              roformer_model: str = DEFAULT_ROFORMER_MODEL,
                              tiger_target: str = DEFAULT_TIGER_TARGET, tiger_overlap: int = DEFAULT_TIGER_OVERLAP,
                              duration: int = None, export_instrumental: bool = False, remove_silence: bool = False,
-                             super_keyframe: bool = False, resolution: str = "1080p"):
+                             super_keyframe: bool = False, resolution: str = "1080p", skip_docker_image: bool = True):
     """
     Shared bookkeeping for starting a single-file separation: creates the
     batch-parent task (for consistent UI polling across single/batch runs),
@@ -82,14 +82,15 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
         skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
         resolution=resolution,
-        export_instrumental=export_instrumental, remove_silence=remove_silence
+        export_instrumental=export_instrumental, remove_silence=remove_silence,
+        skip_docker_image=skip_docker_image
     )
 
     return task_id, batch_id
 
 
 @router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL), roformer_model: str = Form(DEFAULT_ROFORMER_MODEL), tiger_target: str = Form(DEFAULT_TIGER_TARGET), tiger_overlap: int = Form(DEFAULT_TIGER_OVERLAP), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: Optional[int] = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False)):
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL), roformer_model: str = Form(DEFAULT_ROFORMER_MODEL), tiger_target: str = Form(DEFAULT_TIGER_TARGET), tiger_overlap: int = Form(DEFAULT_TIGER_OVERLAP), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: Optional[int] = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False), skip_docker_image: bool = Form(True)):
     """Upload and separate vocals from an audio file."""
     from colorama import Fore, Style
 
@@ -115,7 +116,8 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
         duration=duration,
         export_instrumental=export_instrumental, remove_silence=remove_silence,
-        super_keyframe=super_keyframe, resolution=resolution
+        super_keyframe=super_keyframe, resolution=resolution,
+        skip_docker_image=skip_docker_image
     )
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
@@ -167,7 +169,8 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
         duration=duration,
         export_instrumental=export_instrumental, remove_silence=payload.remove_silence,
-        super_keyframe=super_keyframe, resolution=resolution
+        super_keyframe=super_keyframe, resolution=resolution,
+        skip_docker_image=payload.skip_docker_image
     )
 
     return {"task_id": task_id, "batch_id": batch_id, "metadata": metadata}
@@ -422,7 +425,8 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             super_keyframe=payload.super_keyframe,
             resolution=payload.resolution or "1080p",
             export_instrumental=payload.export_instrumental,
-            remove_silence=payload.remove_silence
+            remove_silence=payload.remove_silence,
+            skip_docker_image=payload.skip_docker_image
         )
 
     print(f"{Fore.GREEN}✓ Batch processing queued with {len(selected_files)} files{Style.RESET_ALL}\n")

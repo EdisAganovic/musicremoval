@@ -70,7 +70,7 @@ cleanup_stale_tasks_on_boot()
 def enqueue_separation(task_id: str, file_path: str, duration=None, model=DEFAULT_MODEL,
                        roformer_model=DEFAULT_ROFORMER_MODEL,
                        tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP,
-                       skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
+                       skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False, skip_docker_image=True):
     """
     Adds a separation task to the FIFO queue and ensures the background worker is running.
     Tasks are processed strictly one at a time to prevent GPU VRAM contention and process collisions.
@@ -90,7 +90,8 @@ def enqueue_separation(task_id: str, file_path: str, duration=None, model=DEFAUL
         "super_keyframe": super_keyframe,
         "resolution": resolution,
         "export_instrumental": export_instrumental,
-        "remove_silence": remove_silence
+        "remove_silence": remove_silence,
+        "skip_docker_image": skip_docker_image
     }
 
     _separation_queue.put(item)
@@ -155,7 +156,8 @@ def _separation_worker_loop():
                 super_keyframe=item.get("super_keyframe", False),
                 resolution=item.get("resolution", "1080p"),
                 export_instrumental=item.get("export_instrumental", False),
-                remove_silence=item.get("remove_silence", False)
+                remove_silence=item.get("remove_silence", False),
+                skip_docker_image=item.get("skip_docker_image", True)
             )
         except Exception as e:
             print(f"{Fore.RED}[Separation Queue] Unhandled exception in task {task_id}: {e}{Style.RESET_ALL}")
@@ -168,7 +170,7 @@ def _separation_worker_loop():
 def _execute_separation(task_id: str, file_path: str, duration=None, model=DEFAULT_MODEL,
                         roformer_model=DEFAULT_ROFORMER_MODEL,
                         tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP,
-                        skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
+                        skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False, skip_docker_image=True):
     """
     Internal execution of vocal separation on a single file.
     """
@@ -229,7 +231,8 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model=DEFAU
             tiger_target=tiger_target, tiger_overlap=tiger_overlap,
             skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
             resolution=resolution,
-            export_instrumental=export_instrumental, remove_silence=remove_silence
+            export_instrumental=export_instrumental, remove_silence=remove_silence,
+            skip_docker_image=skip_docker_image
         )
 
         if success_result:
@@ -371,7 +374,7 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model=DEFAU
 
 
 def run_separation(task_id: str, file_path: str, duration=None, model="both",
-                   skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False):
+                   skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False, skip_docker_image=True):
     """
     Backwards-compatible interface. Automatically routes through the FIFO separation queue.
     """
@@ -384,5 +387,6 @@ def run_separation(task_id: str, file_path: str, duration=None, model="both",
         super_keyframe=super_keyframe,
         resolution=resolution,
         export_instrumental=export_instrumental,
-        remove_silence=remove_silence
+        remove_silence=remove_silence,
+        skip_docker_image=skip_docker_image
     )

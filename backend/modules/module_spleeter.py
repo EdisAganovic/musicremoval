@@ -76,7 +76,7 @@ def is_docker_available():
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
-def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=None, want_instrumental=False):
+def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext, pre_split_segments=None, want_instrumental=False, skip_docker_image=True):
     """
     Separates vocals using Spleeter (2stems model) via subprocess.
     Handles long audio files by splitting them into chunks.
@@ -120,7 +120,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
             spleeter_segment_vocal_paths = []
             spleeter_segment_no_vocals_map = {}
 
-            use_docker = is_docker_available()
+            use_docker = False if skip_docker_image else is_docker_available()
             if use_docker:
                 print(f"{Fore.GREEN}Docker detected. Using {SPLEETER_IMAGE} with {MAX_WORKERS} workers.{Style.RESET_ALL}")
             else:
@@ -222,7 +222,7 @@ def separate_with_spleeter(temp_audio_wav_path, spleeter_out_path, base_audio_na
                     except subprocess.CalledProcessError as e:
                         print(f"{Fore.YELLOW}Warning: Failed to join Spleeter instrumental segments: {e}{Style.RESET_ALL}")
         else:
-            use_docker = is_docker_available()
+            use_docker = False if skip_docker_image else is_docker_available()
             if use_docker:
                 print(f"{Fore.GREEN}Docker detected. Using {SPLEETER_IMAGE} for single file.{Style.RESET_ALL}")
                 input_dir = os.path.dirname(os.path.abspath(temp_audio_wav_path))

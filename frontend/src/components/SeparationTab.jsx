@@ -180,6 +180,8 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
   const [instrumentalFile, setInstrumentalFile] = useState(null);
   const [exportInstrumental, setExportInstrumental] = useState(false);
   const [removeSilence, setRemoveSilence] = useState(false);
+  const [skipDockerImage, setSkipDockerImage] = useState(true);
+  const interfaceVersion = "v2";
 
   // In-browser Audio Player
   const { playTrack, currentTrack, isPlaying, closePlayer } = useAudioPlayer();
@@ -188,6 +190,18 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
     metadata?.is_video ||
     (resultFiles && resultFiles[0] && /\.(mp4|mkv|webm|mov|avi|ts|flv)$/i.test(resultFiles[0]))
   );
+  const inputName = file?.name || libraryFilePath || "";
+  const isAudioOnlyInput = Boolean(inputName) && (
+    file?.type?.startsWith("audio/") || /\.(mp3|m4a|aac|wav|flac|ogg|opus|wma|aiff|alac)$/i.test(inputName)
+  );
+
+  // Video-only options should never carry over to an audio-only source.
+  useEffect(() => {
+    if (isAudioOnlyInput) {
+      if (skipVideoEncoding) setSkipVideoEncoding(false);
+      if (superKeyframe) setSuperKeyframe(false);
+    }
+  }, [isAudioOnlyInput, skipVideoEncoding, superKeyframe]);
 
   const handlePlayVocalsInBrowser = () => {
     if (!resultFiles || !resultFiles[0]) return;
@@ -253,7 +267,9 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
       setInstrumentalFile(null);
       setMetadata(null);
       setError(null);
-      closePlayer?.();
+      // Loading a Library item into Separation is navigation, not a request to
+      // stop the global player. Keep the current track available while the
+      // user prepares the file for separation.
       onFileCleared?.();
       onClearInitialFile?.();
     }
@@ -551,7 +567,8 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
         super_keyframe: superKeyframe,
         resolution: resolution,
         export_instrumental: exportInstrumental,
-        remove_silence: removeSilence
+        remove_silence: removeSilence,
+        skip_docker_image: skipDockerImage
       });
 
       setBatchId(response.data.batch_id);
@@ -594,7 +611,8 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
           resolution: resolution,
           duration: previewMode ? previewSeconds : null,
           export_instrumental: exportInstrumental,
-          remove_silence: removeSilence
+          remove_silence: removeSilence,
+          skip_docker_image: skipDockerImage
         });
         setTaskId(response.data.task_id);
         setStatus("processing");
@@ -611,6 +629,7 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
         formData.append("resolution", resolution);
         formData.append("export_instrumental", exportInstrumental);
         formData.append("remove_silence", removeSilence);
+        formData.append("skip_docker_image", skipDockerImage);
         if (previewMode) {
           formData.append("duration", previewSeconds);
         }
@@ -675,8 +694,123 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
     }
   };
 
+  // V2 is now the sole user-facing separation interface. This no-op keeps the
+  // retained V1 implementation self-contained without exposing a version switch.
+  const selectInterfaceVersion = () => undefined;
+
+  if (interfaceVersion === "v2") {
+    const isBusy = ["uploading", "processing", "pending"].includes(status);
+    const selectedBatchCount = batchFiles.filter((item) => item.selected).length;
+
+    return (
+      <div className="space-y-4 max-w-5xl mx-auto pb-44">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-stretch">
+          <section className="order-2 flex w-full flex-col rounded-2xl border border-white/10 bg-dark-900/60 p-3 shadow-xl">
+            <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-widest text-gray-500">Source file or folder</p>
+            <div className="mb-4 flex rounded-xl bg-dark-800 p-1">
+              {[{ id: "single", label: "Single file", icon: UploadCloud }, { id: "folder", label: "Folder", icon: FolderInput }].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => id === "single" ? (setProcessingMode("single"), setBatchFiles([]), setBatchId(null)) : (setProcessingMode("folder"), setFile(null))}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-bold transition ${processingMode === id ? "bg-primary-600 text-white shadow" : "text-gray-400 hover:text-white"}`}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </div>
+
+            {processingMode === "single" ? (
+              <div className={`rounded-xl border border-dashed p-5 text-center ${file ? "border-emerald-500/40 bg-emerald-500/5" : "border-white/15 bg-dark-800/50"}`}>
+                <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} accept="audio/*,video/*" />
+                {file ? (
+                  <>
+                    <FileAudio className="mx-auto mb-2 h-7 w-7 text-emerald-400" />
+                    <p className="truncate text-sm font-bold text-white" title={file.name}>{file.name}</p>
+                    <p className="mt-1 text-xs text-emerald-400">{libraryFilePath ? "From Library — ready" : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}</p>
+                    {!isBusy && <button onClick={handleReset} className="mt-3 text-xs font-bold text-gray-400 hover:text-white">Choose another file</button>}
+                  </>
+                ) : (
+                  <button onClick={() => fileInputRef.current?.click()} className="w-full py-3">
+                    <UploadCloud className="mx-auto mb-2 h-7 w-7 text-primary-400" />
+                    <span className="text-sm font-bold text-white">Choose audio or video</span>
+                    <span className="mt-1 block text-xs text-gray-500">or drag a file here</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <input value={folderPath || ""} onChange={(e) => setFolderPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleFolderScan()} placeholder="Paste folder path" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-dark-800 px-3 py-2.5 text-xs text-white outline-none focus:border-primary-500" />
+                  <button onClick={handleFolderScan} disabled={!folderPath || isScanning} className="rounded-xl bg-primary-600 px-4 text-xs font-bold text-white disabled:opacity-50">{isScanning ? "Scanning" : "Scan"}</button>
+                </div>
+                {batchFiles.length > 0 && <p className="text-xs text-gray-400">{selectedBatchCount} of {batchFiles.length} files selected</p>}
+              </div>
+            )}
+            <section className="mt-3 rounded-xl border border-primary-500/25 bg-dark-900/95 p-3 shadow-lg lg:mt-auto">
+              <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                <div className="text-xs text-gray-400">{isBusy ? currentStep || "Preparing separation…" : processingMode === "single" ? (file ? "Ready to separate" : "Choose a file to begin") : (batchFiles.length ? `${selectedBatchCount} files ready` : "Scan a folder to begin")}</div>
+                <button onClick={processingMode === "single" ? handleUpload : handleStartBatchProcessing} disabled={isBusy || (processingMode === "single" ? !file : !selectedBatchCount)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary-600 to-accent-600 px-5 py-2.5 text-sm font-black text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+                  {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <PlayCircle className="h-5 w-5" />} {isBusy ? "Processing…" : processingMode === "single" ? "Start separation" : `Start batch (${selectedBatchCount})`}
+                </button>
+              </div>
+              {isBusy || status === "completed" ? <div className="mt-3"><div className="mb-1 flex justify-between text-xs text-gray-400"><span>{status === "completed" ? "Complete" : "Progress"}</span><span>{Math.round(progress)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-dark-700"><div className="h-full bg-gradient-to-r from-primary-500 to-emerald-400 transition-all" style={{ width: `${progress}%` }} /></div></div> : null}
+            </section>
+          </section>
+
+          <section className="order-1 h-full rounded-2xl border border-white/10 bg-dark-900/60 p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">1. Choose model</label>
+              <span className="text-[10px] text-primary-300">{model === "both" ? "Recommended" : "Selected"}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {[
+                { id: "both", label: "Spleeter + Demucs" },
+                { id: "roformer", label: "Roformer BGM" },
+                { id: "tiger", label: "TIGER-DnR" },
+                { id: "demucs", label: "Demucs" },
+                { id: "spleeter", label: "Spleeter" },
+              ].map(({ id, label }) => (
+                <button key={id} type="button" onClick={() => setModel(id)} className={`rounded-lg border px-2 py-2 text-xs font-bold transition ${model === id ? "border-primary-400 bg-primary-600/25 text-white shadow-sm shadow-primary-500/20" : "border-white/10 bg-dark-800 text-gray-400 hover:border-white/25 hover:text-white"}`}>{label}</button>
+              ))}
+            </div>
+
+            <div className="mt-3">
+              <div className="rounded-xl border border-white/5 bg-dark-800/50 p-3">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-500">Model settings</p>
+                {model === "roformer" ? <select value={roformerModel} onChange={(e) => setRoformerModel(e.target.value)} className="w-full rounded-lg border border-primary-500/30 bg-dark-900 px-3 py-2 text-xs text-white outline-none">{ROFORMER_MODELS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select> : model === "tiger" ? <><select value={tigerTarget} onChange={(e) => setTigerTarget(e.target.value)} className="w-full rounded-lg border border-amber-500/30 bg-dark-900 px-3 py-2 text-xs text-white outline-none">{TIGER_TARGETS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><label className="mt-2 flex items-center justify-between text-xs text-gray-300"><span>Quality overlap</span><select value={tigerOverlap} onChange={(e) => setTigerOverlap(Number(e.target.value))} className="rounded bg-dark-900 p-1"><option value={50}>50% Fast</option><option value={75}>75% Ultra HQ</option></select></label></> : <p className="py-2 text-xs text-gray-500">No extra settings for this model.</p>}
+                {["spleeter", "both"].includes(model) && <label className="mt-2 flex cursor-pointer items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2 text-xs text-amber-100"><span><strong className="block">Skip Docker image</strong><span className="text-[10px] text-amber-200/60">Use the local Spleeter installation</span></span><input className="h-4 w-4 accent-amber-400" type="checkbox" checked={skipDockerImage} onChange={() => setSkipDockerImage(!skipDockerImage)} /></label>}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-white/5 bg-dark-800/50 p-3">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-500">Output options</p>
+                <div className="grid gap-2 sm:grid-cols-2 text-xs text-gray-300">
+                  {!isAudioOnlyInput && <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-dark-900/60 px-2.5 py-2"><span>Skip video encoding</span><input className="h-4 w-4 accent-primary-500" type="checkbox" checked={skipVideoEncoding} onChange={() => setSkipVideoEncoding(!skipVideoEncoding)} /></label>}
+                  <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-dark-900/60 px-2.5 py-2"><span>Remove silence</span><input className="h-4 w-4 accent-primary-500" type="checkbox" checked={removeSilence} onChange={() => setRemoveSilence(!removeSilence)} /></label>
+                  {!isAudioOnlyInput && <label className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-dark-900/60 px-2.5 py-2"><span className="flex items-center gap-1">Super keyframe <button type="button" title="Uses parallel dual-NVENC, chunked video encoding. It can speed up compatible NVIDIA video exports, but does not affect audio-only files." aria-label="What is Super keyframe?" className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-500 text-[10px] text-gray-400 hover:border-primary-400 hover:text-primary-300">?</button></span><input className="h-4 w-4 accent-primary-500" type="checkbox" checked={superKeyframe} onChange={() => setSuperKeyframe(!superKeyframe)} /></label>}
+                  {!isAudioOnlyInput && !skipVideoEncoding && <label className="flex items-center justify-between gap-2 rounded-lg bg-dark-900/60 px-2.5 py-2"><span>Resolution</span><select value={resolution} onChange={(e) => setResolution(e.target.value)} className="rounded bg-dark-800 p-1 text-xs"><option value="4k">4K</option><option value="1080p">1080p</option><option value="720p">720p</option><option value="original">Original</option></select></label>}
+                </div>
+              </div>
+
+            </div>
+          </section>
+        </div>
+
+        {error && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200"><AlertCircle className="mr-2 inline h-4 w-4" />{error}</div>}
+
+        {status === "completed" && resultFiles.length > 0 && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-bold text-white">Separation complete</p><p className="text-xs text-emerald-300">Your result is ready.</p></div><div className="flex gap-2"><button onClick={handlePlayVocalsInBrowser} className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-black text-dark-950">Play result</button>{instrumentalFile && <button onClick={handlePlayInstrumentalInBrowser} className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white">Instrumental</button>}</div></div></section>}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between rounded-xl border border-white/10 bg-dark-900/60 px-3 py-2">
+        <span className="text-xs font-bold text-gray-400">Separation interface</span>
+        <div className="flex rounded-lg bg-dark-800 p-1 text-xs font-bold">
+          <button className="rounded-md bg-primary-600 px-3 py-1.5 text-white">V1</button>
+          <button onClick={() => selectInterfaceVersion("v2")} className="rounded-md px-3 py-1.5 text-gray-400 hover:text-white">Try V2</button>
+        </div>
+      </div>
       {/* Processing Mode Selection */}
       <div className="flex justify-center space-x-4 mb-6">
         <button

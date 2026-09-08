@@ -416,7 +416,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
         return None
 
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model=DEFAULT_MODEL, roformer_model=DEFAULT_ROFORMER_MODEL, tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p"):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model=DEFAULT_MODEL, roformer_model=DEFAULT_ROFORMER_MODEL, tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p", skip_docker_image=True):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -686,7 +686,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 update_progress("Running Spleeter", 20 if model == "both" else 15)
                 spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
                     temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
-                    pre_split_segments=shared_segments, want_instrumental=export_instrumental
+                    pre_split_segments=shared_segments, want_instrumental=export_instrumental,
+                    skip_docker_image=skip_docker_image
                 )
                 s_end = time.time()
                 timings['spleeter'] = s_end - s_start

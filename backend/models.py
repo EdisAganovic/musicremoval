@@ -91,6 +91,7 @@ class SeparateRequest(BaseModel):
     duration: Optional[int] = None
     export_instrumental: bool = False
     remove_silence: bool = False
+    skip_docker_image: bool = True
 
 
 class FolderScanRequest(BaseModel):
@@ -125,6 +126,7 @@ class FolderQueueProcessRequest(BaseModel):
     resolution: Optional[str] = "1080p"
     export_instrumental: bool = False
     remove_silence: bool = False
+    skip_docker_image: bool = True
 
 
 class DeleteFileRequest(BaseModel):

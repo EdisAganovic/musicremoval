@@ -192,6 +192,10 @@ def run_yt_dlp(
             opts['cookiefile'] = cookies_path
 
         if format_type == 'audio':
+            # Audio mode deliberately does not honour a UI format ID.  Some
+            # extractors only report combined/video formats, and passing one
+            # here can make yt-dlp download a video stream before converting
+            # it.  Let yt-dlp select its best audio stream directly instead.
             opts.update({
                 'format': 'bestaudio/best',
                 'postprocessors': [{
@@ -200,8 +204,6 @@ def run_yt_dlp(
                     'preferredquality': '320',
                 }],
             })
-            if format_id and format_id != 'best':
-                opts['format'] = f"{format_id}/bestaudio/best"
         else:
             if format_id:
                 opts['format'] = f"{format_id}+bestaudio/best"
