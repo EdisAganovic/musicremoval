@@ -178,11 +178,9 @@ def run_yt_dlp(
             'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
             # Download DASH/HLS fragments in parallel
             'concurrent_fragment_downloads': 4,
-            'extractor_args': {
-                'youtube': {
-                    'player_client': ['tv_embedded', 'android', 'ios', 'web'],
-                }
-            },
+            # Keep this aligned with format analysis: yt-dlp's default player
+            # selection avoids SABR-only client responses that omit the higher
+            # resolution stream URLs.
         }
 
         if ffmpeg_dir:
@@ -237,6 +235,9 @@ def run_yt_dlp(
                 raise Exception("Download failed or was aborted by yt-dlp (info missing)")
 
             video_title = info.get('title', 'Unknown')
+            # Preserve yt-dlp's canonical watch page, rather than only the
+            # shortened or redirected URL originally entered in the UI.
+            source_url = info.get('webpage_url') or info.get('original_url') or url
             log_prefix = f"[{video_title[:40]}]" if video_title != 'Unknown' else f"[{task_id[:8]}]"
             log_console(f"{log_prefix} Download complete, processing metadata...", "info")
             tasks[task_id]["current_step"] = "Processing download..."
@@ -297,6 +298,7 @@ def run_yt_dlp(
                 tasks[task_id]["progress"] = 100
                 tasks[task_id]["current_step"] = "Download complete"
                 tasks[task_id]["metadata"] = file_metadata
+                tasks[task_id]["source_url"] = source_url
                 tasks[task_id]["download_info"] = {
                     "title": info.get('title', 'Unknown'),
                     "duration": info.get('duration', 0),
@@ -308,7 +310,8 @@ def run_yt_dlp(
                 # Save initial download to library with file metadata
                 library_entry = {
                     "task_id": task_id,
-                    "url": url,
+                    "url": source_url,
+                    "source_url": source_url,
                     "title": info.get('title', 'Unknown'),
                     "result_files": [filename],
                     "download_info": tasks[task_id]["download_info"],

@@ -80,7 +80,7 @@ import {
     Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3, 
     ChevronLeft, ChevronRight, ChevronDown, Play, ExternalLink,
     PanelLeftClose, PanelLeftOpen, Layers, Film, Music2, HardDrive,
-    GripVertical, FolderPlus, Plus, Move
+    GripVertical, FolderPlus, Plus, Move, X, Link
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
@@ -251,6 +251,7 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
 
     // Rename state
     const [renameConfirm, setRenameConfirm] = useState(null); // { item, newName }
+    const [videoPreview, setVideoPreview] = useState(null); // { title, path, url }
 
     // Refs for cleanup
     const abortControllerRef = useRef(null);
@@ -260,8 +261,26 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
     // In-browser Audio Player
     const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
 
+    const getItemPath = (item) => item?.result_files?.[0] || item?.file_path || item?.source_file || item?.path;
+
+    const isVideoItem = (item, filePath = getItemPath(item)) => {
+        if (item?.metadata?.is_video) return true;
+        return ['mp4', 'webm', 'mkv', 'mov', 'avi', 'm4v'].includes(
+            filePath?.split('.').pop()?.toLowerCase()
+        );
+    };
+
+    const openSourceLink = (item) => {
+        const sourceUrl = item?.source_url || item?.url;
+        if (!sourceUrl) {
+            toast.error('No original source link was saved for this file.');
+            return;
+        }
+        window.open(sourceUrl, '_blank', 'noopener,noreferrer');
+    };
+
     const handlePlayInBrowser = (item) => {
-        const filePath = item?.result_files?.[0] || item?.file_path || item?.source_file || item?.path;
+        const filePath = getItemPath(item);
         if (!filePath) {
             console.warn("[Library] Cannot play item - missing file path:", item);
             toast.error("File path not available");
@@ -272,11 +291,17 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
         const ext = filePath.split('.').pop()?.toLowerCase() || 'mp3';
         const isVocal = filePath.toLowerCase().includes('vocal');
         const isInstrumental = filePath.toLowerCase().includes('instrumental') || filePath.toLowerCase().includes('karaoke');
+        const streamUrl = `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(filePath)}`;
+
+        if (isVideoItem(item, filePath)) {
+            setVideoPreview({ title: fileName, path: filePath, url: streamUrl });
+            return;
+        }
 
         console.log("[Library] Triggering in-browser play:", { filePath, fileName });
 
         playTrack({
-            url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(filePath)}`,
+            url: streamUrl,
             title: fileName,
             path: filePath,
             type: isVocal ? 'vocal' : isInstrumental ? 'instrumental' : 'audio',
@@ -1305,6 +1330,18 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                             >
                                                 <PlayCircle className="w-3.5 h-3.5" />
                                             </button>
+                                            {isVideoItem(item) && (item.source_url || item.url) && (
+                                                <button
+                                                    className="p-1.5 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-white rounded transition-all"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openSourceLink(item);
+                                                    }}
+                                                    title="Open original YouTube/source link"
+                                                >
+                                                    <Link className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
                                             {/* Show Separate button only for files from download folder */}
                                             {!((item.result_files?.[0] || item.source_file || item.file_path || '').toLowerCase().includes('nomusic')) && (
                                                 <button
@@ -1395,6 +1432,64 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
             </div>
 
             {/* Delete Confirmation Modal - Portaled to Body */}
+            {videoPreview && createPortal(
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+                    onClick={() => setVideoPreview(null)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`Video preview: ${videoPreview.title}`}
+                >
+                    <div
+                        className="w-full max-w-5xl overflow-hidden rounded-2xl border border-white/10 bg-dark-900 shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3">
+                            <div className="min-w-0">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-primary-400">Video preview</p>
+                                <h3 className="truncate text-sm font-medium text-white" title={videoPreview.title}>{videoPreview.title}</h3>
+                            </div>
+                            <button
+                                onClick={() => setVideoPreview(null)}
+                                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+                                title="Close video preview"
+                                aria-label="Close video preview"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="bg-black">
+                            <video
+                                key={videoPreview.url}
+                                className="mx-auto max-h-[72vh] w-full"
+                                controls
+                                autoPlay
+                                preload="metadata"
+                                src={videoPreview.url}
+                                onError={() => toast.error('This video format cannot be played by this browser. Try Open in Desktop Player.')}
+                            >
+                                Your browser does not support this video format.
+                            </video>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-white/10 px-4 py-3">
+                            <button
+                                onClick={() => libraryAPI.openFile(videoPreview.path).catch(() => toast.error('Cannot open video in desktop player.'))}
+                                className="rounded-lg bg-dark-800 px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-dark-700 hover:text-white"
+                            >
+                                Open in Desktop Player
+                            </button>
+                            <button
+                                onClick={() => setVideoPreview(null)}
+                                className="rounded-lg bg-primary-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-primary-500"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             {deleteConfirm && createPortal(
                 <AnimatePresence>
                     <motion.div
@@ -1542,6 +1637,18 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                         <Play className="w-4 h-4 fill-current" />
                         Play in Browser
                     </button>
+                    {isVideoItem(contextMenu.item) && (contextMenu.item?.source_url || contextMenu.item?.url) && (
+                        <button
+                            onClick={() => {
+                                openSourceLink(contextMenu.item);
+                                setContextMenu(null);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 flex items-center gap-2"
+                        >
+                            <Link className="w-4 h-4" />
+                            Open Original Link
+                        </button>
+                    )}
                     <button
                         onClick={() => {
                             libraryAPI.openFile(contextMenu.item?.result_files?.[0]).catch(() => { });

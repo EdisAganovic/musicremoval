@@ -1,10 +1,10 @@
 # Audio Splitter Pro
 
-**Version:** 0.0.19 | **Last Updated:** 2026-08-31
+**Version:** 0.0.20 | **Last Updated:** 2026-09-13
 
 A professional AI-powered vocal separation and audio workstation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
 
-![Version](https://img.shields.io/badge/version-0.0.19-emerald)
+![Version](https://img.shields.io/badge/version-0.0.20-emerald)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.129+-green.svg)
 ![React](https://img.shields.io/badge/react-18.0+-61dafb.svg)
@@ -582,6 +582,10 @@ _Times include both Spleeter + Demucs processing with alignment_
 
 See [docs/backend_changelog.md](docs/backend_changelog.md) and [docs/frontend_changelog.md](docs/frontend_changelog.md) for detailed version history.
 
+### v0.0.20 (2026-09-13)
+- ✅ Higher-resolution YouTube formats are available again by using yt-dlp's default compatible player selection
+- ✅ Downloaded videos can be previewed directly in the Library
+- ✅ Video entries retain and open their original YouTube/source link
 ### v0.0.19 (2026-08-31)
 - ✅ **Rebrand to Audio Splitter Pro** across frontend, backend, titles, and diagnostic dashboards
 - ✅ **Collapsible Folders Sidebar** with dynamic file counts and subfolder management

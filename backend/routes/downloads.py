@@ -251,11 +251,11 @@ async def get_yt_formats(payload: dict, request: Request):
                 'no_warnings': False,
                 'js_runtimes': {'deno': {}},
                 'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'extractor_args': {
-                    'youtube': {
-                        'player_client': ['android', 'ios', 'web', 'mweb'],
-                    }
-                },
+                # Do not force specific YouTube player clients here.  Some of
+                # them receive SABR-only manifests without direct media URLs,
+                # which leaves the UI with only the 360p fallback.  yt-dlp's
+                # default client selection currently exposes the full set of
+                # downloadable DASH formats.
             }
             if ffmpeg_dir:
                 opts['ffmpeg_location'] = ffmpeg_dir

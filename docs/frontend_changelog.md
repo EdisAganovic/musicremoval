@@ -1,5 +1,13 @@
 # Frontend Changelog
 
+## [0.0.20] - 2026-09-13 🚀
+
+### [Added]
+- **In-App Video Preview**: Video library items now open in a native, seekable preview dialog instead of being sent to the audio-only player. Unsupported browser codecs retain an "Open in Desktop Player" fallback.
+- **Original Source Link**: Video rows and their context menu now provide a direct action to open the saved original YouTube/source URL.
+
+---
+
 ## [0.0.19] - 2026-08-31 🚀
 
 ### [Added]

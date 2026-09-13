@@ -1,5 +1,15 @@
 # Backend Changelog
 
+## [0.0.20] - 2026-09-13 🚀
+
+### [Fixed]
+- **YouTube Quality Selection**: Stopped forcing YouTube player clients that can receive SABR-only responses without direct stream URLs. yt-dlp now selects compatible defaults, restoring 480p, 720p, and 1080p options when available.
+
+### [Added]
+- **Canonical Source URLs**: Downloads now retain yt-dlp's canonical source/watch URL in completed tasks and library entries.
+
+---
+
 ## [0.0.18] - 2026-08-20 ⚡
 
 ### [Fixed]
