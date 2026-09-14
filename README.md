@@ -2,7 +2,7 @@
 
 **Version:** 0.0.20 | **Last Updated:** 2026-09-13
 
-A professional AI-powered vocal separation and audio workstation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI models (Demucs & Spleeter).
+A professional AI-powered vocal separation and audio workstation tool with a modern web interface. Remove vocals or background music from any video/audio file using state-of-the-art AI engines (Demucs, Spleeter, Roformer & TIGER-DnR), then refine the result in a built-in multi-track Audio Studio.
 
 ![Version](https://img.shields.io/badge/version-0.0.20-emerald)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
@@ -20,19 +20,44 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 ## ✨ Key Features
 
 ### 🎵 AI Vocal Separation
-- **Dual AI Models** — Runs Demucs (htdemucs) and Spleeter, blends outputs for superior quality
-- **Model Selection** — Choose Spleeter, Demucs, or Both per job
+- **Multi-Engine Separation** — Demucs (htdemucs), Spleeter, Roformer (via audio-separator), and TIGER-DnR; pick the engine per job or blend Demucs + Spleeter
+- **Roformer Checkpoint Library** — 10 specialist models: Crowd & BGM (cartoons/anime/movies), Vocals (Kim FT / ViperX), BS-Roformer (top SDR), InstVoc Duality (film), MDX23C (cartoon SFX), Karaoke, De-Reverb, Denoise & Clean, and Bleed Suppressor
+- **TIGER-DnR 3-Stem Engine** — Cinematic separation into Dialogue / SFX / Music with 4 targets (Dialogue+SFX, Dialogue Only, SFX Only, Music Only) and 3-part parallel GPU execution
+- **Model Selection** — Choose Spleeter, Demucs, Both, Roformer BGM, or TIGER-DnR (3-Stem) per job
 - **Instrumental / Karaoke Output** — Optionally export the instrumental track alongside vocals, at no extra AI cost (reuses Demucs's `no_vocals`/Spleeter's `accompaniment` stem)
+- **Remove Silence** — Trims long silence gaps with 1.0s lead-in/lead-out padding and 30ms micro-fades
 - **Quick Preview Mode** — Process just the first N seconds to compare model quality before running the full file
 - **Batch Folder Processing** — Scan an entire folder of media files and process them in bulk
 - **Bulk Separate from Library** — Multi-select files in the Library tab and separate them all in one batch
 - **Video & Audio Input** — Accepts MP4, MKV, MOV, AVI, WebM, MP3, FLAC, WAV, M4A and more
 - **Skip Video Encoding** — Fast mode copies original video stream without re-encoding
+- **Super Keyframe NVENC Export** — Multi-chunk GPU video export with a resolution selector (up to 4K) for long files
 - **Long Audio Segmentation** — Auto-splits files >10 minutes, processes in parallel, concatenates results
 - **GPU-Aware Worker Scaling** — Automatically avoids contending parallel Demucs workers on the same GPU
 - **Cross-Correlation Alignment** — Millisecond-level sync between original audio and separated output
 - **Audio Normalization** — EBU R128 loudnorm for consistent volume levels
 - **Smart Audio Track Selection** — Auto-selects best language track from multi-language videos
+- **In-Browser Player** — Play audio and stream video results directly in the UI (centered floating player)
+- **Playback Speed Selector** — Adjust playback speed (0.75x to 2.0x) for precise listening
+- **Seek Bar with Scrubber** — Click or drag to seek, with hover preview and 5s skip buttons
+- **Loop Toggle** — Repeat playback for precise editing
+- **Spacebar Shortcut** — Play/pause with keyboard shortcut
+
+### 🎛️ Audio Studio (Multi-Track DAW)
+- **Project Workspaces** — Create persistent multi-track projects from any library file
+- **Separation Pass Stacking** — Run TIGER, Roformer, Demucs, or Spleeter passes on project tracks and stack the stems as new tracks
+- **Voiceover / Dubbing Import** — Import external VO tracks and sync them against the video
+- **AI Music Bleed Heatmap** — Scans tracks for music bleed and visualizes it for surgical cleanup
+- **Waveform Editing** — Drag-select cuts, fade handles, edge trims, and one-click silence cuts with live VU metering
+- **Per-Track Normalization** — Loudness-normalize individual tracks
+- **Pro Mixing** — NumPy Hann-fade mixer with soft-knee true-peak limiting for the final render
+- **Video Remux** — Mux the rendered mix back into the original video
+- **Presets** — Save and reuse project templates
+- **Undo/Redo History** — JSON snapshot-based state machine for full project history
+- **Playback Speed Control** — Adjust playback speed (0.75x, 1.0x, 1.25x, 1.5x, 2.0x)
+- **Per-Track Pan & Mute/Solo** — Stereo positioning and independent track muting
+- **Loop Toggle** — Continuous loop playback for precise editing
+- **Zoomable Timeline** — Minimap scrollbar with frame-accurate playhead positioning
 
 ### 📥 YouTube & Web Downloader
 - **Multi-Platform** — Download from YouTube, Facebook, Instagram, TikTok, and 1000+ sites via yt-dlp
@@ -43,8 +68,10 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 - **Subfolder Organization** — Save downloads into named subfolders
 - **Auto-Separation** — Automatically run vocal extraction after download completes
 - **Subtitle Download** — Fetch subtitles and auto-generated captions
-- **Cookie Support** — Authenticated downloads for age-restricted content
+- **Cookie Support** — Authenticated downloads for age-restricted content (`data/cookies.txt`)
 - **Duplicate Detection** — Prevents re-downloading the same URL
+- **Playlist Resilience** — Deleted/nonexistent playlists fall back to single-video mode gracefully
+- **Detailed yt-dlp Logging** — Colorized yt-dlp errors/warnings surfaced in the backend console
 
 ### 📊 Download Queue
 - **Persistent Queue** — Survives app restarts via JSON persistence
@@ -55,10 +82,16 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 ### 📚 Media Library
 - **Unified View** — All downloads and separated files in one searchable, sortable table
 - **Pagination** — Configurable page size (25/50/100/250) keeps large libraries fast to browse
+- **Collapsible Folders Sidebar** — Dynamic file counts, expandable subfolder tree, and empty folder support
+- **Drag & Drop Between Folders** — Instant optimistic UI for moving single or multiple files
+- **Subfolder Creation** — Create named subfolders within download and nomusic categories
+- **Folder Size Display** — See storage usage for download and nomusic folders
+- **Breadcrumb Navigation** — Navigate subfolders with back button
 - **Folder Filtering** — Toggle between download and nomusic folders with size info
 - **Bulk Operations** — Select multiple files for batch delete or batch vocal separation
 - **Right-Click Context Menu** — Play, Rename, Open Folder, Delete, Send to Separation
-- **Metadata Display** — Duration, resolution, codec info, and model badges
+- **Rename Files In-Place** — Rename files directly from the library table
+- **Metadata Display** — Duration, resolution, codec info, and model badges per file
 - **Broken Entry Cleanup** — Auto-prunes entries for files no longer on disk
 
 ### 🩺 Diagnostics & Monitoring
@@ -74,10 +107,11 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 - **Auto-Refresh** — Polls for new notifications every 3 seconds
 
 ### ⚙️ Infrastructure
+- **LAN Access** — Backend and frontend listen on all network interfaces (`0.0.0.0`), so the app is usable from any device on your local network
 - **Auto FFmpeg Download** — Fetches FFmpeg binaries on first run
 - **yt-dlp Auto-Update** — Checks for yt-dlp updates before each download
 - **Process Management** — Kills all child processes on shutdown to prevent zombies
-- **Stale Process Cleanup** — Orphans from crashed runs are killed on startup
+- **Stale Process Cleanup** — Orphans from crashed runs are killed on startup; stale separation tasks are purged on boot
 - **Background Cleanup** — Hourly removal of temp files >24h old
 - **Docker Spleeter Support** — Optionally runs Spleeter via Docker for isolated execution
 
@@ -114,7 +148,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 cd demucspleeter
 
 # Create virtual environment
-uv venv --python 3.10
+uv venv --python 3.11
 
 # Activate virtual environment
 # Windows:
@@ -222,16 +256,16 @@ rmdir /s /q node_modules del package-lock.json  # Windows
 npm install
 ```
 
-#### 6. Configure Backend Port
+#### 6. Configure Backend URL (Optional)
 
-Create `.env` file in `frontend/` directory:
+No configuration is required for localhost — the frontend auto-detects `http://<current-host>:5170` and proxies `/api` and `/projects` through Vite.
+
+To override (e.g., a custom backend port or remote backend), create a `.env` file in `frontend/`:
 
 ```bash
 # frontend/.env
-VITE_API_BASE_URL=http://localhost:5170/api
+VITE_BACKEND_URL=http://localhost:5170
 ```
-
-**Important:** Change port `5170` to match your backend port if different.
 
 #### 7. Install FFmpeg (Auto-downloaded)
 
@@ -246,17 +280,15 @@ FFmpeg and FFprobe are automatically downloaded on first run to the `backend/mod
 **Run the complete application:**
 
 ```bash
-# Windows
 run_app.bat
-
-# Linux/macOS
-./run_app.sh
 ```
 
 This starts both:
 
 - **Backend**: http://localhost:5170
 - **Frontend**: http://localhost:5173
+
+**LAN access:** Both servers listen on all interfaces, so other devices on your network can open the app at `http://<your-pc-ip>:5173` (find your IP with `ipconfig`).
 
 ### Option 2: Manual Start (Development)
 
@@ -422,20 +454,40 @@ Edit `data/video.json` to customize output settings:
 backend/
 ├── backend.py           # Main FastAPI server entry point
 ├── config.py            # Global state and shared settings
+├── models.py            # Pydantic request/response models
+├── core/                # Shared app core
+│   ├── constants.py         # Defaults (models, targets, overlap)
+│   └── state.py             # Global state + locks
 ├── modules/             # AI core and processing logic
-│   ├── module_processor.py    # Main separation orchestrator
+│   ├── module_processor.py    # Main separation orchestrator (multi-engine)
 │   ├── module_demucs.py       # Demucs AI model wrapper
 │   ├── module_spleeter.py     # Spleeter AI model wrapper
-│   ├── module_ffmpeg.py       # FFmpeg utilities
+│   ├── module_roformer.py     # Roformer engine (audio-separator checkpoints)
+│   ├── module_tiger.py        # TIGER-DnR 3-stem engine (LiteRT/ONNX)
+│   ├── module_bleed_detector.py # AI music-bleed heatmap scanner
+│   ├── module_cuda.py         # CUDA/GPU detection & profiling
+│   ├── module_deno.py         # Deno runtime helper (yt-dlp JS challenges)
+│   ├── module_ffmpeg.py       # FFmpeg utilities & segmentation
 │   ├── module_ffmpeg_shared.py # Shared DLL downloader
-│   ├── module_audio.py        # Audio alignment & mixing
+│   ├── module_audio.py        # Audio alignment, mixing & fades
+│   ├── module_file.py         # File operations
+│   ├── module_tools.py        # Misc processing tools
 │   └── module_ytdlp.py        # YouTube downloading
+├── look2hear/           # TIGER-DnR model internals (LiteRT)
 ├── services/            # Background services
-│   └── process_manager.py     # Child process tracking & cleanup
+│   ├── process_manager.py     # Child process tracking & cleanup
+│   ├── separation_service.py  # Separation task lifecycle
+│   ├── download_service.py    # yt-dlp download orchestration
+│   ├── queue_service.py       # Download queue management
+│   ├── persistence.py         # JSON state persistence
+│   └── cleanup.py             # Temp file & cache cleanup
 ├── routes/              # API Route definitions
-│   ├── diagnostics.py         # Health & diagnostic endpoints
 │   ├── separation.py          # Vocal removal routes
-│   └── library.py             # File management routes
+│   ├── downloads.py           # YouTube download & queue routes
+│   ├── library.py             # File management & media streaming
+│   ├── audio_project.py       # Audio Studio DAW (projects, passes, mixing)
+│   ├── notifications.py       # Notifications, console logs, system info
+│   └── diagnostics.py         # Health & diagnostic endpoints
 ├── tools/               # Windows native utilities
 │   └── SpawnWithJob.exe       # Zombie process prevention
 data/                    # Persistent state and configuration
@@ -443,7 +495,10 @@ data/                    # Persistent state and configuration
 ├── library.json         # Processed files database
 ├── download_queue.json  # YT download queue
 ├── notifications.json   # User alerts
-└── metadata_cache.json  # File metadata cache
+├── tasks.json           # Separation task history
+├── metadata_cache.json  # File metadata cache
+└── cookies.txt          # Optional yt-dlp cookies (you provide)
+projects/                # Audio Studio project workspaces
 docs/                    # Documentation and roadmap
 ├── backend_changelog.md # Backend version history
 ├── frontend_changelog.md # Frontend version history
@@ -456,25 +511,39 @@ docs/                    # Documentation and roadmap
 ```
 frontend/
 ├── src/
-│   ├── App.jsx              # Main app component
+│   ├── App.jsx              # Main app component (tab shell, console, settings)
+│   ├── config.js            # App name/version + dynamic backend URL (LAN-aware)
 │   ├── components/
-│   │   ├── SeparationTab.jsx    # File upload & separation
+│   │   ├── SeparationTab.jsx    # File upload & multi-engine separation
+│   │   ├── AudioStudioTab.jsx   # Multi-track DAW (projects, passes, mixing)
+│   │   ├── audiostudio/         # DAW building blocks (waveforms, transport, modals)
 │   │   ├── DownloaderTab.jsx    # YouTube downloader
-│   │   ├── LibraryTab.jsx       # File library management
+│   │   ├── LibraryTab.jsx       # File library management (folders, drag & drop)
+│   │   ├── AudioPlayer.jsx      # Centered floating audio/video player
 │   │   ├── NotificationBell.jsx # Notification system
 │   │   └── DiagnosticsPanel.jsx # System health dashboard
-│   └── contexts/
-│       └── NotificationContext.jsx  # Notification state
+│   ├── contexts/
+│   │   ├── AudioPlayerContext.jsx   # Global player state
+│   │   └── NotificationContext.jsx  # Notification state
+│   └── api/
+│       └── index.js             # Axios API client
 ```
 
 ### API Endpoints
 
 **Downloads:**
 
+- `POST /api/yt-formats` - Analyze URL for available formats
 - `POST /api/download` - Start YouTube download
+- `POST /api/download/cancel` - Cancel active download
+- `GET /api/downloads` - Fetch active downloads
 - `POST /api/queue/add` - Add to download queue
+- `POST /api/queue/add-batch` - Bulk add playlist videos
+- `POST /api/queue/remove` - Remove from queue
+- `POST /api/queue/clear` - Clear queue
+- `POST /api/queue/start` - Start processing queue
+- `POST /api/queue/stop` - Pause queue
 - `GET /api/queue` - Get queue status
-- `POST /api/queue/*` - Queue management
 
 **Separation:**
 
@@ -483,24 +552,45 @@ frontend/
 - `POST /api/folder/scan` - Scan folder for batch processing
 - `POST /api/folder/scan-files` - Build a batch queue directly from an explicit file list (used by Library bulk-separate)
 - `POST /api/folder-queue/process` - Start batch processing
+- `POST /api/folder-queue/remove` - Remove file from batch queue
+- `GET /api/status/{task_id}` - Get task progress
+- `GET /api/batch-status/{batchId}` - Poll batch progress
 
 **Library:**
 
 - `GET /api/library` - Get all processed files
+- `GET /api/library/folders` - Fetch folder structure
 - `POST /api/delete-file` - Delete file from library
+- `POST /api/rename-file` - Rename file
 - `POST /api/open-file` - Open file with default player
 - `POST /api/open-folder` - Open file location in Explorer
+- `POST /api/library/move` - Move files between folders
+- `POST /api/library/create-folder` - Create subfolder
+- `GET /api/media/stream` - Stream media file to browser
+
+**Audio Studio:**
+
+- `POST /api/audio-project/create` - Create new project
+- `POST /api/audio-project/save` - Save project state
+- `POST /api/audio-project/load` - Load project
+- `POST /api/audio-project/import-track` - Add track to project
+- `POST /api/audio-project/apply-separation` - Run separation pass on track
+- `POST /api/audio-project/export` - Render and export project
+- `GET /projects/{projectId}` - Serve project files
 
 **Notifications:**
 
 - `GET /api/notifications` - Get all notifications
 - `POST /api/notifications/mark-read` - Mark all as read
+- `POST /api/notifications/mark-single-read` - Mark single notification as read
 - `POST /api/notifications/clear` - Clear all notifications
+- `POST /api/notifications/test` - Send test notification
 
-**Utilities:**
+**Diagnostics:**
 
-- `GET /api/status/{task_id}` - Get task progress
-- `POST /api/download/cancel` - Cancel active download
+- `GET /api/diagnostics/health` - Full system health report
+- `POST /api/diagnostics/test-demucs` - Start live Demucs test
+- `GET /api/diagnostics/test-status/{taskId}` - Poll test result
 
 ---
 
@@ -586,6 +676,7 @@ See [docs/backend_changelog.md](docs/backend_changelog.md) and [docs/frontend_ch
 - ✅ Higher-resolution YouTube formats are available again by using yt-dlp's default compatible player selection
 - ✅ Downloaded videos can be previewed directly in the Library
 - ✅ Video entries retain and open their original YouTube/source link
+
 ### v0.0.19 (2026-08-31)
 - ✅ **Rebrand to Audio Splitter Pro** across frontend, backend, titles, and diagnostic dashboards
 - ✅ **Collapsible Folders Sidebar** with dynamic file counts and subfolder management

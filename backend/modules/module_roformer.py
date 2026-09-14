@@ -114,18 +114,10 @@ def separate_with_roformer(
         print(f"{Fore.RED}Failed to determine audio duration for Roformer separation.{Style.RESET_ALL}")
         return None, None, None
 
-    SEGMENT_DURATION_SECONDS = 600  # 10 minute chunks for optimal VRAM efficiency
     temp_segments_dir = None
-
     if pre_split_segments:
         split_audio_paths = pre_split_segments
         temp_segments_dir = tempfile.mkdtemp(dir="_temp")
-    elif audio_duration > SEGMENT_DURATION_SECONDS:
-        print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting for Roformer BGM...{Style.RESET_ALL}\n")
-        temp_segments_dir, split_audio_paths = split_audio_into_segments(
-            temp_audio_wav_path, audio_duration, SEGMENT_DURATION_SECONDS
-        )
-        print(f"\n{Fore.GREEN}[OK] Audio split into {len(split_audio_paths)} segments for Roformer.{Style.RESET_ALL}")
     else:
         split_audio_paths = None
 

@@ -581,10 +581,12 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
         timings['extract'] = extract_end - extract_start
         print(f"{Fore.GREEN}Audio extraction took {timings['extract']:.2f}s{Style.RESET_ALL}")
 
-        # Shared segmentation logic to avoid double splitting (for files > 10 min)
+        # Shared segmentation logic to avoid double splitting (only for Demucs / Spleeter models when > 10 min)
+        # Roformer and TIGER process the full audio natively without file splitting.
         SEGMENT_DURATION = 600
         actual_extracted_duration = get_audio_duration(temp_audio_wav_path) or original_duration
-        if actual_extracted_duration and actual_extracted_duration > SEGMENT_DURATION:
+        is_roformer_or_tiger = model in ["roformer", "bgm", "mel_band_roformer", "tiger", "tiger_dnr", "tiger-dnr"]
+        if not is_roformer_or_tiger and actual_extracted_duration and actual_extracted_duration > SEGMENT_DURATION:
             print(f"\n{Fore.YELLOW}Audio duration ({actual_extracted_duration:.2f}s) exceeds 10 minutes. Splitting audio ONCE for all models...{Style.RESET_ALL}\n")
             shared_segments_dir = tempfile.mkdtemp(dir=TEMP_DIR)
             temp_dirs_to_cleanup.append(shared_segments_dir)
@@ -625,7 +627,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             dialogue_sfx_path, roformer_music_path, temp_roformer_dir = separate_with_roformer(
                 temp_audio_wav_path, roformer_out_path, base_audio_name_no_ext,
                 model_filename=roformer_model,
-                pre_split_segments=shared_segments, want_instrumental=export_instrumental,
+                want_instrumental=export_instrumental,
                 progress_callback=update_progress
             )
             r_end = time.time()
