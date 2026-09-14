@@ -157,7 +157,7 @@ uv venv --python 3.11
 source .venv/bin/activate
 
 # Install dependencies
-uv pip install -r requirements.txt
+uv sync
 ```
 
 #### 3. Install CUDA (Optional but Recommended)
@@ -673,9 +673,11 @@ _Times include both Spleeter + Demucs processing with alignment_
 See [docs/backend_changelog.md](docs/backend_changelog.md) and [docs/frontend_changelog.md](docs/frontend_changelog.md) for detailed version history.
 
 ### v0.0.20 (2026-09-13)
+- ✅ Native Full-Audio Roformer & TIGER Processing (bypasses redundant 10-minute segmentation to preserve audio continuity)
 - ✅ Higher-resolution YouTube formats are available again by using yt-dlp's default compatible player selection
 - ✅ Downloaded videos can be previewed directly in the Library
 - ✅ Video entries retain and open their original YouTube/source link
+- ✅ Standardized package management via `uv sync` / `pyproject.toml`
 
 ### v0.0.19 (2026-08-31)
 - ✅ **Rebrand to Audio Splitter Pro** across frontend, backend, titles, and diagnostic dashboards
