@@ -21,10 +21,11 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 
 ### 🎵 AI Vocal Separation
 - **Dual-GPU & Multi-GPU Acceleration** — Automatically harnesses all available NVIDIA GPUs (e.g. RTX 5070 Ti + RTX 3080/3090) with round-robin segment scheduling, concurrent model passes, and multi-GPU NVENC export
+- **Granular Speed & Batch Controls** — User-controllable performance tuning for each model: configurable TIGER-DnR inference batch size (2x–16x), Roformer parallel batch throughput (1x–8x), and Demucs multi-GPU segment worker jobs (1–4)
 - **Multi-Engine Separation** — Demucs (htdemucs), Spleeter, Roformer (via audio-separator), and TIGER-DnR; pick the engine per job or blend Demucs + Spleeter
 - **Concurrent Multi-Model Blending** — Runs Demucs on GPU 0 and Spleeter on GPU 1 simultaneously in "Both" mode, cutting combined execution time in half
 - **Roformer Checkpoint Library** — 10 specialist models: Crowd & BGM (cartoons/anime/movies), Vocals (Kim FT / ViperX), BS-Roformer (top SDR), InstVoc Duality (film), MDX23C (cartoon SFX), Karaoke, De-Reverb, Denoise & Clean, and Bleed Suppressor
-- **TIGER-DnR 3-Stem Engine** — Cinematic separation into Dialogue / SFX / Music with 4 targets (Dialogue+SFX, Dialogue Only, SFX Only, Music Only) and 3-part parallel GPU execution
+- **TIGER-DnR 3-Stem Engine** — Cinematic separation into Dialogue / SFX / Music with 4 targets (Dialogue+SFX, Dialogue Only, SFX Only, Music Only) and 3-part parallel GPU execution with PyTorch FP16 Tensor Cores and GPU-accelerated resampling
 - **Model Selection** — Choose Spleeter, Demucs, Both, Roformer BGM, or TIGER-DnR (3-Stem) per job
 - **Instrumental / Karaoke Output** — Optionally export the instrumental track alongside vocals, at no extra AI cost (reuses Demucs's `no_vocals`/Spleeter's `accompaniment` stem)
 - **Remove Silence** — Trims long silence gaps with 1.0s lead-in/lead-out padding and 30ms micro-fades

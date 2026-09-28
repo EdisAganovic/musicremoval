@@ -4,7 +4,7 @@ MODULE: module_roformer.py - MEL-BAND ROFORMER & MDX23C BGM SEPARATION ENGINE
 ROLE: Specialized Background Music (BGM) separation for Movies, Anime, and Cartoons.
       Extracts background music scores while preserving dialogue, speech,
       screaming, Foley, and cartoon sound effects (SFX) intact in the primary output stem.
-      Supports target CUDA device allocation (multi-GPU).
+      Supports target CUDA device allocation (multi-GPU) and configurable batch size scaling.
 """
 import os
 import sys
@@ -12,7 +12,11 @@ import tempfile
 from colorama import Fore, Style
 from tqdm import tqdm
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE, split_audio_into_segments
-from core.constants import DEFAULT_ROFORMER_MODEL
+
+try:
+    from core.constants import DEFAULT_ROFORMER_MODEL, DEFAULT_ROFORMER_BATCH_SIZE
+except ImportError:
+    from backend.core.constants import DEFAULT_ROFORMER_MODEL, DEFAULT_ROFORMER_BATCH_SIZE
 
 try:
     from services.process_manager import tracked_run
@@ -68,7 +72,8 @@ def separate_with_roformer(
     pre_split_segments: list = None,
     want_instrumental: bool = False,
     progress_callback: callable = None,
-    device_str: str = None
+    device_str: str = None,
+    roformer_batch_size: int = DEFAULT_ROFORMER_BATCH_SIZE
 ):
     """
     Separates background music from dialogue & SFX using audio-separator with Mel-Band Roformer BGM / MDX models.
@@ -82,6 +87,7 @@ def separate_with_roformer(
         want_instrumental: If True, returns (vocal_or_dialogue_sfx_path, music_instrumental_path).
         progress_callback: Optional callback fn(step_str, progress_int) to report real-time percentage.
         device_str: Target CUDA device (e.g. 'cuda:0', 'cuda:1').
+        roformer_batch_size: Parallel chunk batch size (default 4 for accelerated throughput).
 
     Returns:
         tuple: (path_to_dialogue_sfx_wav, path_to_music_instrumental_wav_or_None, temp_segments_dir)
@@ -89,7 +95,8 @@ def separate_with_roformer(
     if device_str is None:
         device_str = "cuda:0" if torch.cuda.is_available() else "cpu"
 
-    print(f"\n{Fore.CYAN}--- Separating with Mel-Band Roformer BGM Model: {model_filename} on {device_str} ---{Style.RESET_ALL}")
+    effective_batch_size = max(1, int(roformer_batch_size or 4))
+    print(f"\n{Fore.CYAN}--- Separating with Mel-Band Roformer BGM Model: {model_filename} on {device_str} (Batch Size: {effective_batch_size}) ---{Style.RESET_ALL}")
     os.makedirs(output_base_dir, exist_ok=True)
     os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
 
@@ -134,6 +141,9 @@ def separate_with_roformer(
             output_format="WAV",
             model_file_dir=MODEL_CACHE_DIR,
             use_native_fp16=use_native_fp16,
+            mdx_params={'hop_length': 1024, 'segment_size': 256, 'overlap': 0.25, 'batch_size': effective_batch_size, 'enable_denoise': False},
+            mdx23c_params={'batch_size': effective_batch_size, 'overlap': 8},
+            roformer_params={'batch_size': effective_batch_size, 'overlap': 8},
         )
 
         # Configure specific CUDA device

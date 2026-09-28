@@ -9,6 +9,9 @@ from core.constants import (
     DEFAULT_ROFORMER_MODEL,
     DEFAULT_TIGER_TARGET,
     DEFAULT_TIGER_OVERLAP,
+    DEFAULT_TIGER_BATCH_SIZE,
+    DEFAULT_ROFORMER_BATCH_SIZE,
+    DEFAULT_DEMUCS_JOBS,
 )
 
 
@@ -85,6 +88,9 @@ class SeparateRequest(BaseModel):
     roformer_model: Optional[str] = DEFAULT_ROFORMER_MODEL
     tiger_target: Optional[str] = DEFAULT_TIGER_TARGET
     tiger_overlap: Optional[int] = DEFAULT_TIGER_OVERLAP
+    tiger_batch_size: Optional[int] = DEFAULT_TIGER_BATCH_SIZE
+    roformer_batch_size: Optional[int] = DEFAULT_ROFORMER_BATCH_SIZE
+    demucs_jobs: Optional[int] = DEFAULT_DEMUCS_JOBS
     skip_video_encoding: bool = False
     super_keyframe: bool = False
     resolution: Optional[str] = "1080p"
@@ -119,6 +125,9 @@ class FolderQueueProcessRequest(BaseModel):
     roformer_model: Optional[str] = DEFAULT_ROFORMER_MODEL
     tiger_target: Optional[str] = DEFAULT_TIGER_TARGET
     tiger_overlap: Optional[int] = DEFAULT_TIGER_OVERLAP
+    tiger_batch_size: Optional[int] = DEFAULT_TIGER_BATCH_SIZE
+    roformer_batch_size: Optional[int] = DEFAULT_ROFORMER_BATCH_SIZE
+    demucs_jobs: Optional[int] = DEFAULT_DEMUCS_JOBS
     selected_files: Optional[List[str]] = None
     duration: Optional[int] = None
     skip_video_encoding: bool = False

@@ -62,6 +62,9 @@ from core.constants import (
     DEFAULT_ROFORMER_MODEL,
     DEFAULT_TIGER_TARGET,
     DEFAULT_TIGER_OVERLAP,
+    DEFAULT_TIGER_BATCH_SIZE,
+    DEFAULT_ROFORMER_BATCH_SIZE,
+    DEFAULT_DEMUCS_JOBS,
 )
 from module_ffmpeg import (
     get_audio_duration, FFMPEG_EXE, convert_audio_with_ffmpeg,
@@ -416,7 +419,7 @@ def _encode_instrumental_output(instrumental_wav_path, is_audio_only, input_file
         return None
 
 
-def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model=DEFAULT_MODEL, roformer_model=DEFAULT_ROFORMER_MODEL, tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p", skip_docker_image=True):
+def process_file(input_file, keep_temp=False, duration=None, progress_callback=None, model=DEFAULT_MODEL, roformer_model=DEFAULT_ROFORMER_MODEL, tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP, tiger_batch_size=DEFAULT_TIGER_BATCH_SIZE, roformer_batch_size=DEFAULT_ROFORMER_BATCH_SIZE, demucs_jobs=DEFAULT_DEMUCS_JOBS, skip_video_encoding=None, export_instrumental=False, remove_silence=False, super_keyframe=False, resolution="1080p", skip_docker_image=True):
     """
     Process a video or audio file to separate vocals.
     Handles both video files (creates new video with vocals) and audio files (creates vocals-only audio).
@@ -628,7 +631,8 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 temp_audio_wav_path, roformer_out_path, base_audio_name_no_ext,
                 model_filename=roformer_model,
                 want_instrumental=export_instrumental,
-                progress_callback=update_progress
+                progress_callback=update_progress,
+                roformer_batch_size=roformer_batch_size
             )
             r_end = time.time()
             timings['roformer'] = r_end - r_start
@@ -656,6 +660,7 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
                 temp_audio_wav_path, tiger_out_path, base_audio_name_no_ext,
                 tiger_target=tiger_target,
                 tiger_overlap=tiger_overlap,
+                tiger_batch_size=tiger_batch_size,
                 progress_callback=update_progress,
                 want_instrumental=export_instrumental
             )

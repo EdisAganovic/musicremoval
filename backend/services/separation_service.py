@@ -70,6 +70,7 @@ cleanup_stale_tasks_on_boot()
 def enqueue_separation(task_id: str, file_path: str, duration=None, model=DEFAULT_MODEL,
                        roformer_model=DEFAULT_ROFORMER_MODEL,
                        tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP,
+                       tiger_batch_size=8, roformer_batch_size=4, demucs_jobs=2,
                        skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False, skip_docker_image=True):
     """
     Adds a separation task to the FIFO queue and ensures the background worker is running.
@@ -86,6 +87,9 @@ def enqueue_separation(task_id: str, file_path: str, duration=None, model=DEFAUL
         "roformer_model": roformer_model,
         "tiger_target": tiger_target,
         "tiger_overlap": tiger_overlap,
+        "tiger_batch_size": tiger_batch_size,
+        "roformer_batch_size": roformer_batch_size,
+        "demucs_jobs": demucs_jobs,
         "skip_video_encoding": skip_video_encoding,
         "super_keyframe": super_keyframe,
         "resolution": resolution,
@@ -152,6 +156,9 @@ def _separation_worker_loop():
                 roformer_model=item.get("roformer_model", DEFAULT_ROFORMER_MODEL),
                 tiger_target=item.get("tiger_target", DEFAULT_TIGER_TARGET),
                 tiger_overlap=item.get("tiger_overlap", DEFAULT_TIGER_OVERLAP),
+                tiger_batch_size=item.get("tiger_batch_size", 8),
+                roformer_batch_size=item.get("roformer_batch_size", 4),
+                demucs_jobs=item.get("demucs_jobs", 2),
                 skip_video_encoding=item.get("skip_video_encoding", False),
                 super_keyframe=item.get("super_keyframe", False),
                 resolution=item.get("resolution", "1080p"),
@@ -170,6 +177,7 @@ def _separation_worker_loop():
 def _execute_separation(task_id: str, file_path: str, duration=None, model=DEFAULT_MODEL,
                         roformer_model=DEFAULT_ROFORMER_MODEL,
                         tiger_target=DEFAULT_TIGER_TARGET, tiger_overlap=DEFAULT_TIGER_OVERLAP,
+                        tiger_batch_size=8, roformer_batch_size=4, demucs_jobs=2,
                         skip_video_encoding=False, super_keyframe=False, resolution="1080p", export_instrumental=False, remove_silence=False, skip_docker_image=True):
     """
     Internal execution of vocal separation on a single file.
@@ -229,6 +237,7 @@ def _execute_separation(task_id: str, file_path: str, duration=None, model=DEFAU
             file_path, keep_temp=False, duration=duration, progress_callback=on_progress,
             model=model, roformer_model=roformer_model,
             tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+            tiger_batch_size=tiger_batch_size, roformer_batch_size=roformer_batch_size, demucs_jobs=demucs_jobs,
             skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
             resolution=resolution,
             export_instrumental=export_instrumental, remove_silence=remove_silence,

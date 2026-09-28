@@ -97,6 +97,9 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
   const [roformerModel, setRoformerModel] = useState("mel_band_roformer_crowd_aufr33_viperx_sdr_8.7144.ckpt");
   const [tigerTarget, setTigerTarget] = useState("dialogue_sfx");
   const [tigerOverlap, setTigerOverlap] = useState(50);
+  const [tigerBatchSize, setTigerBatchSize] = useState(8);
+  const [roformerBatchSize, setRoformerBatchSize] = useState(4);
+  const [demucsJobs, setDemucsJobs] = useState(2);
   const [metadata, setMetadata] = useState(null);
   const [processingMode, setProcessingMode] = useState("single");
   const [isScanning, setIsScanning] = useState(false);
@@ -563,6 +566,9 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
         roformer_model: roformerModel,
         tiger_target: tigerTarget,
         tiger_overlap: tigerOverlap,
+        tiger_batch_size: tigerBatchSize,
+        roformer_batch_size: roformerBatchSize,
+        demucs_jobs: demucsJobs,
         skip_video_encoding: skipVideoEncoding,
         super_keyframe: superKeyframe,
         resolution: resolution,
@@ -606,6 +612,9 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
           roformer_model: roformerModel,
           tiger_target: tigerTarget,
           tiger_overlap: tigerOverlap,
+          tiger_batch_size: tigerBatchSize,
+          roformer_batch_size: roformerBatchSize,
+          demucs_jobs: demucsJobs,
           skip_video_encoding: skipVideoEncoding,
           super_keyframe: superKeyframe,
           resolution: resolution,
@@ -624,6 +633,9 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
         formData.append("roformer_model", roformerModel);
         formData.append("tiger_target", tigerTarget);
         formData.append("tiger_overlap", tigerOverlap);
+        formData.append("tiger_batch_size", tigerBatchSize);
+        formData.append("roformer_batch_size", roformerBatchSize);
+        formData.append("demucs_jobs", demucsJobs);
         formData.append("skip_video_encoding", skipVideoEncoding);
         formData.append("super_keyframe", superKeyframe);
         formData.append("resolution", resolution);
@@ -864,7 +876,7 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
           animate={{ opacity: 1, y: 0 }}
           className="bg-gradient-to-r from-primary-950/40 via-dark-900 to-primary-950/40 p-4 rounded-xl border border-primary-500/30 shadow-lg mb-6 max-w-2xl mx-auto"
         >
-          <div className="flex flex-col space-y-2">
+          <div className="flex flex-col space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-primary-300 uppercase tracking-wider flex items-center gap-1.5">
                 <Music className="w-3.5 h-3.5" />
@@ -895,9 +907,31 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
               </div>
             </div>
 
-            <p className="text-xs text-gray-400 italic pt-1">
+            <p className="text-xs text-gray-400 italic pt-0.5">
               💡 {ROFORMER_MODELS.find(m => m.id === roformerModel)?.desc}
             </p>
+
+            {/* Roformer Batch Size Selector */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-200">Roformer Batch Size</span>
+                <span className="text-[10px] text-gray-400">
+                  GPU parallel chunk throughput (Recommended: 4 for 10-16GB VRAM)
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-dark-950 p-1 rounded-lg border border-white/5">
+                {[1, 2, 4, 8].map(bs => (
+                  <button
+                    key={`roformer-bs-${bs}`}
+                    type="button"
+                    onClick={() => setRoformerBatchSize(bs)}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${roformerBatchSize === bs ? 'bg-primary-600 text-white shadow-sm shadow-primary-500/30' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    {bs}x
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </motion.div>
       )}
@@ -969,6 +1003,69 @@ const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCl
                 >
                   75% (Ultra-HQ)
                 </button>
+              </div>
+            </div>
+
+            {/* TIGER Batch Size Selector */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-200">Inference Batch Size</span>
+                <span className="text-[10px] text-gray-400">
+                  Parallel audio windows processed on GPU (Default: 8 for 10-16GB VRAM)
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-dark-950 p-1 rounded-lg border border-white/5">
+                {[2, 4, 8, 12, 16].map(bs => (
+                  <button
+                    key={`tiger-bs-${bs}`}
+                    type="button"
+                    onClick={() => setTigerBatchSize(bs)}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${tigerBatchSize === bs ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/30' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    {bs}x
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Demucs Multi-GPU Parallel Jobs Panel */}
+      {(model === "demucs" || model === "both") && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-r from-blue-950/40 via-dark-900 to-blue-950/40 p-4 rounded-xl border border-blue-500/30 shadow-lg mb-6 max-w-2xl mx-auto"
+        >
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5" />
+                <span>Demucs Multi-GPU Parallel Jobs</span>
+              </label>
+              <span className="text-[10px] font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                Multi-GPU CUDA Dispatch
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-gray-200">Parallel Segment Jobs</span>
+                <span className="text-[10px] text-gray-400">
+                  Splits audio across RTX 5070 Ti + RTX 3080 simultaneously
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-dark-950 p-1 rounded-lg border border-white/5">
+                {[1, 2, 4].map(j => (
+                  <button
+                    key={`demucs-jobs-${j}`}
+                    type="button"
+                    onClick={() => setDemucsJobs(j)}
+                    className={`px-2.5 py-1 rounded text-xs font-bold transition-colors ${demucsJobs === j ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    {j} {j === 1 ? 'Job' : 'Jobs'}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

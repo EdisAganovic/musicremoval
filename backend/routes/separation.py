@@ -27,6 +27,7 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
                              metadata: dict, model: str, skip_video_encoding: bool, current_step: str,
                              roformer_model: str = DEFAULT_ROFORMER_MODEL,
                              tiger_target: str = DEFAULT_TIGER_TARGET, tiger_overlap: int = DEFAULT_TIGER_OVERLAP,
+                             tiger_batch_size: int = 8, roformer_batch_size: int = 4, demucs_jobs: int = 2,
                              duration: int = None, export_instrumental: bool = False, remove_silence: bool = False,
                              super_keyframe: bool = False, resolution: str = "1080p", skip_docker_image: bool = True):
     """
@@ -80,6 +81,7 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
         task_id=task_id, file_path=file_path, duration=duration, model=model,
         roformer_model=roformer_model,
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+        tiger_batch_size=tiger_batch_size, roformer_batch_size=roformer_batch_size, demucs_jobs=demucs_jobs,
         skip_video_encoding=skip_video_encoding, super_keyframe=super_keyframe,
         resolution=resolution,
         export_instrumental=export_instrumental, remove_silence=remove_silence,
@@ -90,7 +92,7 @@ def _create_separation_task(background_tasks: BackgroundTasks, file_path: str, f
 
 
 @router.post("/separate")
-async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL), roformer_model: str = Form(DEFAULT_ROFORMER_MODEL), tiger_target: str = Form(DEFAULT_TIGER_TARGET), tiger_overlap: int = Form(DEFAULT_TIGER_OVERLAP), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: Optional[int] = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False), skip_docker_image: bool = Form(True)):
+async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = File(...), model: str = Form(DEFAULT_MODEL), roformer_model: str = Form(DEFAULT_ROFORMER_MODEL), tiger_target: str = Form(DEFAULT_TIGER_TARGET), tiger_overlap: int = Form(DEFAULT_TIGER_OVERLAP), tiger_batch_size: int = Form(8), roformer_batch_size: int = Form(4), demucs_jobs: int = Form(2), skip_video_encoding: bool = Form(False), super_keyframe: bool = Form(False), resolution: str = Form("1080p"), duration: Optional[int] = Form(None), export_instrumental: bool = Form(False), remove_silence: bool = Form(False), skip_docker_image: bool = Form(True)):
     """Upload and separate vocals from an audio file."""
     from colorama import Fore, Style
 
@@ -114,6 +116,7 @@ async def separate_audio(background_tasks: BackgroundTasks, file: UploadFile = F
         model, skip_video_encoding, "File queued for separation",
         roformer_model=roformer_model,
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+        tiger_batch_size=tiger_batch_size, roformer_batch_size=roformer_batch_size, demucs_jobs=demucs_jobs,
         duration=duration,
         export_instrumental=export_instrumental, remove_silence=remove_silence,
         super_keyframe=super_keyframe, resolution=resolution,
@@ -148,6 +151,9 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
     roformer_model = payload.roformer_model or DEFAULT_ROFORMER_MODEL
     tiger_target = payload.tiger_target or DEFAULT_TIGER_TARGET
     tiger_overlap = payload.tiger_overlap or DEFAULT_TIGER_OVERLAP
+    tiger_batch_size = payload.tiger_batch_size or 8
+    roformer_batch_size = payload.roformer_batch_size or 4
+    demucs_jobs = payload.demucs_jobs or 2
     skip_video_encoding = payload.skip_video_encoding
     super_keyframe = payload.super_keyframe
     resolution = payload.resolution or "1080p"
@@ -167,6 +173,7 @@ async def separate_file(background_tasks: BackgroundTasks, payload: SeparateRequ
         model, skip_video_encoding, "File queued for separation",
         roformer_model=roformer_model,
         tiger_target=tiger_target, tiger_overlap=tiger_overlap,
+        tiger_batch_size=tiger_batch_size, roformer_batch_size=roformer_batch_size, demucs_jobs=demucs_jobs,
         duration=duration,
         export_instrumental=export_instrumental, remove_silence=payload.remove_silence,
         super_keyframe=super_keyframe, resolution=resolution,
@@ -421,6 +428,9 @@ async def process_folder_queue(background_tasks: BackgroundTasks, payload: Folde
             roformer_model=payload.roformer_model or DEFAULT_ROFORMER_MODEL,
             tiger_target=payload.tiger_target or DEFAULT_TIGER_TARGET,
             tiger_overlap=payload.tiger_overlap or DEFAULT_TIGER_OVERLAP,
+            tiger_batch_size=getattr(payload, 'tiger_batch_size', 8) or 8,
+            roformer_batch_size=getattr(payload, 'roformer_batch_size', 4) or 4,
+            demucs_jobs=getattr(payload, 'demucs_jobs', 2) or 2,
             skip_video_encoding=payload.skip_video_encoding,
             super_keyframe=payload.super_keyframe,
             resolution=payload.resolution or "1080p",
