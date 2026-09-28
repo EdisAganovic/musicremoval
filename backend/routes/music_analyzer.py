@@ -11,29 +11,27 @@ Endpoints:
 
 import os
 import uuid
-import asyncio
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
 
-from config import tasks, add_notification, log_console
+from config import add_notification, tasks
 from core.constants import NOMUSIC_DIR
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from modules.module_music_analyzer import (
-    process_music_analysis,
+    MAX_CHUNK_DURATION_SECONDS,
     auto_censor_media,
-    MAX_CHUNK_DURATION_SECONDS
+    process_music_analysis,
 )
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/music-analyzer", tags=["music-analyzer"])
 
 
 class MusicAnalyzeRequest(BaseModel):
     file_path: str
-    chunk_duration: Optional[int] = MAX_CHUNK_DURATION_SECONDS
-    analysis_mode: Optional[str] = "music"
-    custom_prompt: Optional[str] = None
-    keywords: Optional[str] = None
+    chunk_duration: int | None = MAX_CHUNK_DURATION_SECONDS
+    analysis_mode: str | None = "music"
+    custom_prompt: str | None = None
+    keywords: str | None = None
 
 
 class AutoCensorRequest(BaseModel):
@@ -45,8 +43,8 @@ def run_music_analysis_task(
     file_path: str,
     chunk_duration: int,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None,
-    keywords: Optional[str] = None
+    custom_prompt: str | None = None,
+    keywords: str | None = None
 ):
     """Background worker for Audio & Speech Analyzer."""
     try:
@@ -86,17 +84,17 @@ def run_music_analysis_task(
             message=f"Generated SRT for {os.path.basename(file_path)} with {result['summary']['segment_count']} segments.",
             type="success"
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         import traceback
         traceback.print_exc()
         if task_id in tasks:
             tasks[task_id]["status"] = "failed"
             tasks[task_id]["error"] = str(e)
-            tasks[task_id]["current_step"] = f"Error: {str(e)}"
+            tasks[task_id]["current_step"] = f"Error: {e!s}"
         
         add_notification(
             title="Analysis Failed",
-            message=f"Failed to analyze {os.path.basename(file_path)}: {str(e)}",
+            message=f"Failed to analyze {os.path.basename(file_path)}: {e!s}",
             type="error"
         )
 
@@ -104,12 +102,12 @@ def run_music_analysis_task(
 @router.post("/analyze")
 async def start_music_analysis(
     background_tasks: BackgroundTasks,
-    file_path: Optional[str] = Form(None),
+    file_path: str | None = Form(None),
     chunk_duration: int = Form(MAX_CHUNK_DURATION_SECONDS),
     analysis_mode: str = Form("music"),
-    custom_prompt: Optional[str] = Form(None),
-    keywords: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None)
+    custom_prompt: str | None = Form(None),
+    keywords: str | None = Form(None),
+    file: UploadFile | None = File(None)  # noqa: B008
 ):
     """Start analyzing an audio/video file for music detection or speech compliance."""
     target_file = None
@@ -118,8 +116,8 @@ async def start_music_analysis(
         os.makedirs(NOMUSIC_DIR, exist_ok=True)
         safe_name = os.path.basename(file.filename or "upload.mp3")
         target_file = os.path.join(NOMUSIC_DIR, f"temp_analyzer_{uuid.uuid4().hex[:8]}_{safe_name}")
-        with open(target_file, "wb") as f:
-            content = await file.read()
+        content = await file.read()
+        with open(target_file, "wb") as f:  # noqa: ASYNC230
             f.write(content)
     elif file_path:
         if not os.path.isfile(file_path):
@@ -213,8 +211,8 @@ async def auto_censor_endpoint(request: AutoCensorRequest):
             "filename": os.path.basename(censored_path),
             "muted_count": len(events)
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to auto-censor media: {str(e)}")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to auto-censor media: {e!s}")
 
 
 @router.get("/download-censored/{task_id}")

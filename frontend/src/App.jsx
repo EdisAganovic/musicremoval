@@ -277,7 +277,7 @@ function AppContent() {
               libraryFile={libraryFileToAnalyze}
               initialFilePath={libraryFileToAnalyze}
               onFileCleared={() => setLibraryFileToAnalyze(null)}
-              onSendToStudio={(filePath) => {
+              onSendToStudio={(_filePath) => {
                 setActiveTab('studio');
               }}
             />

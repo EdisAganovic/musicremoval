@@ -16,16 +16,16 @@ FEATURES:
   - Auto-censoring media export muting all flagged timestamps
 """
 
-import os
-import sys
 import json
+import os
 import re
-import subprocess
 import shutil
+import subprocess
+import sys
 import tempfile
-import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, Optional, Callable
+from typing import Any
 
 # Ensure UTF-8 output
 if hasattr(sys.stdout, "reconfigure"):
@@ -34,9 +34,9 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 try:
-    from module_ffmpeg import FFMPEG_EXE, FFPROBE_EXE, get_audio_duration
+    from module_ffmpeg import FFMPEG_EXE, get_audio_duration
 except ImportError:
-    from modules.module_ffmpeg import FFMPEG_EXE, FFPROBE_EXE, get_audio_duration
+    from modules.module_ffmpeg import FFMPEG_EXE, get_audio_duration
 
 MAX_CHUNK_DURATION_SECONDS = 1800  # 30 minutes optimal precision limit
 
@@ -56,7 +56,7 @@ DEFAULT_PROFANITY_PROMPT = (
 )
 
 
-def find_agy_executable() -> Optional[str]:
+def find_agy_executable() -> str | None:
     """Locate the agy CLI executable on the system."""
     local_app_data = os.environ.get("LOCALAPPDATA", "")
     if local_app_data:
@@ -84,7 +84,7 @@ def format_seconds_to_srt_time(seconds: float) -> str:
     hrs = int(seconds // 3600)
     mins = int((seconds % 3600) // 60)
     secs = int(seconds % 60)
-    millis = int(round((seconds - int(seconds)) * 1000))
+    millis = round((seconds - int(seconds)) * 1000)
     if millis >= 1000:
         secs += 1
         millis -= 1000
@@ -97,7 +97,7 @@ def format_seconds_to_srt_time(seconds: float) -> str:
     return f"{hrs:02d}:{mins:02d}:{secs:02d},{millis:03d}"
 
 
-def parse_timestamp_to_seconds(ts_str: Any) -> Optional[float]:
+def parse_timestamp_to_seconds(ts_str: Any) -> float | None:
     """Parse string timestamp (HH:MM:SS.mmm or MM:SS or seconds float) to seconds float."""
     if ts_str is None:
         return None
@@ -115,7 +115,7 @@ def parse_timestamp_to_seconds(ts_str: Any) -> Optional[float]:
             return float(m) * 60 + float(sec)
         elif len(parts) == 1:
             return float(parts[0])
-    except Exception:
+    except (ValueError, TypeError, IndexError):
         pass
     return None
 
@@ -124,7 +124,7 @@ def split_audio_into_chunks(
     input_path: str,
     output_dir: str,
     chunk_duration: int = MAX_CHUNK_DURATION_SECONDS
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Splits an audio or video file into <= chunk_duration (30m) audio segments (192k MP3)
     to guarantee file size < 100MB and optimal token/acoustic resolution.
@@ -177,7 +177,7 @@ def split_audio_into_chunks(
                 "start_offset": float(start_time),
                 "duration": float(current_chunk_duration)
             })
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             print(f"[MusicAnalyzer] Error creating chunk {idx}: {e}")
 
     return chunks
@@ -186,8 +186,8 @@ def split_audio_into_chunks(
 def build_analysis_prompt(
     abs_chunk_path: str,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None,
-    keywords: Optional[str] = None
+    custom_prompt: str | None = None,
+    keywords: str | None = None
 ) -> str:
     """Constructs tailored prompt based on selected analysis mode and target keywords."""
     keyword_instructions = ""
@@ -274,9 +274,9 @@ def analyze_chunk_with_agy(
     chunk_path: str,
     start_offset: float = 0.0,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None,
-    keywords: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    custom_prompt: str | None = None,
+    keywords: str | None = None
+) -> list[dict[str, Any]]:
     """
     Sends an audio chunk to Antigravity CLI and parses the resulting timestamps.
     """
@@ -302,7 +302,8 @@ def analyze_chunk_with_agy(
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=300
+            timeout=300,
+            check=False
         )
         output = proc.stdout.strip()
         if not output:
@@ -344,12 +345,12 @@ def analyze_chunk_with_agy(
                     "confidence": conf
                 })
         return results
-    except Exception as e:
+    except (subprocess.SubprocessError, json.JSONDecodeError, OSError, ValueError) as e:
         print(f"[MusicAnalyzer] Error analyzing chunk {chunk_path}: {e}")
         return []
 
 
-def merge_intervals(intervals: List[Dict[str, Any]], max_gap_seconds: float = 1.5, analysis_mode: str = "music") -> List[Dict[str, Any]]:
+def merge_intervals(intervals: list[dict[str, Any]], max_gap_seconds: float = 1.5, analysis_mode: str = "music") -> list[dict[str, Any]]:
     """
     Merges overlapping or immediately adjacent intervals.
     """
@@ -394,7 +395,7 @@ def merge_intervals(intervals: List[Dict[str, Any]], max_gap_seconds: float = 1.
     return merged
 
 
-def generate_srt_content(events: List[Dict[str, Any]], analysis_mode: str = "music") -> str:
+def generate_srt_content(events: list[dict[str, Any]], analysis_mode: str = "music") -> str:
     """Generates standard SRT file string from event list."""
     lines = []
     for idx, event in enumerate(events, start=1):
@@ -435,8 +436,8 @@ def generate_srt_content(events: List[Dict[str, Any]], analysis_mode: str = "mus
 
 def auto_censor_media(
     input_file: str,
-    intervals: List[Dict[str, Any]],
-    output_dir: Optional[str] = None
+    intervals: list[dict[str, Any]],
+    output_dir: str | None = None
 ) -> str:
     """
     Applies FFmpeg volume gates on the exact flagged intervals to produce a clean,
@@ -511,13 +512,13 @@ def auto_censor_media(
 
 def process_music_analysis(
     input_file: str,
-    output_dir: Optional[str] = None,
+    output_dir: str | None = None,
     chunk_duration: int = MAX_CHUNK_DURATION_SECONDS,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None,
-    keywords: Optional[str] = None,
-    progress_callback: Optional[Callable[[int, str], None]] = None
-) -> Dict[str, Any]:
+    custom_prompt: str | None = None,
+    keywords: str | None = None,
+    progress_callback: Callable[[int, str], None] | None = None
+) -> dict[str, Any]:
     """
     Full audio/speech analysis pipeline with parallel multi-chunk processing:
     1. Splits file into <= 30min chunks (<100MB).
@@ -558,7 +559,7 @@ def process_music_analysis(
 
         if total_chunks == 1:
             if progress_callback:
-                progress_callback(30, f"Analyzing audio with Antigravity AI...")
+                progress_callback(30, "Analyzing audio with Antigravity AI...")
             chunk_events = analyze_chunk_with_agy(
                 agy_exe=agy_exe,
                 chunk_path=chunks[0]["path"],
@@ -593,7 +594,7 @@ def process_music_analysis(
                     try:
                         res = future.result()
                         all_events.extend(res)
-                    except Exception as exc:
+                    except (subprocess.SubprocessError, OSError, ValueError, RuntimeError) as exc:
                         print(f"[MusicAnalyzer] Parallel chunk failed: {exc}")
 
         if progress_callback:

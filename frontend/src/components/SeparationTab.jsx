@@ -77,7 +77,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
 
-const SeparationTab = ({ isActive = true, libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
+const SeparationTab = ({ _isActive = true, libraryFile, initialFilePath, onFileCleared, onClearInitialFile, externalBatchId, initialBatchId, onExternalBatchConsumed, onClearBatchId }) => {
   const activeLibraryFile = libraryFile || initialFilePath;
   const activeBatchId = externalBatchId || initialBatchId;
   const [file, setFile] = useState(null);

@@ -54,7 +54,7 @@ const PROFANITY_PRESET_PROMPT = `Analyze the spoken audio to detect all swear wo
 
 const DEFAULT_SHARIA_KEYWORDS = "Jesus, Christ, Lord, swear, bet, casino, wine, alcohol, beer";
 
-const MusicAnalyzerTab = ({ isActive = true, libraryFile, initialFilePath, onFileCleared, onSendToStudio }) => {
+const MusicAnalyzerTab = ({ _isActive = true, libraryFile, initialFilePath, onFileCleared, _onSendToStudio }) => {
   const activeLibraryFile = libraryFile || initialFilePath;
   const [file, setFile] = useState(null);
   const [libraryFilePath, setLibraryFilePath] = useState(null);
