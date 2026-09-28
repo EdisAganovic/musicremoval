@@ -2,7 +2,7 @@
  * MUSICANALYZERTAB.JSX - Antigravity AI Audio & Speech Sharia Compliance Analyzer
  * 
  * ROLE: Analyzes audio/video files for background music detection, Sharia speech compliance,
- *       and custom speech auditing using Antigravity Multimodal Audio intelligence.
+ *       target keyword watchlists, and custom speech auditing using Antigravity Multimodal Audio intelligence.
  */
 
 import { useState, useRef, useEffect } from "react";
@@ -31,7 +31,9 @@ import {
   Scale,
   MessageSquareQuote,
   Edit3,
-  RotateCcw
+  RotateCcw,
+  Tag,
+  Hash
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
@@ -47,6 +49,8 @@ Identify and locate every spoken phrase, dialogue, or statement that falls into 
 
 const PROFANITY_PRESET_PROMPT = `Analyze the spoken audio to detect all swear words, profanity, crude insults, sexual innuendo, and vulgar expressions.`;
 
+const DEFAULT_SHARIA_KEYWORDS = "Jesus, Christ, Lord, swear, bet, casino, wine, alcohol, beer";
+
 const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
   const [file, setFile] = useState(null);
   const [libraryFilePath, setLibraryFilePath] = useState(null);
@@ -60,6 +64,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
   const [chunkDuration, setChunkDuration] = useState(1800); // 30 minutes
   const [analysisMode, setAnalysisMode] = useState("sharia_compliance"); // "sharia_compliance" | "music" | "custom_speech"
   const [customPrompt, setCustomPrompt] = useState(SHARIA_PRESET_PROMPT);
+  const [keywords, setKeywords] = useState(DEFAULT_SHARIA_KEYWORDS);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [activeView, setActiveView] = useState("cues"); // "cues" | "srt"
   const fileInputRef = useRef(null);
@@ -71,10 +76,13 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     setAnalysisMode(mode);
     if (mode === "sharia_compliance") {
       setCustomPrompt(SHARIA_PRESET_PROMPT);
+      setKeywords(DEFAULT_SHARIA_KEYWORDS);
     } else if (mode === "custom_speech") {
       setCustomPrompt(PROFANITY_PRESET_PROMPT);
+      setKeywords("");
     } else {
       setCustomPrompt("");
+      setKeywords("");
     }
   };
 
@@ -165,6 +173,9 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
       if (customPrompt && customPrompt.trim()) {
         formData.append("custom_prompt", customPrompt.trim());
       }
+      if (keywords && keywords.trim()) {
+        formData.append("keywords", keywords.trim());
+      }
 
       response = await axios.post(`${BACKEND_URL}/api/music-analyzer/analyze`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -218,6 +229,11 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     return "bg-blue-500/20 text-blue-300 border-blue-500/40";
   };
 
+  // Keyword chip pills
+  const parsedKeywordList = keywords
+    ? keywords.split(',').map(k => k.trim()).filter(Boolean)
+    : [];
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
@@ -235,7 +251,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                AI speech analysis for Sharia rulings, profanity/cursing, forbidden vice, or background music with SRT subtitle export.
+                AI speech analysis for Sharia rulings, specific keyword watchlists, or background music with SRT subtitle export.
               </p>
             </div>
           </div>
@@ -270,6 +286,41 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
             <span>{m.label}</span>
           </button>
         ))}
+      </div>
+
+      {/* Specific Target Keywords Watchlist Input */}
+      <div className="bg-dark-900/70 p-4 rounded-xl border border-white/10 shadow-md space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5" />
+            <span>Target Keywords Watchlist (Separated by commas)</span>
+          </label>
+          <span className="text-[10px] text-gray-400">
+            {parsedKeywordList.length} keywords active
+          </span>
+        </div>
+
+        <input
+          type="text"
+          value={keywords}
+          onChange={(e) => setKeywords(e.target.value)}
+          placeholder="e.g. Jesus, Christ, swear, bet, casino, wine, beer..."
+          className="w-full bg-dark-950 text-white text-xs font-mono px-3.5 py-2.5 rounded-xl border border-white/10 focus:border-emerald-500/50 outline-none transition-colors"
+        />
+
+        {parsedKeywordList.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {parsedKeywordList.map((kw, i) => (
+              <span
+                key={i}
+                className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center gap-1"
+              >
+                <Hash className="w-2.5 h-2.5 text-emerald-400" />
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Custom Prompt & Rulebook Accordion */}

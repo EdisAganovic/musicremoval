@@ -2,7 +2,7 @@
 API ROUTES: music_analyzer.py - AI Music & Speech Sharia Compliance Analyzer
 
 Endpoints:
-  - POST /api/music-analyzer/analyze (Direct upload or library file path with mode & custom prompt)
+  - POST /api/music-analyzer/analyze (Direct upload or library file path with mode, custom prompt & keywords)
   - GET  /api/music-analyzer/status/{task_id} (Task progress polling)
   - GET  /api/music-analyzer/download-srt/{task_id} (Download .srt file)
 """
@@ -27,6 +27,7 @@ class MusicAnalyzeRequest(BaseModel):
     chunk_duration: Optional[int] = MAX_CHUNK_DURATION_SECONDS
     analysis_mode: Optional[str] = "music"
     custom_prompt: Optional[str] = None
+    keywords: Optional[str] = None
 
 
 def run_music_analysis_task(
@@ -34,7 +35,8 @@ def run_music_analysis_task(
     file_path: str,
     chunk_duration: int,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    keywords: Optional[str] = None
 ):
     """Background worker for Audio & Speech Analyzer."""
     try:
@@ -54,6 +56,7 @@ def run_music_analysis_task(
             chunk_duration=chunk_duration,
             analysis_mode=analysis_mode,
             custom_prompt=custom_prompt,
+            keywords=keywords,
             progress_callback=update_progress
         )
 
@@ -95,6 +98,7 @@ async def start_music_analysis(
     chunk_duration: int = Form(MAX_CHUNK_DURATION_SECONDS),
     analysis_mode: str = Form("music"),
     custom_prompt: Optional[str] = Form(None),
+    keywords: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
     """Start analyzing an audio/video file for music detection or speech compliance."""
@@ -122,7 +126,8 @@ async def start_music_analysis(
         "current_step": "Queued for analysis...",
         "file_name": os.path.basename(target_file),
         "file_path": target_file,
-        "analysis_mode": analysis_mode
+        "analysis_mode": analysis_mode,
+        "keywords": keywords or ""
     }
 
     background_tasks.add_task(
@@ -131,7 +136,8 @@ async def start_music_analysis(
         file_path=target_file,
         chunk_duration=chunk_duration,
         analysis_mode=analysis_mode,
-        custom_prompt=custom_prompt
+        custom_prompt=custom_prompt,
+        keywords=keywords
     )
 
     return {

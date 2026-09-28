@@ -182,16 +182,29 @@ def split_audio_into_chunks(
 def build_analysis_prompt(
     abs_chunk_path: str,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    keywords: Optional[str] = None
 ) -> str:
-    """Constructs tailored prompt based on selected analysis mode."""
+    """Constructs tailored prompt based on selected analysis mode and target keywords."""
+    keyword_instructions = ""
+    if keywords and keywords.strip():
+        kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        if kw_list:
+            kw_formatted = ", ".join(f'"{k}"' for k in kw_list)
+            keyword_instructions = (
+                f"\n\nSPECIFIC TARGET KEYWORDS WATCHLIST (Must actively monitor and flag):\n"
+                f"List of specific watch terms: [{kw_formatted}]\n"
+                "If any of these specific keywords or variations are spoken in the audio, flag them with exact timestamps, "
+                "the spoken sentence in 'quote', set 'category' to 'Specific Keyword Match: <keyword>', and provide an explanation in 'description'."
+            )
+
     if analysis_mode == "sharia_compliance":
         guidelines = custom_prompt.strip() if (custom_prompt and custom_prompt.strip()) else DEFAULT_SHARIA_PROMPT
         return (
             f"Listen carefully to the speech and audio in this file: \"{abs_chunk_path}\".\n\n"
-            f"AUDIT CRITERIA & GUIDELINES:\n{guidelines}\n\n"
+            f"AUDIT CRITERIA & GUIDELINES:\n{guidelines}{keyword_instructions}\n\n"
             "OUTPUT INSTRUCTIONS:\n"
-            "Detect and list every violation or non-compliant speech event with exact timestamps.\n"
+            "Detect and list every violation, non-compliant speech event, or keyword match with exact timestamps.\n"
             "Return ONLY a valid JSON array of objects. Do NOT include markdown codeblocks or conversational text.\n"
             "JSON Schema:\n"
             "[\n"
@@ -199,19 +212,19 @@ def build_analysis_prompt(
             "    \"start_seconds\": 14.5,\n"
             "    \"end_seconds\": 18.2,\n"
             "    \"quote\": \"Spoken sentence containing the violation\",\n"
-            "    \"category\": \"Profanity / Cursing | Blasphemy | Slander | Vice Promotion | Deception\",\n"
+            "    \"category\": \"Profanity / Cursing | Blasphemy | Slander | Vice Promotion | Deception | Keyword Match\",\n"
             "    \"severity\": \"Critical | High | Medium | Low\",\n"
-            "    \"description\": \"Explanation of why this violates Islamic ruling / speech ethics\",\n"
+            "    \"description\": \"Explanation of why this violates Islamic ruling / speech ethics / matches keyword\",\n"
             "    \"confidence\": \"high\"\n"
             "  }\n"
             "]\n"
-            "If no speech violations exist, return: []"
+            "If no speech violations or keyword matches exist, return: []"
         )
     elif analysis_mode == "custom_speech":
         guidelines = custom_prompt.strip() if (custom_prompt and custom_prompt.strip()) else DEFAULT_PROFANITY_PROMPT
         return (
             f"Listen carefully to this audio file: \"{abs_chunk_path}\".\n\n"
-            f"ANALYSIS TASK & RULES:\n{guidelines}\n\n"
+            f"ANALYSIS TASK & RULES:\n{guidelines}{keyword_instructions}\n\n"
             "OUTPUT INSTRUCTIONS:\n"
             "Return ONLY a valid JSON array of objects. Do NOT include markdown codeblocks or conversational text.\n"
             "JSON Schema:\n"
@@ -234,7 +247,7 @@ def build_analysis_prompt(
         return (
             f"Listen carefully to this audio file at: \"{abs_chunk_path}\".\n"
             "Your task: Detect and identify all intervals/timestamps where background music, "
-            f"instrumental score, theme songs, beats, or musical accompaniment appear.{user_addendum}\n\n"
+            f"instrumental score, theme songs, beats, or musical accompaniment appear.{user_addendum}{keyword_instructions}\n\n"
             "Instructions:\n"
             "1. Identify the exact start and end time of every music segment.\n"
             "2. Provide a brief description of the music style (e.g. 'Dramatic orchestral score', 'Acoustic guitar background', 'Upbeat electronic theme', 'Mellow ambient piano').\n"
@@ -257,13 +270,19 @@ def analyze_chunk_with_agy(
     chunk_path: str,
     start_offset: float = 0.0,
     analysis_mode: str = "music",
-    custom_prompt: Optional[str] = None
+    custom_prompt: Optional[str] = None,
+    keywords: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Sends an audio chunk to Antigravity CLI and parses the resulting timestamps.
     """
     abs_chunk_path = os.path.abspath(chunk_path)
-    prompt = build_analysis_prompt(abs_chunk_path, analysis_mode=analysis_mode, custom_prompt=custom_prompt)
+    prompt = build_analysis_prompt(
+        abs_chunk_path,
+        analysis_mode=analysis_mode,
+        custom_prompt=custom_prompt,
+        keywords=keywords
+    )
 
     cmd = [
         agy_exe,
@@ -416,6 +435,7 @@ def process_music_analysis(
     chunk_duration: int = MAX_CHUNK_DURATION_SECONDS,
     analysis_mode: str = "music",
     custom_prompt: Optional[str] = None,
+    keywords: Optional[str] = None,
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
@@ -463,7 +483,8 @@ def process_music_analysis(
                 chunk_path=chunk["path"],
                 start_offset=chunk["start_offset"],
                 analysis_mode=analysis_mode,
-                custom_prompt=custom_prompt
+                custom_prompt=custom_prompt,
+                keywords=keywords
             )
             all_events.extend(chunk_events)
 
@@ -490,6 +511,7 @@ def process_music_analysis(
         summary = {
             "file_name": os.path.basename(input_file),
             "analysis_mode": analysis_mode,
+            "target_keywords": keywords or "",
             "total_duration_seconds": round(total_duration, 2),
             "total_flagged_seconds": round(flagged_duration, 2),
             "flagged_percentage": flagged_percentage,
