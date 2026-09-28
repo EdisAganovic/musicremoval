@@ -31,6 +31,7 @@ import SeparationTab from './components/SeparationTab';
 import DownloaderTab from './components/DownloaderTab';
 import LibraryTab from './components/LibraryTab';
 import AudioStudioTab from './components/AudioStudioTab';
+import MusicAnalyzerTab from './components/MusicAnalyzerTab';
 import NotificationBell from './components/NotificationBell';
 import DiagnosticsPanel from './components/DiagnosticsPanel';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -38,7 +39,7 @@ import { AudioPlayerProvider } from './contexts/AudioPlayerContext';
 import AudioPlayer from './components/AudioPlayer';
 import { APP_VERSION, APP_NAME, BACKEND_URL } from './config';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle, Activity, Sliders } from 'lucide-react';
+import { AudioLines, Download, Music, Library, Terminal, X, Trash2, Cpu, Info, AlertCircle, Activity, Sliders, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import { Toaster } from 'react-hot-toast';
 
@@ -214,11 +215,11 @@ function AppContent() {
         {/* Tab Navigation - Pill Style */}
         <div className="flex justify-center">
           <div className="bg-dark-900/50 backdrop-blur-md p-1 rounded-full inline-flex border border-white/5 shadow-xl relative">
-            {['separation', 'studio', 'downloader', 'library'].map((tab) => (
+            {['separation', 'analyzer', 'studio', 'downloader', 'library'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`relative px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 z-10 flex items-center space-x-2 outline-none focus:outline-none ${activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-white'
+                className={`relative px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 z-10 flex items-center space-x-2 outline-none focus:outline-none ${activeTab === tab ? 'text-white' : 'text-gray-400 hover:text-white'
                   }`}
               >
                 {activeTab === tab && (
@@ -229,8 +230,8 @@ function AppContent() {
                   />
                 )}
                 <span className="relative z-10 flex items-center space-x-2">
-                  {tab === 'separation' ? <AudioLines className="w-4 h-4" /> : tab === 'studio' ? <Sliders className="w-4 h-4 text-amber-300" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
-                  <span className="capitalize">{tab === 'studio' ? 'Audio Studio' : tab === 'downloader' ? 'Downloader' : tab}</span>
+                  {tab === 'separation' ? <AudioLines className="w-4 h-4" /> : tab === 'analyzer' ? <Sparkles className="w-4 h-4 text-purple-300" /> : tab === 'studio' ? <Sliders className="w-4 h-4 text-amber-300" /> : tab === 'downloader' ? <Download className="w-4 h-4" /> : <Library className="w-4 h-4" />}
+                  <span className="capitalize">{tab === 'analyzer' ? 'Music Analyzer' : tab === 'studio' ? 'Audio Studio' : tab === 'downloader' ? 'Downloader' : tab}</span>
                 </span>
               </button>
             ))}
@@ -258,6 +259,23 @@ function AppContent() {
               initialBatchId={bulkSeparateBatchId}
               onExternalBatchConsumed={() => setBulkSeparateBatchId(null)}
               onClearBatchId={() => setBulkSeparateBatchId(null)}
+            />
+          </motion.div>
+
+          {/* Music Analyzer Tab */}
+          <motion.div
+            key="analyzer"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: activeTab === 'analyzer' ? 1 : 0 }}
+            transition={{ duration: 0.15 }}
+            {...getTabPanelProps('analyzer')}
+            className="glass-card p-6 md:p-8 border border-white/5 bg-gradient-to-b from-dark-800/80 to-dark-900/80 shadow-xl"
+          >
+            <MusicAnalyzerTab
+              isActive={activeTab === 'analyzer'}
+              onSendToStudio={(filePath) => {
+                setActiveTab('studio');
+              }}
             />
           </motion.div>
 

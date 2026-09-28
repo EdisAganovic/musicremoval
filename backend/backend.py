@@ -56,6 +56,7 @@ from routes.library import router as library_router
 from routes.notifications import router as notifications_router
 from routes.diagnostics import router as diagnostics_router
 from routes.audio_project import router as audio_project_router
+from routes.music_analyzer import router as music_analyzer_router
 from fastapi.staticfiles import StaticFiles
 
 app.include_router(downloads_router)
@@ -64,6 +65,7 @@ app.include_router(library_router)
 app.include_router(notifications_router)
 app.include_router(diagnostics_router)
 app.include_router(audio_project_router)
+app.include_router(music_analyzer_router)
 
 os.makedirs("projects", exist_ok=True)
 app.mount("/projects", StaticFiles(directory="projects"), name="projects")
