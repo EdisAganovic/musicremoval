@@ -46,12 +46,14 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 - **Loop Toggle** — Repeat playback for precise editing
 - **Spacebar Shortcut** — Play/pause with keyboard shortcut
 
-### ✨ Antigravity Music Analyzer (AI Music Cues & SRT Generation)
-- **Multimodal AI Acoustic Analysis** — Directly analyzes waveforms using Antigravity AI (`agy`) to pinpoint timestamps where background music, scores, or theme tracks appear
+### ✨ Antigravity Audio & Speech Analyzer (Sharia Speech Compliance & Music SRTs)
+- **Multimodal AI Speech & Acoustic Analysis** — Analyzes speech and audio using Antigravity AI (`agy`) to pinpoint timestamps where background music, cursing/profanity, or Sharia non-compliant speech occurs
+- **⚖️ Sharia Speech Compliance Mode** — Automated Islamic ruling audit detecting cursing/vulgarity (*Fahishah*), blasphemy/shirk (*Kufr/Shirk*), slander/backbiting (*Qadhf/Gheebah*), forbidden vice promotion (intoxicants, gambling, usury, illicit relations), and deception with direct quote extraction and severity ratings
+- **✍️ Customizable Speech Prompt & Rules** — User-editable rulebook and custom prompt injection to add specific forbidden terms, slang, or custom content policies
 - **30-Minute Optimum Precision Chunks** — Auto-splits long media into <= 30-minute high-fidelity chunks to ensure maximum acoustic resolution within model token limits and under 100MB file size
-- **Automatic SRT Subtitle Generation** — Produces standard `.srt` subtitle files with millisecond timestamps (`00:01:15,200 --> 00:02:40,000`) and stylistic descriptions for immediate use in video editors or DAWs
-- **Interactive Cue Sheet UI** — Live clickable cue sheet timeline with click-to-play streaming, copy SRT to clipboard, and direct `.srt` download
-- **JSON Cue Sheet Export** — Generates structured event timelines with music percentage, duration stats, and confidence levels
+- **Automatic SRT Subtitle Generation** — Produces standard `.srt` subtitle files with millisecond timestamps (`00:01:15,200 --> 00:02:40,000`), quotes, and severity levels for quick editing, muting, or bleeping in DAWs/video editors
+- **Interactive Cue Sheet & Audit Report UI** — Live clickable audit timeline with click-to-play streaming, copy SRT to clipboard, and direct `.srt` download
+- **JSON Cue Sheet Export** — Generates structured event timelines with violation statistics, flagged duration, and confidence levels
 
 ### 🎛️ Audio Studio (Multi-Track DAW)
 - **Project Workspaces** — Create persistent multi-track projects from any library file

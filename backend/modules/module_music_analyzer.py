@@ -1,16 +1,16 @@
 """
-MODULE: module_music_analyzer.py - AI Music Detection & SRT Timestamp Generator
+MODULE: module_music_analyzer.py - AI Audio, Music & Sharia Speech Compliance Analyzer
 
-ROLE: Analyzes audio/video files to detect where background music and soundtrack stems appear,
-      respecting 30-minute chunk limits and 100MB prompt constraints, and produces standard SRT subtitle files.
+ROLE: Analyzes audio/video files using Antigravity Multimodal Audio intelligence:
+      1. Music & Soundtrack Interval Detection
+      2. Sharia Speech & Content Compliance (Cursing, Profanity, Blasphemy, Slander, Vice Promotion)
+      3. Custom User-Defined Speech Auditing & Timestamped SRT Subtitle Generation
 
-WORKFLOW:
-  1. Inspect file duration via FFprobe.
-  2. Split long audio (>30 minutes) into <= 30-minute high-fidelity chunks (MP3/WAV <100MB).
-  3. Send each chunk to Antigravity CLI (`agy --dangerously-skip-permissions -p "..."`) with multimodal audio prompt.
-  4. Parse detected music intervals and adjust offsets (+1800s per chunk).
-  5. Merge contiguous/overlapping music intervals.
-  6. Generate standard .srt subtitle files and structured JSON cue sheets.
+FEATURES:
+  - 30-minute optimum chunk splitting (<100MB per chunk)
+  - Multimodal audio analysis via Antigravity CLI (`agy.exe --dangerously-skip-permissions -p "..."`)
+  - Subtitle generation in standard .srt format and structured JSON cue sheets
+  - Customizable prompt presets and user prompt overrides
 """
 
 import os
@@ -36,24 +36,36 @@ except ImportError:
 
 MAX_CHUNK_DURATION_SECONDS = 1800  # 30 minutes optimal precision limit
 
+DEFAULT_SHARIA_PROMPT = (
+    "Analyze the spoken audio carefully against Islamic rulings (Sharia guidelines on speech) and ethical standards.\n"
+    "Identify and locate every spoken phrase, dialogue, or statement that falls into the following violation categories:\n"
+    "1. Profanity, Cursing & Vulgarity (Fahishah / Sabb): Curse words, swear words, obscene slang, sexually explicit speech, crude insults.\n"
+    "2. Blasphemy & Sacred Transgressions (Kufr / Shirk / Istihza'): Mocking God, prophets, sacred scriptures, religion, or endorsing idolatry/sorcery.\n"
+    "3. Slander, Defamation & Malicious Gossip (Qadhf / Gheebah / Nameemah): Backbiting, false moral accusations, spreading rumors to damage honor.\n"
+    "4. Vice & Forbidden Promotion (Haram / Fasād): Promoting, justifying, or glamorizing intoxicants/drugs/alcohol, gambling (Maysir), interest/usury (Riba), or illicit relations (Zina).\n"
+    "5. Deception, Perjury & Falsehood (Kidhb / Shahadat al-Zoor): Promoting scams, lying, or encouraging deceit.\n"
+    "6. Violence & Injustice: Inciting unlawful aggression or cruelty."
+)
+
+DEFAULT_PROFANITY_PROMPT = (
+    "Analyze the spoken audio to detect all swear words, profanity, crude insults, sexual innuendo, and vulgar expressions."
+)
+
 
 def find_agy_executable() -> Optional[str]:
     """Locate the agy CLI executable on the system."""
-    # Check default Windows AppData path
     local_app_data = os.environ.get("LOCALAPPDATA", "")
     if local_app_data:
         candidate = os.path.join(local_app_data, "agy", "bin", "agy.exe")
         if os.path.isfile(candidate):
             return candidate
 
-    # Check user profile path
     user_profile = os.environ.get("USERPROFILE", "")
     if user_profile:
         candidate = os.path.join(user_profile, "AppData", "Local", "agy", "bin", "agy.exe")
         if os.path.isfile(candidate):
             return candidate
 
-    # Check PATH
     which_agy = shutil.which("agy") or shutil.which("agy.exe")
     if which_agy:
         return which_agy
@@ -89,7 +101,6 @@ def parse_timestamp_to_seconds(ts_str: Any) -> Optional[float]:
         return float(ts_str)
 
     s = str(ts_str).strip().replace(",", ".")
-    # Match HH:MM:SS.mmm or MM:SS.mmm
     parts = s.split(":")
     try:
         if len(parts) == 3:
@@ -116,7 +127,6 @@ def split_audio_into_chunks(
     """
     duration = get_audio_duration(input_path)
     if not duration or duration <= 0:
-        # Fallback probe
         duration = 1800.0
 
     chunks = []
@@ -169,35 +179,91 @@ def split_audio_into_chunks(
     return chunks
 
 
+def build_analysis_prompt(
+    abs_chunk_path: str,
+    analysis_mode: str = "music",
+    custom_prompt: Optional[str] = None
+) -> str:
+    """Constructs tailored prompt based on selected analysis mode."""
+    if analysis_mode == "sharia_compliance":
+        guidelines = custom_prompt.strip() if (custom_prompt and custom_prompt.strip()) else DEFAULT_SHARIA_PROMPT
+        return (
+            f"Listen carefully to the speech and audio in this file: \"{abs_chunk_path}\".\n\n"
+            f"AUDIT CRITERIA & GUIDELINES:\n{guidelines}\n\n"
+            "OUTPUT INSTRUCTIONS:\n"
+            "Detect and list every violation or non-compliant speech event with exact timestamps.\n"
+            "Return ONLY a valid JSON array of objects. Do NOT include markdown codeblocks or conversational text.\n"
+            "JSON Schema:\n"
+            "[\n"
+            "  {\n"
+            "    \"start_seconds\": 14.5,\n"
+            "    \"end_seconds\": 18.2,\n"
+            "    \"quote\": \"Spoken sentence containing the violation\",\n"
+            "    \"category\": \"Profanity / Cursing | Blasphemy | Slander | Vice Promotion | Deception\",\n"
+            "    \"severity\": \"Critical | High | Medium | Low\",\n"
+            "    \"description\": \"Explanation of why this violates Islamic ruling / speech ethics\",\n"
+            "    \"confidence\": \"high\"\n"
+            "  }\n"
+            "]\n"
+            "If no speech violations exist, return: []"
+        )
+    elif analysis_mode == "custom_speech":
+        guidelines = custom_prompt.strip() if (custom_prompt and custom_prompt.strip()) else DEFAULT_PROFANITY_PROMPT
+        return (
+            f"Listen carefully to this audio file: \"{abs_chunk_path}\".\n\n"
+            f"ANALYSIS TASK & RULES:\n{guidelines}\n\n"
+            "OUTPUT INSTRUCTIONS:\n"
+            "Return ONLY a valid JSON array of objects. Do NOT include markdown codeblocks or conversational text.\n"
+            "JSON Schema:\n"
+            "[\n"
+            "  {\n"
+            "    \"start_seconds\": 12.0,\n"
+            "    \"end_seconds\": 16.5,\n"
+            "    \"quote\": \"Exact words spoken\",\n"
+            "    \"category\": \"Rule violation or speech tag\",\n"
+            "    \"severity\": \"High | Medium | Low\",\n"
+            "    \"description\": \"Description or reason for flag\",\n"
+            "    \"confidence\": \"high\"\n"
+            "  }\n"
+            "]\n"
+            "If no matching events occur, return: []"
+        )
+    else:
+        # Default: Background Music Detection
+        user_addendum = f"\nAdditional User Instructions: {custom_prompt.strip()}\n" if (custom_prompt and custom_prompt.strip()) else ""
+        return (
+            f"Listen carefully to this audio file at: \"{abs_chunk_path}\".\n"
+            "Your task: Detect and identify all intervals/timestamps where background music, "
+            f"instrumental score, theme songs, beats, or musical accompaniment appear.{user_addendum}\n\n"
+            "Instructions:\n"
+            "1. Identify the exact start and end time of every music segment.\n"
+            "2. Provide a brief description of the music style (e.g. 'Dramatic orchestral score', 'Acoustic guitar background', 'Upbeat electronic theme', 'Mellow ambient piano').\n"
+            "3. Return ONLY a valid JSON array of objects. Do NOT include markdown codeblocks or extra conversational text.\n"
+            "Schema:\n"
+            "[\n"
+            "  {\n"
+            "    \"start_seconds\": 14.5,\n"
+            "    \"end_seconds\": 85.0,\n"
+            "    \"description\": \"Upbeat acoustic guitar background music\",\n"
+            "    \"confidence\": \"high\"\n"
+            "  }\n"
+            "]\n"
+            "If absolutely no music appears in the entire audio, return an empty array: []"
+        )
+
+
 def analyze_chunk_with_agy(
     agy_exe: str,
     chunk_path: str,
-    start_offset: float = 0.0
+    start_offset: float = 0.0,
+    analysis_mode: str = "music",
+    custom_prompt: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
-    Sends an audio chunk to Antigravity CLI and parses the resulting music timestamps.
+    Sends an audio chunk to Antigravity CLI and parses the resulting timestamps.
     """
     abs_chunk_path = os.path.abspath(chunk_path)
-    
-    prompt = (
-        f"Listen carefully to this audio file at: \"{abs_chunk_path}\".\n"
-        "Your task: Detect and identify all intervals/timestamps where background music, "
-        "instrumental score, theme songs, beats, or musical accompaniment appear.\n\n"
-        "Instructions:\n"
-        "1. Identify the exact start and end time of every music segment.\n"
-        "2. Provide a brief description of the music style (e.g. 'Dramatic orchestral score', 'Acoustic guitar background', 'Upbeat electronic theme', 'Mellow ambient piano').\n"
-        "3. Return ONLY a valid JSON array of objects. Do NOT include markdown codeblocks or extra conversational text.\n"
-        "Schema:\n"
-        "[\n"
-        "  {\n"
-        "    \"start_seconds\": 14.5,\n"
-        "    \"end_seconds\": 85.0,\n"
-        "    \"description\": \"Upbeat acoustic guitar background music\",\n"
-        "    \"confidence\": \"high\"\n"
-        "  }\n"
-        "]\n"
-        "If absolutely no music appears in the entire audio, return an empty array: []"
-    )
+    prompt = build_analysis_prompt(abs_chunk_path, analysis_mode=analysis_mode, custom_prompt=custom_prompt)
 
     cmd = [
         agy_exe,
@@ -235,8 +301,12 @@ def analyze_chunk_with_agy(
             if start_sec is not None and end_sec is not None and end_sec > start_sec:
                 adj_start = start_sec + start_offset
                 adj_end = end_sec + start_offset
-                desc = item.get("description", "Background Music").strip()
+                desc = item.get("description") or item.get("reason") or "Flagged Segment"
+                desc = str(desc).strip()
                 conf = item.get("confidence", "high").strip()
+                quote = item.get("quote", "").strip()
+                category = item.get("category", "General").strip()
+                severity = item.get("severity", "Medium").strip()
 
                 results.append({
                     "start_seconds": round(adj_start, 2),
@@ -245,6 +315,9 @@ def analyze_chunk_with_agy(
                     "end_srt": format_seconds_to_srt_time(adj_end),
                     "duration_seconds": round(adj_end - adj_start, 2),
                     "description": desc,
+                    "quote": quote,
+                    "category": category,
+                    "severity": severity,
                     "confidence": conf
                 })
         return results
@@ -253,21 +326,39 @@ def analyze_chunk_with_agy(
         return []
 
 
-def merge_music_intervals(intervals: List[Dict[str, Any]], max_gap_seconds: float = 2.0) -> List[Dict[str, Any]]:
+def merge_intervals(intervals: List[Dict[str, Any]], max_gap_seconds: float = 1.5, analysis_mode: str = "music") -> List[Dict[str, Any]]:
     """
-    Merges overlapping or adjacent music intervals (gap <= max_gap_seconds).
+    Merges overlapping or immediately adjacent intervals.
     """
     if not intervals:
         return []
 
     sorted_ints = sorted(intervals, key=lambda x: x["start_seconds"])
+    
+    if analysis_mode != "music":
+        # For speech compliance, keep individual quotes distinct unless they overlap
+        merged = []
+        for item in sorted_ints:
+            if not merged:
+                merged.append(item.copy())
+                continue
+            prev = merged[-1]
+            if item["start_seconds"] < prev["end_seconds"]:
+                # True overlap: update end time and append description
+                prev["end_seconds"] = max(prev["end_seconds"], item["end_seconds"])
+                prev["end_srt"] = format_seconds_to_srt_time(prev["end_seconds"])
+                prev["duration_seconds"] = round(prev["end_seconds"] - prev["start_seconds"], 2)
+                if item.get("quote") and item["quote"] not in prev.get("quote", ""):
+                    prev["quote"] = (prev.get("quote", "") + " | " + item["quote"]).strip(" |")
+            else:
+                merged.append(item.copy())
+        return merged
+
+    # For music intervals, merge close gaps
     merged = []
-    
     current = sorted_ints[0].copy()
-    
     for nxt in sorted_ints[1:]:
         if nxt["start_seconds"] <= current["end_seconds"] + max_gap_seconds:
-            # Merge
             current["end_seconds"] = max(current["end_seconds"], nxt["end_seconds"])
             current["end_srt"] = format_seconds_to_srt_time(current["end_seconds"])
             current["duration_seconds"] = round(current["end_seconds"] - current["start_seconds"], 2)
@@ -276,22 +367,44 @@ def merge_music_intervals(intervals: List[Dict[str, Any]], max_gap_seconds: floa
         else:
             merged.append(current)
             current = nxt.copy()
-            
     merged.append(current)
     return merged
 
 
-def generate_srt_content(events: List[Dict[str, Any]]) -> str:
-    """Generates standard SRT file string from music event list."""
+def generate_srt_content(events: List[Dict[str, Any]], analysis_mode: str = "music") -> str:
+    """Generates standard SRT file string from event list."""
     lines = []
     for idx, event in enumerate(events, start=1):
         start_srt = event.get("start_srt") or format_seconds_to_srt_time(event["start_seconds"])
         end_srt = event.get("end_srt") or format_seconds_to_srt_time(event["end_seconds"])
-        desc = event.get("description", "Background Music")
         
         lines.append(f"{idx}")
         lines.append(f"{start_srt} --> {end_srt}")
-        lines.append(f"[Music: {desc}]")
+
+        if analysis_mode == "sharia_compliance":
+            cat = event.get("category", "Sharia Flag")
+            sev = event.get("severity", "High")
+            quote = event.get("quote", "")
+            desc = event.get("description", "")
+            
+            lines.append(f"[SHARIA AUDIT: {cat} | Severity: {sev}]")
+            if quote:
+                lines.append(f"Quote: \"{quote}\"")
+            if desc:
+                lines.append(f"Reason: {desc}")
+        elif analysis_mode == "custom_speech":
+            cat = event.get("category", "Speech Flag")
+            quote = event.get("quote", "")
+            desc = event.get("description", "")
+            lines.append(f"[FLAG: {cat}]")
+            if quote:
+                lines.append(f"Quote: \"{quote}\"")
+            if desc:
+                lines.append(f"Note: {desc}")
+        else:
+            desc = event.get("description", "Background Music")
+            lines.append(f"[Music: {desc}]")
+            
         lines.append("")
 
     return "\n".join(lines).strip() + "\n"
@@ -301,10 +414,12 @@ def process_music_analysis(
     input_file: str,
     output_dir: Optional[str] = None,
     chunk_duration: int = MAX_CHUNK_DURATION_SECONDS,
+    analysis_mode: str = "music",
+    custom_prompt: Optional[str] = None,
     progress_callback: Optional[Callable[[int, str], None]] = None
 ) -> Dict[str, Any]:
     """
-    Full music analysis pipeline:
+    Full audio/speech analysis pipeline:
     1. Splits file into <= 30min chunks (<100MB).
     2. Runs Antigravity multimodal audio analysis on each chunk.
     3. Merges timeline and formats SRT & JSON.
@@ -323,11 +438,12 @@ def process_music_analysis(
     base_name = os.path.splitext(os.path.basename(input_file))[0]
     total_duration = get_audio_duration(input_file) or 0.0
 
-    temp_dir = tempfile.mkdtemp(prefix="music_analyzer_")
+    temp_dir = tempfile.mkdtemp(prefix="audio_analyzer_")
     
     try:
         if progress_callback:
-            progress_callback(10, "Extracting audio and splitting into 30m precision chunks...")
+            mode_label = "Sharia Compliance" if analysis_mode == "sharia_compliance" else "Speech Audit" if analysis_mode == "custom_speech" else "Music Detection"
+            progress_callback(10, f"Extracting audio & splitting into 30m precision chunks ({mode_label})...")
 
         chunks = split_audio_into_chunks(input_file, temp_dir, chunk_duration=chunk_duration)
         if not chunks:
@@ -345,34 +461,38 @@ def process_music_analysis(
             chunk_events = analyze_chunk_with_agy(
                 agy_exe=agy_exe,
                 chunk_path=chunk["path"],
-                start_offset=chunk["start_offset"]
+                start_offset=chunk["start_offset"],
+                analysis_mode=analysis_mode,
+                custom_prompt=custom_prompt
             )
             all_events.extend(chunk_events)
 
         if progress_callback:
-            progress_callback(90, "Merging timestamps and formatting SRT subtitle...")
+            progress_callback(90, "Merging timestamps and formatting SRT subtitle cue sheet...")
 
-        merged_events = merge_music_intervals(all_events)
-        srt_content = generate_srt_content(merged_events)
+        merged_events = merge_intervals(all_events, analysis_mode=analysis_mode)
+        srt_content = generate_srt_content(merged_events, analysis_mode=analysis_mode)
 
         # Save SRT file
-        srt_filename = f"{base_name}_music.srt"
+        tag = "sharia_audit" if analysis_mode == "sharia_compliance" else "speech_audit" if analysis_mode == "custom_speech" else "music"
+        srt_filename = f"{base_name}_{tag}.srt"
         srt_path = os.path.join(output_dir, srt_filename)
         with open(srt_path, "w", encoding="utf-8") as f:
             f.write(srt_content)
 
         # Save JSON cue sheet
-        json_filename = f"{base_name}_music.json"
+        json_filename = f"{base_name}_{tag}.json"
         json_path = os.path.join(output_dir, json_filename)
         
-        total_music_duration = sum(e["duration_seconds"] for e in merged_events)
-        music_percentage = round((total_music_duration / total_duration * 100), 1) if total_duration > 0 else 0.0
+        flagged_duration = sum(e["duration_seconds"] for e in merged_events)
+        flagged_percentage = round((flagged_duration / total_duration * 100), 1) if total_duration > 0 else 0.0
 
         summary = {
             "file_name": os.path.basename(input_file),
+            "analysis_mode": analysis_mode,
             "total_duration_seconds": round(total_duration, 2),
-            "total_music_seconds": round(total_music_duration, 2),
-            "music_percentage": music_percentage,
+            "total_flagged_seconds": round(flagged_duration, 2),
+            "flagged_percentage": flagged_percentage,
             "segment_count": len(merged_events),
             "chunks_analyzed": total_chunks,
             "chunk_limit_seconds": chunk_duration
@@ -389,10 +509,11 @@ def process_music_analysis(
             json.dump(output_data, f, indent=2, ensure_ascii=False)
 
         if progress_callback:
-            progress_callback(100, "Music analysis complete!")
+            progress_callback(100, f"Analysis complete! Found {len(merged_events)} flagged segments.")
 
         return {
             "status": "completed",
+            "analysis_mode": analysis_mode,
             "srt_path": srt_path,
             "srt_content": srt_content,
             "json_path": json_path,

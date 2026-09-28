@@ -1,8 +1,8 @@
 """
-API ROUTES: music_analyzer.py - AI Music Detection & SRT Subtitle Generator
+API ROUTES: music_analyzer.py - AI Music & Speech Sharia Compliance Analyzer
 
 Endpoints:
-  - POST /api/music-analyzer/analyze (Direct upload or library file path)
+  - POST /api/music-analyzer/analyze (Direct upload or library file path with mode & custom prompt)
   - GET  /api/music-analyzer/status/{task_id} (Task progress polling)
   - GET  /api/music-analyzer/download-srt/{task_id} (Download .srt file)
 """
@@ -25,10 +25,18 @@ router = APIRouter(prefix="/api/music-analyzer", tags=["music-analyzer"])
 class MusicAnalyzeRequest(BaseModel):
     file_path: str
     chunk_duration: Optional[int] = MAX_CHUNK_DURATION_SECONDS
+    analysis_mode: Optional[str] = "music"
+    custom_prompt: Optional[str] = None
 
 
-def run_music_analysis_task(task_id: str, file_path: str, chunk_duration: int):
-    """Background worker for Music Analyzer."""
+def run_music_analysis_task(
+    task_id: str,
+    file_path: str,
+    chunk_duration: int,
+    analysis_mode: str = "music",
+    custom_prompt: Optional[str] = None
+):
+    """Background worker for Audio & Speech Analyzer."""
     try:
         def update_progress(pct: int, step_desc: str):
             if task_id in tasks:
@@ -38,27 +46,31 @@ def run_music_analysis_task(task_id: str, file_path: str, chunk_duration: int):
 
         tasks[task_id]["status"] = "processing"
         tasks[task_id]["progress"] = 5
-        tasks[task_id]["current_step"] = "Initializing Antigravity Music Analyzer..."
+        tasks[task_id]["current_step"] = "Initializing Antigravity Analyzer..."
 
         result = process_music_analysis(
             input_file=file_path,
             output_dir=NOMUSIC_DIR,
             chunk_duration=chunk_duration,
+            analysis_mode=analysis_mode,
+            custom_prompt=custom_prompt,
             progress_callback=update_progress
         )
 
         tasks[task_id]["status"] = "completed"
         tasks[task_id]["progress"] = 100
-        tasks[task_id]["current_step"] = "Music analysis completed!"
+        tasks[task_id]["current_step"] = "Analysis completed!"
         tasks[task_id]["result"] = result
         tasks[task_id]["srt_path"] = result.get("srt_path")
         tasks[task_id]["srt_content"] = result.get("srt_content")
         tasks[task_id]["summary"] = result.get("summary")
         tasks[task_id]["events"] = result.get("events")
+        tasks[task_id]["analysis_mode"] = analysis_mode
 
+        title_tag = "Sharia Speech Audit" if analysis_mode == "sharia_compliance" else "Speech Audit" if analysis_mode == "custom_speech" else "Music Analysis"
         add_notification(
-            title="Music Analysis Complete",
-            message=f"Generated music SRT for {os.path.basename(file_path)} with {result['summary']['segment_count']} segments.",
+            title=f"{title_tag} Complete",
+            message=f"Generated SRT for {os.path.basename(file_path)} with {result['summary']['segment_count']} segments.",
             type="success"
         )
     except Exception as e:
@@ -70,8 +82,8 @@ def run_music_analysis_task(task_id: str, file_path: str, chunk_duration: int):
             tasks[task_id]["current_step"] = f"Error: {str(e)}"
         
         add_notification(
-            title="Music Analysis Failed",
-            message=f"Failed to analyze music in {os.path.basename(file_path)}: {str(e)}",
+            title="Analysis Failed",
+            message=f"Failed to analyze {os.path.basename(file_path)}: {str(e)}",
             type="error"
         )
 
@@ -81,13 +93,14 @@ async def start_music_analysis(
     background_tasks: BackgroundTasks,
     file_path: Optional[str] = Form(None),
     chunk_duration: int = Form(MAX_CHUNK_DURATION_SECONDS),
+    analysis_mode: str = Form("music"),
+    custom_prompt: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
-    """Start analyzing an audio/video file to detect music timestamps."""
+    """Start analyzing an audio/video file for music detection or speech compliance."""
     target_file = None
 
     if file:
-        # Save uploaded file to temp/downloads
         os.makedirs(NOMUSIC_DIR, exist_ok=True)
         safe_name = os.path.basename(file.filename or "upload.mp3")
         target_file = os.path.join(NOMUSIC_DIR, f"temp_analyzer_{uuid.uuid4().hex[:8]}_{safe_name}")
@@ -108,26 +121,30 @@ async def start_music_analysis(
         "progress": 0,
         "current_step": "Queued for analysis...",
         "file_name": os.path.basename(target_file),
-        "file_path": target_file
+        "file_path": target_file,
+        "analysis_mode": analysis_mode
     }
 
     background_tasks.add_task(
         run_music_analysis_task,
         task_id=task_id,
         file_path=target_file,
-        chunk_duration=chunk_duration
+        chunk_duration=chunk_duration,
+        analysis_mode=analysis_mode,
+        custom_prompt=custom_prompt
     )
 
     return {
         "success": True,
         "task_id": task_id,
-        "message": "Music analysis started"
+        "analysis_mode": analysis_mode,
+        "message": "Analysis started"
     }
 
 
 @router.get("/status/{task_id}")
 async def get_music_analysis_status(task_id: str):
-    """Retrieve status, progress, and results of music analysis."""
+    """Retrieve status, progress, and results of analysis."""
     task = tasks.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

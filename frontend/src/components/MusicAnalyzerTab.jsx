@@ -1,8 +1,8 @@
 /**
- * MUSICANALYZERTAB.JSX - Antigravity AI Music Analyzer & SRT Generator
+ * MUSICANALYZERTAB.JSX - Antigravity AI Audio & Speech Sharia Compliance Analyzer
  * 
- * ROLE: Analyzes audio/video files to locate background music timestamps
- *       using Antigravity Multimodal Audio intelligence, outputting standard SRT files.
+ * ROLE: Analyzes audio/video files for background music detection, Sharia speech compliance,
+ *       and custom speech auditing using Antigravity Multimodal Audio intelligence.
  */
 
 import { useState, useRef, useEffect } from "react";
@@ -26,10 +26,26 @@ import {
   Sliders,
   Share2,
   ExternalLink,
-  Scissors
+  ShieldCheck,
+  AlertTriangle,
+  Scale,
+  MessageSquareQuote,
+  Edit3,
+  RotateCcw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
+
+const SHARIA_PRESET_PROMPT = `Analyze the spoken audio carefully against Islamic rulings (Sharia guidelines on speech) and ethical standards.
+Identify and locate every spoken phrase, dialogue, or statement that falls into the following violation categories:
+1. Profanity, Cursing & Vulgarity (Fahishah / Sabb): Curse words, swear words, obscene slang, sexually explicit speech, crude insults.
+2. Blasphemy & Sacred Transgressions (Kufr / Shirk / Istihza'): Mocking God, prophets, sacred scriptures, religion, or endorsing idolatry/sorcery.
+3. Slander, Defamation & Malicious Gossip (Qadhf / Gheebah / Nameemah): Backbiting, false moral accusations, spreading rumors to damage honor.
+4. Vice & Forbidden Promotion (Haram / Fasād): Promoting, justifying, or glamorizing intoxicants/drugs/alcohol, gambling (Maysir), interest/usury (Riba), or illicit relations (Zina).
+5. Deception, Perjury & Falsehood (Kidhb / Shahadat al-Zoor): Promoting scams, lying, or encouraging deceit.
+6. Violence & Injustice: Inciting unlawful aggression or cruelty.`;
+
+const PROFANITY_PRESET_PROMPT = `Analyze the spoken audio to detect all swear words, profanity, crude insults, sexual innuendo, and vulgar expressions.`;
 
 const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
   const [file, setFile] = useState(null);
@@ -42,10 +58,25 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
   const [error, setError] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [chunkDuration, setChunkDuration] = useState(1800); // 30 minutes
+  const [analysisMode, setAnalysisMode] = useState("sharia_compliance"); // "sharia_compliance" | "music" | "custom_speech"
+  const [customPrompt, setCustomPrompt] = useState(SHARIA_PRESET_PROMPT);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [activeView, setActiveView] = useState("cues"); // "cues" | "srt"
   const fileInputRef = useRef(null);
 
   const { playTrack } = useAudioPlayer();
+
+  // Switch default prompt on mode change
+  const handleModeChange = (mode) => {
+    setAnalysisMode(mode);
+    if (mode === "sharia_compliance") {
+      setCustomPrompt(SHARIA_PRESET_PROMPT);
+    } else if (mode === "custom_speech") {
+      setCustomPrompt(PROFANITY_PRESET_PROMPT);
+    } else {
+      setCustomPrompt("");
+    }
+  };
 
   // Polling effect for active analysis
   useEffect(() => {
@@ -62,9 +93,9 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
           if (data.status === "completed") {
             setAnalysisResult(data.result || data);
             clearInterval(interval);
-            toast.success("Music analysis complete!");
+            toast.success("Analysis complete!");
           } else if (data.status === "failed" || data.status === "error") {
-            setError(data.error || "Music analysis failed. Check logs.");
+            setError(data.error || "Analysis failed. Check logs.");
             setStatus("error");
             clearInterval(interval);
           }
@@ -123,19 +154,21 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
 
     try {
       let response;
+      const formData = new FormData();
       if (file) {
-        const formData = new FormData();
         formData.append("file", file);
-        formData.append("chunk_duration", chunkDuration);
-        response = await axios.post(`${BACKEND_URL}/api/music-analyzer/analyze`, formData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
       } else {
-        const formData = new FormData();
         formData.append("file_path", libraryFilePath);
-        formData.append("chunk_duration", chunkDuration);
-        response = await axios.post(`${BACKEND_URL}/api/music-analyzer/analyze`, formData);
       }
+      formData.append("chunk_duration", chunkDuration);
+      formData.append("analysis_mode", analysisMode);
+      if (customPrompt && customPrompt.trim()) {
+        formData.append("custom_prompt", customPrompt.trim());
+      }
+
+      response = await axios.post(`${BACKEND_URL}/api/music-analyzer/analyze`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
 
       setTaskId(response.data.task_id);
       setStatus("processing");
@@ -162,10 +195,10 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     
     playTrack({
       url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(targetPath)}`,
-      title: `${cue.description} (${cue.start_srt})`,
+      title: `${cue.category || cue.description} (${cue.start_srt})`,
       path: targetPath,
-      type: 'music-cue',
-      badge: 'MUSIC CUE'
+      type: 'cue',
+      badge: analysisMode === 'sharia_compliance' ? 'SHARIA FLAG' : 'AUDIO CUE'
     });
     toast.success(`Playing from ${cue.start_srt}`);
   };
@@ -177,36 +210,112 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const getSeverityBadge = (severity) => {
+    const s = (severity || "").toLowerCase();
+    if (s === "critical") return "bg-red-500/20 text-red-400 border-red-500/40";
+    if (s === "high") return "bg-orange-500/20 text-orange-400 border-orange-500/40";
+    if (s === "medium") return "bg-amber-500/20 text-amber-300 border-amber-500/40";
+    return "bg-blue-500/20 text-blue-300 border-blue-500/40";
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-purple-900/40 via-dark-900 to-primary-900/40 p-6 rounded-2xl border border-purple-500/20 shadow-xl">
+      <div className="bg-gradient-to-r from-emerald-950/40 via-dark-900 to-purple-950/40 p-6 rounded-2xl border border-emerald-500/20 shadow-xl">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center space-x-4">
-            <div className="p-3.5 bg-gradient-to-br from-purple-600 to-primary-600 rounded-xl shadow-lg shadow-purple-500/20">
-              <Sparkles className="w-7 h-7 text-white" />
+            <div className="p-3.5 bg-gradient-to-br from-emerald-600 to-teal-600 rounded-xl shadow-lg shadow-emerald-500/20">
+              <Scale className="w-7 h-7 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-white tracking-wide">Antigravity Music Analyzer</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                  Multimodal AI
+                <h2 className="text-xl font-bold text-white tracking-wide">Antigravity AI Audio & Speech Analyzer</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Multimodal Sharia & Speech Auditing
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Pinpoints where background music and soundtrack themes appear, and exports standard SRT subtitle cue sheets.
+                AI speech analysis for Sharia rulings, profanity/cursing, forbidden vice, or background music with SRT subtitle export.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 bg-dark-950/80 px-4 py-2.5 rounded-xl border border-white/5">
-            <Clock className="w-4 h-4 text-purple-400" />
+            <Clock className="w-4 h-4 text-emerald-400" />
             <div className="flex flex-col">
               <span className="text-[11px] font-bold text-gray-200">Segment Limit</span>
-              <span className="text-[10px] text-gray-400">30 Min Optimum Precision</span>
+              <span className="text-[10px] text-gray-400">30 Min Precision Windows</span>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Analysis Mode Selector */}
+      <div className="flex flex-wrap items-center justify-center gap-3 bg-dark-900/60 p-2.5 rounded-2xl border border-white/5 shadow-inner">
+        {[
+          { id: "sharia_compliance", label: "⚖️ Sharia Speech Compliance", desc: "Audits for cursing, blasphemy, slander, vice & forbidden speech" },
+          { id: "music", label: "🎵 Music & BGM Detection", desc: "Pinpoints background music intervals and themes" },
+          { id: "custom_speech", label: "✍️ Custom Speech Audit", desc: "Custom user guidelines or general profanity filtering" }
+        ].map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => handleModeChange(m.id)}
+            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 border flex flex-col items-center ${
+              analysisMode === m.id
+                ? "bg-emerald-600/20 text-emerald-300 border-emerald-500/50 shadow-lg shadow-emerald-500/10 scale-105"
+                : "bg-dark-800 text-gray-400 hover:text-white hover:bg-dark-700 border-transparent"
+            }`}
+          >
+            <span>{m.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Custom Prompt & Rulebook Accordion */}
+      <div className="bg-dark-900/70 p-4 rounded-xl border border-white/10 shadow-md">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Edit3 className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-bold text-white uppercase tracking-wider">
+              {analysisMode === "sharia_compliance" ? "Sharia Ruling Criteria & Speech Guidelines" : "Custom Speech Prompt & Rules"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPromptEditor(!showPromptEditor)}
+            className="text-xs text-emerald-400 hover:text-emerald-300 font-semibold underline"
+          >
+            {showPromptEditor ? "Hide Rule Editor" : "Customize Prompt & Criteria"}
+          </button>
+        </div>
+
+        {showPromptEditor && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className="mt-3 space-y-3"
+          >
+            <textarea
+              rows={6}
+              value={customPrompt}
+              onChange={(e) => setCustomPrompt(e.target.value)}
+              placeholder="Enter your custom speech analysis criteria, prohibited words, Islamic rulings, or guidelines..."
+              className="w-full bg-dark-950 text-gray-200 text-xs font-mono p-3 rounded-xl border border-white/10 focus:border-emerald-500/50 outline-none transition-colors"
+            />
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span>💡 You can add specific terms, slang, or specialized rulings to inspect.</span>
+              <button
+                type="button"
+                onClick={() => setCustomPrompt(analysisMode === "sharia_compliance" ? SHARIA_PRESET_PROMPT : PROFANITY_PRESET_PROMPT)}
+                className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset to Preset</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
       </div>
 
       {/* Upload & Dropzone Area */}
@@ -217,8 +326,8 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
         onClick={() => fileInputRef.current?.click()}
         className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300 ${
           dragging
-            ? 'border-purple-500 bg-purple-500/10 scale-[1.01]'
-            : 'border-white/10 hover:border-purple-500/40 bg-dark-900/40'
+            ? 'border-emerald-500 bg-emerald-500/10 scale-[1.01]'
+            : 'border-white/10 hover:border-emerald-500/40 bg-dark-900/40'
         }`}
       >
         <input
@@ -230,7 +339,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
         />
 
         <div className="flex flex-col items-center justify-center space-y-3">
-          <div className="p-4 bg-purple-600/20 rounded-full text-purple-400">
+          <div className="p-4 bg-emerald-600/20 rounded-full text-emerald-400">
             <UploadCloud className="w-8 h-8" />
           </div>
           <div>
@@ -238,7 +347,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
               {file ? file.name : libraryFilePath ? libraryFilePath.split(/[\\/]/).pop() : "Drop audio/video file here, or click to browse"}
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              Supports MP3, WAV, MP4, MKV, FLAC, AAC, M4A & all media formats
+              Supports MP3, WAV, MP4, MKV, FLAC, AAC, M4A & all media files
             </p>
           </div>
         </div>
@@ -255,7 +364,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                 type="button"
                 onClick={() => setChunkDuration(s)}
                 className={`px-2.5 py-1 rounded text-xs font-bold transition-all ${
-                  chunkDuration === s ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+                  chunkDuration === s ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >
                 {s === 1800 ? "30 min (Optimal)" : "15 min (Micro)"}
@@ -267,17 +376,17 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
         <button
           onClick={handleStartAnalysis}
           disabled={(!file && !libraryFilePath) || status === "processing" || status === "uploading"}
-          className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-primary-600 hover:from-purple-500 hover:to-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-purple-500/20 flex items-center justify-center space-x-2"
+          className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2"
         >
           {status === "processing" || status === "uploading" ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              <span>Analyzing Music...</span>
+              <span>Analyzing Speech & Audio...</span>
             </>
           ) : (
             <>
-              <Sparkles className="w-4 h-4" />
-              <span>Analyze Music & Generate SRT</span>
+              <ShieldCheck className="w-4 h-4" />
+              <span>{analysisMode === "sharia_compliance" ? "Run Sharia Compliance Audit" : "Analyze Audio & Generate SRT"}</span>
             </>
           )}
         </button>
@@ -288,19 +397,19 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-dark-900/90 p-6 rounded-2xl border border-purple-500/30 shadow-xl space-y-4"
+          className="bg-dark-900/90 p-6 rounded-2xl border border-emerald-500/30 shadow-xl space-y-4"
         >
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-white flex items-center gap-2">
-              <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
+              <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
               {currentStep || "Processing..."}
             </span>
-            <span className="text-sm font-mono font-bold text-purple-400">{progress}%</span>
+            <span className="text-sm font-mono font-bold text-emerald-400">{progress}%</span>
           </div>
 
           <div className="w-full bg-dark-950 h-3 rounded-full overflow-hidden border border-white/5">
             <motion.div
-              className="h-full bg-gradient-to-r from-purple-600 to-primary-500"
+              className="h-full bg-gradient-to-r from-emerald-600 to-teal-500"
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
@@ -327,21 +436,23 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
           {/* Summary Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-dark-900/80 p-4 rounded-xl border border-white/5 flex flex-col">
-              <span className="text-[11px] font-bold text-gray-400 uppercase">Music Segments</span>
+              <span className="text-[11px] font-bold text-gray-400 uppercase">
+                {analysisMode === "sharia_compliance" ? "Flagged Violations" : "Total Cues"}
+              </span>
               <span className="text-2xl font-bold text-white mt-1">
                 {analysisResult.summary?.segment_count || analysisResult.events?.length || 0}
               </span>
             </div>
             <div className="bg-dark-900/80 p-4 rounded-xl border border-white/5 flex flex-col">
-              <span className="text-[11px] font-bold text-gray-400 uppercase">Total Music Duration</span>
-              <span className="text-2xl font-bold text-purple-400 mt-1">
-                {formatSecs(analysisResult.summary?.total_music_seconds)}
+              <span className="text-[11px] font-bold text-gray-400 uppercase">Flagged Duration</span>
+              <span className="text-2xl font-bold text-emerald-400 mt-1">
+                {formatSecs(analysisResult.summary?.total_flagged_seconds || analysisResult.summary?.total_music_seconds)}
               </span>
             </div>
             <div className="bg-dark-900/80 p-4 rounded-xl border border-white/5 flex flex-col">
-              <span className="text-[11px] font-bold text-gray-400 uppercase">Music Percentage</span>
-              <span className="text-2xl font-bold text-emerald-400 mt-1">
-                {analysisResult.summary?.music_percentage || 0}%
+              <span className="text-[11px] font-bold text-gray-400 uppercase">Violation Percentage</span>
+              <span className="text-2xl font-bold text-amber-400 mt-1">
+                {analysisResult.summary?.flagged_percentage || analysisResult.summary?.music_percentage || 0}%
               </span>
             </div>
             <div className="bg-dark-900/80 p-4 rounded-xl border border-white/5 flex flex-col">
@@ -359,17 +470,17 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                 onClick={() => setActiveView("cues")}
                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                   activeView === "cues"
-                    ? "bg-purple-600 text-white shadow-md shadow-purple-500/20"
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
                     : "text-gray-400 hover:text-white bg-dark-900"
                 }`}
               >
-                Interactive Cue Sheet ({analysisResult.events?.length || 0})
+                {analysisMode === "sharia_compliance" ? "Sharia Audit Report" : "Interactive Cue Sheet"} ({analysisResult.events?.length || 0})
               </button>
               <button
                 onClick={() => setActiveView("srt")}
                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
                   activeView === "srt"
-                    ? "bg-purple-600 text-white shadow-md shadow-purple-500/20"
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
                     : "text-gray-400 hover:text-white bg-dark-900"
                 }`}
               >
@@ -382,12 +493,12 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                 onClick={handleCopySRT}
                 className="px-3 py-1.5 bg-dark-800 hover:bg-dark-700 text-gray-200 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 border border-white/10"
               >
-                <Copy className="w-3.5 h-3.5 text-purple-400" />
+                <Copy className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Copy SRT</span>
               </button>
               <button
                 onClick={handleDownloadSRT}
-                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 shadow-md shadow-purple-500/20"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 shadow-md shadow-emerald-500/20"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Download .srt</span>
@@ -395,14 +506,18 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
             </div>
           </div>
 
-          {/* Interactive Cue List */}
+          {/* Interactive Cue & Audit List */}
           {activeView === "cues" && (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {(!analysisResult.events || analysisResult.events.length === 0) ? (
                 <div className="text-center py-12 text-gray-500 bg-dark-900/40 rounded-xl border border-white/5">
-                  <Music className="w-8 h-8 mx-auto mb-2 opacity-40 text-purple-400" />
-                  <p className="text-sm font-semibold text-gray-300">No background music detected</p>
-                  <p className="text-xs text-gray-500 mt-1">This file appears to contain clean speech or ambient sound effects.</p>
+                  <CheckCircle className="w-9 h-9 mx-auto mb-2 text-emerald-400" />
+                  <p className="text-sm font-semibold text-gray-200">
+                    {analysisMode === "sharia_compliance" ? "Clean Audio - 100% Sharia Compliant" : "No flagged events detected"}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    No speech violations or non-compliant content were detected in this audio.
+                  </p>
                 </div>
               ) : (
                 analysisResult.events.map((cue, idx) => (
@@ -410,35 +525,52 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                     key={idx}
                     initial={{ opacity: 0, x: -5 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.03 }}
-                    className="flex items-center justify-between p-3.5 bg-dark-900/80 hover:bg-dark-800/80 rounded-xl border border-white/5 transition-colors group"
+                    transition={{ delay: idx * 0.02 }}
+                    className="p-4 bg-dark-900/80 hover:bg-dark-800/80 rounded-xl border border-white/5 transition-colors space-y-2"
                   >
-                    <div className="flex items-center space-x-3.5">
-                      <span className="w-7 h-7 rounded-lg bg-purple-600/20 text-purple-400 font-mono font-bold text-xs flex items-center justify-center border border-purple-500/20">
-                        #{idx + 1}
-                      </span>
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-gray-100 group-hover:text-purple-300 transition-colors">
-                          {cue.description}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center space-x-3">
+                        <span className="w-7 h-7 rounded-lg bg-emerald-600/20 text-emerald-400 font-mono font-bold text-xs flex items-center justify-center border border-emerald-500/20">
+                          #{idx + 1}
                         </span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] font-mono font-semibold text-purple-400 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/40">
-                            {cue.start_srt} ➔ {cue.end_srt}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">
+                            {cue.category || cue.description}
                           </span>
-                          <span className="text-[10px] text-gray-500">
-                            ({cue.duration_seconds}s)
-                          </span>
+                          {cue.severity && (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getSeverityBadge(cue.severity)}`}>
+                              {cue.severity}
+                            </span>
+                          )}
                         </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono font-semibold text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-800/40">
+                          {cue.start_srt} ➔ {cue.end_srt} ({cue.duration_seconds}s)
+                        </span>
+                        <button
+                          onClick={() => handlePlayCue(cue)}
+                          className="px-3 py-1 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 border border-emerald-500/30"
+                        >
+                          <PlayCircle className="w-4 h-4" />
+                          <span>Play</span>
+                        </button>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handlePlayCue(cue)}
-                      className="px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600 text-purple-300 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 border border-purple-500/30"
-                    >
-                      <PlayCircle className="w-4 h-4" />
-                      <span>Play Cue</span>
-                    </button>
+                    {cue.quote && (
+                      <div className="bg-dark-950/60 p-2.5 rounded-lg border border-white/5 text-xs text-gray-300 flex items-start space-x-2">
+                        <MessageSquareQuote className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        <span className="italic">"{cue.quote}"</span>
+                      </div>
+                    )}
+
+                    {cue.description && cue.description !== cue.category && (
+                      <p className="text-xs text-gray-400 pl-1">
+                        <strong className="text-gray-300">Ruling Note:</strong> {cue.description}
+                      </p>
+                    )}
                   </motion.div>
                 ))
               )}
