@@ -46,6 +46,7 @@ import { Toaster } from 'react-hot-toast';
 function AppContent() {
   const [activeTab, setActiveTab] = useState('separation');
   const [libraryFileToSeparate, setLibraryFileToSeparate] = useState(null);
+  const [libraryFileToAnalyze, setLibraryFileToAnalyze] = useState(null);
   const [bulkSeparateBatchId, setBulkSeparateBatchId] = useState(null);
   const [showConsole, setShowConsole] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -273,6 +274,9 @@ function AppContent() {
           >
             <MusicAnalyzerTab
               isActive={activeTab === 'analyzer'}
+              libraryFile={libraryFileToAnalyze}
+              initialFilePath={libraryFileToAnalyze}
+              onFileCleared={() => setLibraryFileToAnalyze(null)}
               onSendToStudio={(filePath) => {
                 setActiveTab('studio');
               }}
@@ -324,6 +328,10 @@ function AppContent() {
               onSeparate={(filePath) => {
                 setLibraryFileToSeparate(filePath);
                 setActiveTab('separation');
+              }}
+              onAnalyze={(filePath) => {
+                setLibraryFileToAnalyze(filePath);
+                setActiveTab('analyzer');
               }}
               onBulkSeparate={(batchId) => {
                 setBulkSeparateBatchId(batchId);

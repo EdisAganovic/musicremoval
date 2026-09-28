@@ -5,7 +5,7 @@
  *       target keyword watchlists, and custom speech auditing using Antigravity Multimodal Audio intelligence.
  */
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import axios from "axios";
 import { BACKEND_URL } from '../config';
 import { useAudioPlayer } from '../contexts/AudioPlayerContext';
@@ -33,7 +33,10 @@ import {
   Edit3,
   RotateCcw,
   Tag,
-  Hash
+  Hash,
+  VolumeX,
+  Zap,
+  Filter
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from 'react-hot-toast';
@@ -51,7 +54,8 @@ const PROFANITY_PRESET_PROMPT = `Analyze the spoken audio to detect all swear wo
 
 const DEFAULT_SHARIA_KEYWORDS = "Jesus, Christ, Lord, swear, bet, casino, wine, alcohol, beer";
 
-const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
+const MusicAnalyzerTab = ({ isActive = true, libraryFile, initialFilePath, onFileCleared, onSendToStudio }) => {
+  const activeLibraryFile = libraryFile || initialFilePath;
   const [file, setFile] = useState(null);
   const [libraryFilePath, setLibraryFilePath] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -67,9 +71,32 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
   const [keywords, setKeywords] = useState(DEFAULT_SHARIA_KEYWORDS);
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [activeView, setActiveView] = useState("cues"); // "cues" | "srt"
+  const [activeFilter, setActiveFilter] = useState("all"); // "all" | "critical" | "high" | "medium" | "keywords"
+  const [isCensoring, setIsCensoring] = useState(false);
+  const [censoredFile, setCensoredFile] = useState(null);
   const fileInputRef = useRef(null);
 
   const { playTrack } = useAudioPlayer();
+
+  // Handle library file pre-load
+  useEffect(() => {
+    if (activeLibraryFile) {
+      setLibraryFilePath(activeLibraryFile);
+      setFile({
+        name: activeLibraryFile.split(/[\\/]/).pop() || 'Selected File',
+        size: 0,
+        path: activeLibraryFile
+      });
+      setStatus(null);
+      setProgress(0);
+      setCurrentStep("");
+      setTaskId(null);
+      setAnalysisResult(null);
+      setCensoredFile(null);
+      setError(null);
+      onFileCleared?.();
+    }
+  }, [activeLibraryFile, onFileCleared]);
 
   // Switch default prompt on mode change
   const handleModeChange = (mode) => {
@@ -121,6 +148,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
       setLibraryFilePath(null);
       setError(null);
       setAnalysisResult(null);
+      setCensoredFile(null);
       setStatus(null);
       setProgress(0);
     }
@@ -144,6 +172,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
       setLibraryFilePath(null);
       setError(null);
       setAnalysisResult(null);
+      setCensoredFile(null);
       setStatus(null);
       setProgress(0);
     }
@@ -156,6 +185,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     }
 
     setError(null);
+    setCensoredFile(null);
     setStatus("uploading");
     setProgress(5);
     setCurrentStep("Preparing file for Antigravity AI...");
@@ -163,10 +193,11 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     try {
       let response;
       const formData = new FormData();
-      if (file) {
+      if (file && !libraryFilePath && file instanceof File) {
         formData.append("file", file);
       } else {
-        formData.append("file_path", libraryFilePath);
+        const targetPath = libraryFilePath || file?.path;
+        formData.append("file_path", targetPath);
       }
       formData.append("chunk_duration", chunkDuration);
       formData.append("analysis_mode", analysisMode);
@@ -200,6 +231,36 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
     window.open(`${BACKEND_URL}/api/music-analyzer/download-srt/${taskId}`, '_blank');
   };
 
+  const handleAutoCensor = async () => {
+    if (!taskId) return;
+    setIsCensoring(true);
+    try {
+      const response = await axios.post(`${BACKEND_URL}/api/music-analyzer/auto-censor`, {
+        task_id: taskId
+      });
+      setCensoredFile(response.data.censored_file);
+      toast.success(`Censored media generated! (${response.data.muted_count} regions muted)`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to auto-censor media");
+    } finally {
+      setIsCensoring(false);
+    }
+  };
+
+  const handlePlayCensoredMedia = () => {
+    if (!censoredFile) return;
+    const fileName = censoredFile.split(/[\\/]/).pop();
+    const isVideo = /\.(mp4|mkv|webm|mov|avi|ts|flv)$/i.test(censoredFile);
+    playTrack({
+      url: `${BACKEND_URL}/api/media/stream?path=${encodeURIComponent(censoredFile)}`,
+      title: fileName,
+      path: censoredFile,
+      type: isVideo ? 'video' : 'vocal',
+      badge: 'CENSORED'
+    });
+    toast.success(`Playing censored clean media: ${fileName}`);
+  };
+
   const handlePlayCue = (cue) => {
     const targetPath = file?.path || libraryFilePath || analysisResult?.summary?.file_name;
     if (!targetPath) return;
@@ -230,9 +291,46 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
   };
 
   // Keyword chip pills
-  const parsedKeywordList = keywords
-    ? keywords.split(',').map(k => k.trim()).filter(Boolean)
-    : [];
+  const parsedKeywordList = useMemo(() => {
+    return keywords ? keywords.split(',').map(k => k.trim()).filter(Boolean) : [];
+  }, [keywords]);
+
+  // Highlight keywords inside text
+  const renderHighlightedText = (text) => {
+    if (!text || parsedKeywordList.length === 0) return text;
+    
+    // Create regex from keywords
+    const pattern = new RegExp(`(${parsedKeywordList.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+    const parts = text.split(pattern);
+
+    return parts.map((part, index) => {
+      const isMatch = parsedKeywordList.some(k => k.toLowerCase() === part.toLowerCase());
+      if (isMatch) {
+        return (
+          <mark key={index} className="bg-emerald-500/30 text-emerald-300 px-1 py-0.5 rounded font-bold">
+            {part}
+          </mark>
+        );
+      }
+      return part;
+    });
+  };
+
+  // Filter events
+  const filteredEvents = useMemo(() => {
+    const events = analysisResult?.events || [];
+    if (activeFilter === "all") return events;
+    if (activeFilter === "critical") return events.filter(e => (e.severity || "").toLowerCase() === "critical");
+    if (activeFilter === "high") return events.filter(e => (e.severity || "").toLowerCase() === "high");
+    if (activeFilter === "medium") return events.filter(e => (e.severity || "").toLowerCase() === "medium");
+    if (activeFilter === "keywords") {
+      return events.filter(e => 
+        (e.category || "").toLowerCase().includes("keyword") ||
+        parsedKeywordList.some(k => (e.quote || "").toLowerCase().includes(k.toLowerCase()))
+      );
+    }
+    return events;
+  }, [analysisResult, activeFilter, parsedKeywordList]);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -251,16 +349,16 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                AI speech analysis for Sharia rulings, specific keyword watchlists, or background music with SRT subtitle export.
+                AI speech analysis for Sharia rulings, target keyword watchlists, or background music with SRT subtitle export and auto-censoring.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 bg-dark-950/80 px-4 py-2.5 rounded-xl border border-white/5">
-            <Clock className="w-4 h-4 text-emerald-400" />
+            <Zap className="w-4 h-4 text-emerald-400" />
             <div className="flex flex-col">
-              <span className="text-[11px] font-bold text-gray-200">Segment Limit</span>
-              <span className="text-[10px] text-gray-400">30 Min Precision Windows</span>
+              <span className="text-[11px] font-bold text-gray-200">Parallel Chunks</span>
+              <span className="text-[10px] text-gray-400">Multi-Threaded Speedup</span>
             </div>
           </div>
         </div>
@@ -514,8 +612,53 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
             </div>
           </div>
 
+          {/* Auto-Censor Export Banner */}
+          <div className="bg-gradient-to-r from-emerald-900/30 via-dark-900 to-teal-900/30 p-4 rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-emerald-600/20 rounded-lg text-emerald-400">
+                <VolumeX className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">Auto-Censor / Mute Flagged Speech</h4>
+                <p className="text-xs text-gray-400">
+                  Export a clean audio/video copy with all {analysisResult.events?.length || 0} flagged regions muted with smooth micro-fades.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleAutoCensor}
+                disabled={isCensoring || !analysisResult.events?.length}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center space-x-1.5"
+              >
+                {isCensoring ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Muting Audio...</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>⚡ Generate Censored Copy</span>
+                  </>
+                )}
+              </button>
+
+              {censoredFile && (
+                <button
+                  onClick={handlePlayCensoredMedia}
+                  className="px-3.5 py-2 bg-dark-800 hover:bg-dark-700 text-emerald-300 rounded-lg text-xs font-bold transition-all border border-emerald-500/30 flex items-center space-x-1"
+                >
+                  <PlayCircle className="w-3.5 h-3.5" />
+                  <span>Play Clean</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           {/* View Mode Tabs & Actions */}
-          <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setActiveView("cues")}
@@ -525,7 +668,7 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                     : "text-gray-400 hover:text-white bg-dark-900"
                 }`}
               >
-                {analysisMode === "sharia_compliance" ? "Sharia Audit Report" : "Interactive Cue Sheet"} ({analysisResult.events?.length || 0})
+                {analysisMode === "sharia_compliance" ? "Sharia Audit Report" : "Interactive Cue Sheet"} ({filteredEvents.length})
               </button>
               <button
                 onClick={() => setActiveView("srt")}
@@ -557,21 +700,50 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
             </div>
           </div>
 
+          {/* Filter Pills */}
+          {activeView === "cues" && analysisResult.events?.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold text-gray-400 flex items-center gap-1">
+                <Filter className="w-3 h-3 text-emerald-400" />
+                <span>Filter:</span>
+              </span>
+              {[
+                { id: "all", label: `All (${analysisResult.events?.length || 0})` },
+                { id: "critical", label: `🔴 Critical (${analysisResult.events?.filter(e => (e.severity || '').toLowerCase() === 'critical').length || 0})` },
+                { id: "high", label: `🟠 High (${analysisResult.events?.filter(e => (e.severity || '').toLowerCase() === 'high').length || 0})` },
+                { id: "medium", label: `🟡 Medium (${analysisResult.events?.filter(e => (e.severity || '').toLowerCase() === 'medium').length || 0})` },
+                { id: "keywords", label: `🎯 Keywords (${analysisResult.events?.filter(e => (e.category || '').toLowerCase().includes('keyword') || parsedKeywordList.some(k => (e.quote || '').toLowerCase().includes(k.toLowerCase()))).length || 0})` }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setActiveFilter(f.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                    activeFilter === f.id
+                      ? "bg-emerald-600 text-white shadow-sm shadow-emerald-500/30"
+                      : "bg-dark-900 text-gray-400 hover:text-white border border-white/5"
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Interactive Cue & Audit List */}
           {activeView === "cues" && (
             <div className="space-y-3">
-              {(!analysisResult.events || analysisResult.events.length === 0) ? (
+              {filteredEvents.length === 0 ? (
                 <div className="text-center py-12 text-gray-500 bg-dark-900/40 rounded-xl border border-white/5">
                   <CheckCircle className="w-9 h-9 mx-auto mb-2 text-emerald-400" />
                   <p className="text-sm font-semibold text-gray-200">
-                    {analysisMode === "sharia_compliance" ? "Clean Audio - 100% Sharia Compliant" : "No flagged events detected"}
+                    {analysisMode === "sharia_compliance" ? "No flagged events matching filter" : "No flagged events"}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    No speech violations or non-compliant content were detected in this audio.
+                    No speech violations or non-compliant content were found for this selection.
                   </p>
                 </div>
               ) : (
-                analysisResult.events.map((cue, idx) => (
+                filteredEvents.map((cue, idx) => (
                   <motion.div
                     key={idx}
                     initial={{ opacity: 0, x: -5 }}
@@ -613,7 +785,9 @@ const MusicAnalyzerTab = ({ isActive = true, onSendToStudio }) => {
                     {cue.quote && (
                       <div className="bg-dark-950/60 p-2.5 rounded-lg border border-white/5 text-xs text-gray-300 flex items-start space-x-2">
                         <MessageSquareQuote className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                        <span className="italic">"{cue.quote}"</span>
+                        <span className="italic">
+                          "{renderHighlightedText(cue.quote)}"
+                        </span>
                       </div>
                     )}
 

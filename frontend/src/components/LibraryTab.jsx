@@ -80,13 +80,13 @@ import {
     Square, PlayCircle, Download, RefreshCw, Loader2, AlertCircle, Edit3, 
     ChevronLeft, ChevronRight, ChevronDown, Play, ExternalLink,
     PanelLeftClose, PanelLeftOpen, Layers, Film, Music2, HardDrive,
-    GripVertical, FolderPlus, Plus, Move, X, Link
+    GripVertical, FolderPlus, Plus, Move, X, Link, Sparkles
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
+const LibraryTab = ({ onSeparate, onBulkSeparate, onAnalyze, isActive }) => {
     const [items, setItems] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
@@ -1361,6 +1361,21 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                                                 </button>
                                             )}
                                             <button
+                                                className="p-1.5 bg-purple-600/10 hover:bg-purple-600/25 text-purple-300 rounded-lg transition-all border border-purple-500/20 hover:border-purple-500/40"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const targetPath = item.result_files?.[0] || item.source_file || item.file_path;
+                                                    if (targetPath) {
+                                                        onAnalyze?.(targetPath);
+                                                    } else {
+                                                        toast.error("File path not found");
+                                                    }
+                                                }}
+                                                title="Analyze Speech & Music"
+                                            >
+                                                <Sparkles className="w-4 h-4" />
+                                            </button>
+                                            <button
                                                 className="p-1.5 bg-dark-700 hover:bg-dark-600 text-gray-400 hover:text-white rounded transition-all"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -1696,6 +1711,21 @@ const LibraryTab = ({ onSeparate, onBulkSeparate, isActive }) => {
                             Separate Vocals
                         </button>
                     )}
+                    <button
+                        onClick={() => {
+                            const targetPath = contextMenu.item?.result_files?.[0] || contextMenu.item?.source_file || contextMenu.item?.file_path;
+                            if (targetPath) {
+                                onAnalyze?.(targetPath);
+                            } else {
+                                toast.error("File path not found");
+                            }
+                            setContextMenu(null);
+                        }}
+                        className="w-full px-3 py-2 text-left text-sm text-purple-400 hover:bg-purple-600/10 flex items-center gap-2"
+                    >
+                        <Sparkles className="w-4 h-4 text-purple-400" />
+                        Analyze Speech & Music
+                    </button>
                     <div className="border-t border-white/5 my-1"></div>
                     <button
                         onClick={() => {

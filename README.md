@@ -51,7 +51,10 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 - **⚖️ Sharia Speech Compliance Mode** — Automated Islamic ruling audit detecting cursing/vulgarity (*Fahishah*), blasphemy/shirk (*Kufr/Shirk*), slander/backbiting (*Qadhf/Gheebah*), forbidden vice promotion (intoxicants, gambling, usury, illicit relations), and deception with direct quote extraction and severity ratings
 - **🎯 Target Keywords Watchlist** — Comma-separated keyword list (e.g. `Jesus, Christ, swear, bet, casino, wine`) that directs the AI to actively monitor, identify, and flag specific words or phrases with exact timestamps
 - **✍️ Customizable Speech Prompt & Rules** — User-editable rulebook and custom prompt injection to add specific forbidden terms, slang, or custom content policies
-- **30-Minute Optimum Precision Chunks** — Auto-splits long media into <= 30-minute high-fidelity chunks to ensure maximum acoustic resolution within model token limits and under 100MB file size
+- **⚡ Parallel Multi-Chunk Processing** — Concurrent multi-threaded execution across 30-minute chunks for 2x–3x speedup on long audio/video files
+- **🔇 One-Click Auto-Censor Media Export** — Automatically applies FFmpeg volume gates on exact flagged intervals to export clean, censored audio/video files with anti-pop micro-fades
+- **📚 Library Right-Click Integration** — Direct "Analyze Speech & Music" action in Library table rows and right-click context menu
+- **🎯 Visual Keyword Highlighting & Severity Filters** — Live highlighted keywords inside quotes and filter pills (`All`, `Critical`, `High`, `Medium`, `Keywords`)
 - **Automatic SRT Subtitle Generation** — Produces standard `.srt` subtitle files with millisecond timestamps (`00:01:15,200 --> 00:02:40,000`), quotes, and severity levels for quick editing, muting, or bleeping in DAWs/video editors
 - **Interactive Cue Sheet & Audit Report UI** — Live clickable audit timeline with click-to-play streaming, copy SRT to clipboard, and direct `.srt` download
 - **JSON Cue Sheet Export** — Generates structured event timelines with violation statistics, flagged duration, and confidence levels

@@ -5,19 +5,25 @@ Endpoints:
   - POST /api/music-analyzer/analyze (Direct upload or library file path with mode, custom prompt & keywords)
   - GET  /api/music-analyzer/status/{task_id} (Task progress polling)
   - GET  /api/music-analyzer/download-srt/{task_id} (Download .srt file)
+  - POST /api/music-analyzer/auto-censor (Mute/censor all flagged timestamps via FFmpeg)
+  - GET  /api/music-analyzer/download-censored/{task_id} (Download clean censored media file)
 """
 
 import os
 import uuid
 import asyncio
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from config import tasks, add_notification, log_console
 from core.constants import NOMUSIC_DIR
-from modules.module_music_analyzer import process_music_analysis, MAX_CHUNK_DURATION_SECONDS
+from modules.module_music_analyzer import (
+    process_music_analysis,
+    auto_censor_media,
+    MAX_CHUNK_DURATION_SECONDS
+)
 
 router = APIRouter(prefix="/api/music-analyzer", tags=["music-analyzer"])
 
@@ -28,6 +34,10 @@ class MusicAnalyzeRequest(BaseModel):
     analysis_mode: Optional[str] = "music"
     custom_prompt: Optional[str] = None
     keywords: Optional[str] = None
+
+
+class AutoCensorRequest(BaseModel):
+    task_id: str
 
 
 def run_music_analysis_task(
@@ -172,5 +182,54 @@ async def download_analysis_srt(task_id: str):
     return FileResponse(
         path=srt_path,
         media_type="text/plain",
+        filename=filename
+    )
+
+
+@router.post("/auto-censor")
+async def auto_censor_endpoint(request: AutoCensorRequest):
+    """Mute all flagged timestamps using FFmpeg and generate a clean censored media file."""
+    task = tasks.get(request.task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    file_path = task.get("file_path")
+    events = task.get("events") or []
+
+    if not file_path or not os.path.isfile(file_path):
+        raise HTTPException(status_code=400, detail="Original media file not found")
+
+    try:
+        censored_path = auto_censor_media(
+            input_file=file_path,
+            intervals=events,
+            output_dir=NOMUSIC_DIR
+        )
+        task["censored_file"] = censored_path
+
+        return {
+            "success": True,
+            "censored_file": censored_path,
+            "filename": os.path.basename(censored_path),
+            "muted_count": len(events)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to auto-censor media: {str(e)}")
+
+
+@router.get("/download-censored/{task_id}")
+async def download_censored_media(task_id: str):
+    """Download the auto-censored media file."""
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    censored_path = task.get("censored_file")
+    if not censored_path or not os.path.isfile(censored_path):
+        raise HTTPException(status_code=404, detail="Censored media file not generated yet")
+
+    filename = os.path.basename(censored_path)
+    return FileResponse(
+        path=censored_path,
         filename=filename
     )
