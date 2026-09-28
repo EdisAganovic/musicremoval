@@ -1,7 +1,8 @@
 """
-MODULE: module_cuda.py - GPU/CUDA DETECTION & HARDWARE PROFILING
+MODULE: module_cuda.py - MULTI-GPU/CUDA DETECTION & HARDWARE PROFILING
 
-ROLE: Checks PyTorch CUDA availability, profiles GPU hardware, and saves NVENC specs to data/nvidia.json.
+ROLE: Checks PyTorch CUDA availability, profiles all installed GPUs, manages device assignment,
+      and saves hardware configurations to data/nvidia.json.
 """
 import os
 import json
@@ -60,13 +61,15 @@ def determine_nvenc_capabilities(gpu_name: str, vram_gb: float) -> dict:
 
 def detect_and_save_nvidia_info() -> dict:
     """
-    Detects active NVIDIA GPU details and writes them to data/nvidia.json.
+    Detects all active NVIDIA GPU details (multi-GPU aware) and writes them to data/nvidia.json.
     """
     info = {
         "cuda_available": False,
         "gpu_name": "Unknown",
         "vram_gb": 0.0,
         "cuda_version": None,
+        "device_count": 0,
+        "devices": [],
         "nvenc_engines": 1,
         "optimal_chunks": 2,
         "max_concurrent_sessions": 5,
@@ -80,30 +83,49 @@ def detect_and_save_nvidia_info() -> dict:
     try:
         import torch
         if torch.cuda.is_available():
-            props = torch.cuda.get_device_properties(0)
-            gpu_name = props.name
-            vram_gb = props.total_memory / (1024 ** 3)
-            caps = determine_nvenc_capabilities(gpu_name, vram_gb)
+            dev_count = torch.cuda.device_count()
+            devices = []
+            for i in range(dev_count):
+                props = torch.cuda.get_device_properties(i)
+                gpu_name = props.name
+                vram_gb = props.total_memory / (1024 ** 3)
+                caps = determine_nvenc_capabilities(gpu_name, vram_gb)
+                caps["id"] = i
+                caps["device_str"] = f"cuda:{i}"
+                caps["compute_capability"] = f"{props.major}.{props.minor}"
+                devices.append(caps)
 
-            info.update(caps)
-            info["cuda_available"] = True
-            info["cuda_version"] = str(torch.version.cuda)
-            info["device_count"] = torch.cuda.device_count()
-            info["compute_capability"] = f"{props.major}.{props.minor}"
+            if devices:
+                # Primary GPU (GPU 0) is default anchor
+                primary = devices[0]
+                info.update(primary)
+                info["devices"] = devices
+                info["device_count"] = dev_count
+                info["cuda_available"] = True
+                info["cuda_version"] = str(torch.version.cuda)
     except Exception:
         # Fallback to nvidia-smi if torch not loaded
         try:
             res = subprocess.run(
-                ["nvidia-smi", "--query-gpu=gpu_name,memory.total", "--format=csv,noheader,nounits"],
+                ["nvidia-smi", "--query-gpu=index,gpu_name,memory.total", "--format=csv,noheader,nounits"],
                 capture_output=True, text=True, check=True
             )
             lines = res.stdout.strip().splitlines()
-            if lines:
-                parts = lines[0].split(",")
-                gpu_name = parts[0].strip()
-                vram_gb = float(parts[1].strip()) / 1024.0
-                caps = determine_nvenc_capabilities(gpu_name, vram_gb)
-                info.update(caps)
+            devices = []
+            for line in lines:
+                parts = line.split(",")
+                if len(parts) >= 3:
+                    idx = int(parts[0].strip())
+                    gpu_name = parts[1].strip()
+                    vram_gb = float(parts[2].strip()) / 1024.0
+                    caps = determine_nvenc_capabilities(gpu_name, vram_gb)
+                    caps["id"] = idx
+                    caps["device_str"] = f"cuda:{idx}"
+                    devices.append(caps)
+            if devices:
+                info.update(devices[0])
+                info["devices"] = devices
+                info["device_count"] = len(devices)
                 info["cuda_available"] = True
         except Exception:
             pass
@@ -131,33 +153,54 @@ def get_nvidia_config() -> dict:
     return detect_and_save_nvidia_info()
 
 
-def get_optimal_nvenc_chunks(default: int = 4) -> int:
+def get_available_cuda_devices() -> list:
     """
-    Returns the recommended parallel chunk count for the active NVIDIA GPU.
+    Returns list of CUDA device strings available (e.g. ['cuda:0', 'cuda:1']).
+    Falls back to ['cpu'] if CUDA is unavailable.
     """
     cfg = get_nvidia_config()
+    devices = cfg.get("devices", [])
+    if devices:
+        return [d.get("device_str", f"cuda:{d.get('id', 0)}") for d in devices]
+    if cfg.get("cuda_available"):
+        return ["cuda:0"]
+    return ["cpu"]
+
+
+def get_optimal_nvenc_chunks(default: int = 4) -> int:
+    """
+    Returns the recommended parallel chunk count for the active NVIDIA GPU(s).
+    """
+    cfg = get_nvidia_config()
+    devices = cfg.get("devices", [])
+    if len(devices) > 1:
+        # Sum optimal chunks across GPUs for combined super-keyframe export
+        total = sum(d.get("optimal_chunks", 2) for d in devices)
+        return min(total, 8)
     return cfg.get("optimal_chunks", default)
 
 
 def check_gpu_cuda_support():
     """
-    Checks for PyTorch CUDA availability and prints GPU information.
+    Checks for PyTorch CUDA availability and prints multi-GPU information.
     Returns True if CUDA is available, False otherwise.
     """
-    print(f"\n{Fore.CYAN}2. Provjera GPU/CUDA podrške{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}2. GPU / CUDA Multi-Device Verification{Style.RESET_ALL}")
     try:
         info = detect_and_save_nvidia_info()
         if info.get("cuda_available"):
-            print(f"{Fore.GREEN}CUDA Version: {info.get('cuda_version', 'N/A')} # {info.get('gpu_name')} ({info.get('vram_gb')} GB VRAM, {info.get('nvenc_engines')}x NVENC engines -> {info.get('optimal_chunks')} parallel chunks){Style.RESET_ALL}")
+            devs = info.get("devices", [])
+            print(f"{Fore.GREEN}CUDA Version: {info.get('cuda_version', 'N/A')} | Detected {len(devs)} GPU(s):{Style.RESET_ALL}")
+            for d in devs:
+                print(f"  {Fore.GREEN}• [GPU {d.get('id')}] {d.get('gpu_name')} ({d.get('vram_gb')} GB VRAM, {d.get('nvenc_engines')}x NVENC){Style.RESET_ALL}")
             return True
         else:
             print(f"{Fore.RED}PyTorch CUDA is NOT AVAILABLE.{Style.RESET_ALL}")
             print(f"{Fore.YELLOW}  - Check if NVIDIA drivers are installed.{Style.RESET_ALL}")
             print(f"{Fore.YELLOW}  - Check if CUDA Toolkit is installed and its paths are configured correctly.{Style.RESET_ALL}")
-            print(f"{Fore.YELLOW}  - Remove pip uninstall torch torchaudio torchvision and install again with CUDA support from PyTorch website.{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}  - Reinstall PyTorch with CUDA: uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128{Style.RESET_ALL}")
             print(f"{Fore.RED}Demucs and Spleeter will run on CPU, which can be significantly slower.{Style.RESET_ALL}")
             return False
     except Exception as e:
         print(f"{Fore.RED}An error occurred while checking for CUDA support: {e}{Style.RESET_ALL}")
         return False
-

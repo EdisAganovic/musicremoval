@@ -3,6 +3,39 @@
   "gpu_name": "NVIDIA GeForce RTX 5070 Ti",
   "vram_gb": 15.92,
   "cuda_version": "12.8",
+  "device_count": 2,
+  "devices": [
+    {
+      "gpu_name": "NVIDIA GeForce RTX 5070 Ti",
+      "vram_gb": 15.92,
+      "nvenc_engines": 2,
+      "optimal_chunks": 4,
+      "max_concurrent_sessions": 5,
+      "supports_av1_nvenc": true,
+      "supports_hevc_nvenc": true,
+      "supports_h264_nvenc": true,
+      "recommended_preset": "p4",
+      "recommended_tune": "hq",
+      "id": 0,
+      "device_str": "cuda:0",
+      "compute_capability": "12.0"
+    },
+    {
+      "gpu_name": "NVIDIA GeForce RTX 3080",
+      "vram_gb": 10.0,
+      "nvenc_engines": 1,
+      "optimal_chunks": 2,
+      "max_concurrent_sessions": 5,
+      "supports_av1_nvenc": false,
+      "supports_hevc_nvenc": true,
+      "supports_h264_nvenc": true,
+      "recommended_preset": "p4",
+      "recommended_tune": "hq",
+      "id": 1,
+      "device_str": "cuda:1",
+      "compute_capability": "8.6"
+    }
+  ],
   "nvenc_engines": 2,
   "optimal_chunks": 4,
   "max_concurrent_sessions": 5,
@@ -11,6 +44,7 @@
   "supports_h264_nvenc": true,
   "recommended_preset": "p4",
   "recommended_tune": "hq",
-  "device_count": 1,
+  "id": 0,
+  "device_str": "cuda:0",
   "compute_capability": "12.0"
 }

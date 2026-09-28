@@ -20,7 +20,9 @@ A professional AI-powered vocal separation and audio workstation tool with a mod
 ## ✨ Key Features
 
 ### 🎵 AI Vocal Separation
+- **Dual-GPU & Multi-GPU Acceleration** — Automatically harnesses all available NVIDIA GPUs (e.g. RTX 5070 Ti + RTX 3080/3090) with round-robin segment scheduling, concurrent model passes, and multi-GPU NVENC export
 - **Multi-Engine Separation** — Demucs (htdemucs), Spleeter, Roformer (via audio-separator), and TIGER-DnR; pick the engine per job or blend Demucs + Spleeter
+- **Concurrent Multi-Model Blending** — Runs Demucs on GPU 0 and Spleeter on GPU 1 simultaneously in "Both" mode, cutting combined execution time in half
 - **Roformer Checkpoint Library** — 10 specialist models: Crowd & BGM (cartoons/anime/movies), Vocals (Kim FT / ViperX), BS-Roformer (top SDR), InstVoc Duality (film), MDX23C (cartoon SFX), Karaoke, De-Reverb, Denoise & Clean, and Bleed Suppressor
 - **TIGER-DnR 3-Stem Engine** — Cinematic separation into Dialogue / SFX / Music with 4 targets (Dialogue+SFX, Dialogue Only, SFX Only, Music Only) and 3-part parallel GPU execution
 - **Model Selection** — Choose Spleeter, Demucs, Both, Roformer BGM, or TIGER-DnR (3-Stem) per job
@@ -673,6 +675,8 @@ _Times include both Spleeter + Demucs processing with alignment_
 See [docs/backend_changelog.md](docs/backend_changelog.md) and [docs/frontend_changelog.md](docs/frontend_changelog.md) for detailed version history.
 
 ### v0.0.20 (2026-09-13)
+- ✅ **Dual-GPU & Multi-GPU Acceleration**: Auto-discovers multiple CUDA GPUs (RTX 5070 Ti 16GB + RTX 3080 10GB), dynamically assigning Demucs segments, running concurrent Demucs + Spleeter passes, and parallelizing multi-chunk NVENC video encodes across hardware engines
+- ✅ **Multi-Device Diagnostics**: Real-time multi-GPU VRAM and compute capability tracking in the System Diagnostics tab
 - ✅ Native Full-Audio Roformer & TIGER Processing (bypasses redundant 10-minute segmentation to preserve audio continuity)
 - ✅ Higher-resolution YouTube formats are available again by using yt-dlp's default compatible player selection
 - ✅ Downloaded videos can be previewed directly in the Library

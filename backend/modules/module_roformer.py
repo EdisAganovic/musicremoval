@@ -4,6 +4,7 @@ MODULE: module_roformer.py - MEL-BAND ROFORMER & MDX23C BGM SEPARATION ENGINE
 ROLE: Specialized Background Music (BGM) separation for Movies, Anime, and Cartoons.
       Extracts background music scores while preserving dialogue, speech,
       screaming, Foley, and cartoon sound effects (SFX) intact in the primary output stem.
+      Supports target CUDA device allocation (multi-GPU).
 """
 import os
 import sys
@@ -66,7 +67,8 @@ def separate_with_roformer(
     model_filename: str = DEFAULT_BGM_MODEL,
     pre_split_segments: list = None,
     want_instrumental: bool = False,
-    progress_callback: callable = None
+    progress_callback: callable = None,
+    device_str: str = None
 ):
     """
     Separates background music from dialogue & SFX using audio-separator with Mel-Band Roformer BGM / MDX models.
@@ -79,11 +81,15 @@ def separate_with_roformer(
         pre_split_segments: Optional list of pre-split audio segments.
         want_instrumental: If True, returns (vocal_or_dialogue_sfx_path, music_instrumental_path).
         progress_callback: Optional callback fn(step_str, progress_int) to report real-time percentage.
+        device_str: Target CUDA device (e.g. 'cuda:0', 'cuda:1').
 
     Returns:
         tuple: (path_to_dialogue_sfx_wav, path_to_music_instrumental_wav_or_None, temp_segments_dir)
     """
-    print(f"\n{Fore.CYAN}--- Separating with Mel-Band Roformer BGM Model: {model_filename} ---{Style.RESET_ALL}")
+    if device_str is None:
+        device_str = "cuda:0" if torch.cuda.is_available() else "cpu"
+
+    print(f"\n{Fore.CYAN}--- Separating with Mel-Band Roformer BGM Model: {model_filename} on {device_str} ---{Style.RESET_ALL}")
     os.makedirs(output_base_dir, exist_ok=True)
     os.makedirs(MODEL_CACHE_DIR, exist_ok=True)
 
@@ -121,16 +127,29 @@ def separate_with_roformer(
     else:
         split_audio_paths = None
 
-    def process_single_file(input_wav: str, out_dir: str, cb=None, start_p=20, end_p=85, label="Roformer"):
+    def process_single_file(input_wav: str, out_dir: str, cb=None, start_p=20, end_p=85, label="Roformer", target_device="cuda:0"):
         """Runs separator on a single WAV file, returning (dialogue_sfx_path, music_path)."""
         separator = Separator(
             output_dir=out_dir,
             output_format="WAV",
             model_file_dir=MODEL_CACHE_DIR,
-            # Native FP16 roughly doubled warm Roformer throughput on the RTX 5070 Ti.
-            # Keep the CPU path in FP32 for compatibility.
             use_native_fp16=use_native_fp16,
         )
+
+        # Configure specific CUDA device
+        if "cuda" in target_device and torch.cuda.is_available():
+            try:
+                import torch
+                dev_obj = torch.device(target_device)
+                dev_idx = dev_obj.index if dev_obj.index is not None else 0
+                separator.torch_device = dev_obj
+                separator.onnx_execution_provider = [
+                    ("CUDAExecutionProvider", {"device_id": dev_idx}),
+                    "CPUExecutionProvider"
+                ]
+            except Exception:
+                pass
+
         if cb:
             cb(f"{label}: Loading Model", start_p)
         separator.load_model(model_filename=model_filename)
@@ -138,10 +157,6 @@ def separate_with_roformer(
         with TqdmProgressHook(cb, start_pct=start_p, end_pct=end_p, desc_prefix=label):
             separated_files = separator.separate(input_wav)
 
-        # audio-separator returns list of generated filenames in out_dir
-        # BGM models produce two stems:
-        # 1. Background Music / Instrumental (music score to remove)
-        # 2. Vocals / No_BGM / Speech+SFX (dialogue + effects to keep)
         dialogue_sfx_path = None
         music_path = None
 
@@ -161,89 +176,12 @@ def separate_with_roformer(
 
         return dialogue_sfx_path, music_path
 
-    # Multi-segment parallel processing
-    if split_audio_paths:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-
-        max_workers = min(3, len(split_audio_paths))
-        print(f"\n{Fore.CYAN}[Roformer BGM] Launching {len(split_audio_paths)} segments in parallel ({max_workers} concurrent GPU workers on CUDA)...{Style.RESET_ALL}")
-
-        completed_count = 0
-        total_segs = len(split_audio_paths)
-
-        def process_segment_task(item):
-            nonlocal completed_count
-            i, segment_path = item
-            seg_out_dir = os.path.join(output_base_dir, f"seg_{i:03d}")
-            os.makedirs(seg_out_dir, exist_ok=True)
-            try:
-                vocal_sfx_p, music_p = process_single_file(
-                    segment_path, seg_out_dir,
-                    cb=progress_callback,
-                    start_p=int(20 + (i / total_segs) * 65),
-                    end_p=int(20 + ((i + 1) / total_segs) * 65),
-                    label=f"Roformer Seg {i+1}/{total_segs}"
-                )
-            except Exception as e:
-                print(f"\n{Fore.RED}{'='*70}")
-                print(f"[FATAL CHUNK ERROR] Roformer BGM failed on Segment {i+1}/{len(split_audio_paths)}")
-                print(f"Segment Audio File: {segment_path}")
-                print(f"Error Details: {e}")
-                print(f"{'='*70}{Style.RESET_ALL}\n")
-                raise RuntimeError(f"Roformer failed on segment {i+1} ({os.path.basename(segment_path)}): {e}")
-
-            if not (vocal_sfx_p and os.path.exists(vocal_sfx_p) and os.path.getsize(vocal_sfx_p) > 1024):
-                raise RuntimeError(f"Roformer produced empty output on segment {i+1} ({os.path.basename(segment_path)})")
-
-            return i, vocal_sfx_p, music_p
-
-        results = [None] * len(split_audio_paths)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(process_segment_task, (i, p)): (i, p) for i, p in enumerate(split_audio_paths)}
-            with tqdm(total=len(split_audio_paths), desc="Roformer Parallel", unit="seg") as pbar:
-                for future in as_completed(futures):
-                    i, vocal_sfx_p, music_p = future.result()
-                    results[i] = (vocal_sfx_p, music_p)
-                    pbar.update(1)
-                    completed_count += 1
-                    if progress_callback:
-                        progress_callback(f"Roformer Segments ({completed_count}/{total_segs})", int(20 + (completed_count / total_segs) * 65))
-
-        vocal_paths = [r[0] for r in results if r and r[0]]
-        music_paths = [r[1] for r in results if r and r[1]]
-
-        # Concatenate vocal / dialogue+SFX segments
-        concat_list_path = os.path.join(temp_segments_dir, "roformer_concat_list.txt")
-        with open(concat_list_path, "w", encoding="utf-8") as f:
-            for p in vocal_paths:
-                f.write(f"file '{os.path.abspath(p)}'\n")
-
-        final_dialogue_wav = os.path.join(temp_segments_dir, "concatenated_roformer_dialogue_sfx.wav")
-        ffmpeg_concat_cmd = [FFMPEG_EXE, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", concat_list_path, "-c", "copy", final_dialogue_wav]
-        tracked_run(ffmpeg_concat_cmd, check=True)
-
-        final_music_wav = None
-        if want_instrumental and len(music_paths) == len(split_audio_paths):
-            music_concat_list_path = os.path.join(temp_segments_dir, "roformer_concat_music_list.txt")
-            with open(music_concat_list_path, "w", encoding="utf-8") as f:
-                for p in music_paths:
-                    f.write(f"file '{os.path.abspath(p)}'\n")
-            final_music_wav = os.path.join(temp_segments_dir, "concatenated_roformer_music.wav")
-            ffmpeg_music_concat = [FFMPEG_EXE, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", music_concat_list_path, "-c", "copy", final_music_wav]
-            try:
-                tracked_run(ffmpeg_music_concat, check=True)
-            except Exception:
-                final_music_wav = None
-
-        print(f"\n{Fore.GREEN}[OK] All {len(vocal_paths)} Roformer BGM segments joined successfully.{Style.RESET_ALL}")
-        return final_dialogue_wav, final_music_wav, temp_segments_dir
-
-    else:
-        # Single file processing
-        vocal_sfx_p, music_p = process_single_file(
-            temp_audio_wav_path, output_base_dir,
-            cb=progress_callback,
-            start_p=20, end_p=85,
-            label="Roformer BGM"
-        )
-        return vocal_sfx_p, (music_p if want_instrumental else None), None
+    # Single file processing
+    vocal_sfx_p, music_p = process_single_file(
+        temp_audio_wav_path, output_base_dir,
+        cb=progress_callback,
+        start_p=20, end_p=85,
+        label="Roformer BGM",
+        target_device=device_str
+    )
+    return vocal_sfx_p, (music_p if want_instrumental else None), None

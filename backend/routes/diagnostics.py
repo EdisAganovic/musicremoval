@@ -147,13 +147,14 @@ def _check_cuda():
             cuda_info["devices"] = []
             for i in range(torch.cuda.device_count()):
                 props = torch.cuda.get_device_properties(i)
+                total_mem = getattr(props, "total_memory", None) or getattr(props, "total_mem", 0)
                 cuda_info["devices"].append({
                     "index": i,
                     "name": props.name,
-                    "total_memory_gb": round(props.total_mem / (1024**3), 2),
+                    "total_memory_gb": round(total_mem / (1024**3), 2),
                     "major": props.major,
                     "minor": props.minor,
-                    "multi_processor_count": props.multi_processor_count,
+                    "multi_processor_count": getattr(props, "multi_processor_count", "N/A"),
                 })
             cuda_info["memory_allocated_gb"] = round(torch.cuda.memory_allocated() / (1024**3), 3)
             cuda_info["memory_reserved_gb"] = round(torch.cuda.memory_reserved() / (1024**3), 3)

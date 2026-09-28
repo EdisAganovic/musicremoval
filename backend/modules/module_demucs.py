@@ -1,34 +1,8 @@
 """
-MODULE: module_demucs.py - Demucs AI MODEL WRAPPER
+MODULE: module_demucs.py - Demucs AI MODEL WRAPPER (MULTI-GPU ACCELERATED)
 
 ROLE: Separates vocals using Facebook's Demucs (htdemucs model)
-
-RESPONSIBILITIES:
-  - Runs Demucs source separation on audio files
-  - Splits audio >10min into 600s segments for parallel processing
-  - Handles OOM prevention via segmentation
-  - Creates silence fallback on model failure
-
-KEY FUNCTIONS:
-  separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, 
-                       base_audio_name_no_ext, max_workers) → tuple
-    - Returns: (path_to_vocal_wav, temp_segments_dir)
-    - max_workers: Parallel segment processing (default: 2)
-
-SEGMENTATION STRATEGY:
-  - Files ≤10min: Process directly
-  - Files >10min: Split into 600s chunks, process in parallel, concatenate
-
-OUTPUT:
-  - Saves to demucs_out/htdemucs/<basename>/vocals.wav
-  - Temp segments stored in _temp/ (caller responsible for cleanup)
-
-DEPENDENCIES:
-  - module_ffmpeg: get_audio_duration(), FFMPEG_EXE for splitting/concatenation
-
-MODEL:
-  - Uses htdemucs (hybrid transformer Demucs)
-  - Command: python -m demucs.separate -n htdemucs -o <output> <input>
+      Supports multi-GPU segment distribution across available CUDA devices (e.g. cuda:0 & cuda:1).
 """
 import os
 import subprocess
@@ -38,34 +12,47 @@ import shutil
 from colorama import Fore, Style
 from tqdm import tqdm
 from module_ffmpeg import get_audio_duration, FFMPEG_EXE, split_audio_into_segments
+from module_cuda import get_available_cuda_devices
 
-# Use tracked subprocess to prevent zombie processes on app exit
 try:
     from services.process_manager import tracked_run
 except ImportError:
-    # Fallback if running standalone (e.g. from CLI main.py)
     tracked_run = subprocess.run
 
-def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext, max_workers=4, pre_split_segments=None, want_instrumental=False):
+
+def separate_with_demucs(
+    temp_audio_wav_path,
+    demucs_base_out_path,
+    base_audio_name_no_ext,
+    max_workers=None,
+    pre_split_segments=None,
+    want_instrumental=False,
+    device=None
+):
     """
     Separates vocals using Demucs (htdemucs model).
-    If audio is > 10 min, it splits the file into segments, processes them in parallel, and joins them back.
+    If audio is > 10 min, it splits the file into segments, processes them in parallel across
+    all available GPUs (cuda:0, cuda:1, etc.), and joins them back.
 
     Args:
         temp_audio_wav_path: Path to the source WAV file.
         demucs_base_out_path: Directory to store Demucs output.
         base_audio_name_no_ext: Base name for identifying output segments.
-        max_workers: Number of parallel segments to process.
+        max_workers: Number of parallel segments to process (defaults to number of GPUs).
         pre_split_segments: Optional list of pre-split audio segment paths.
-        want_instrumental: If True, also produce a "no_vocals" (instrumental) track
-            via demucs's --two-stems mode. When False, behavior/output is identical
-            to before this option existed.
+        want_instrumental: If True, also produce a "no_vocals" (instrumental) track.
+        device: Explicit device override (e.g. 'cuda:0'). If None, dynamically distributes.
 
     Returns:
         tuple: (path_to_final_vocal_wav, path_to_final_instrumental_wav_or_None, temp_demucs_segments_dir)
     """
+    available_devices = get_available_cuda_devices()
+    if max_workers is None:
+        # Default parallel workers = number of available GPUs
+        max_workers = max(1, len(available_devices))
+
     print(f"\n{Fore.CYAN}3. Separating with Demucs (htdemucs model) into: {demucs_base_out_path}...{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}Using up to {max_workers} parallel workers for Demucs segments.{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}Available Devices: {', '.join(available_devices)} | Max Parallel Workers: {max_workers}{Style.RESET_ALL}")
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -80,13 +67,12 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
             print(f"{Fore.RED}Failed to get audio duration, cannot proceed with Demucs separation.{Style.RESET_ALL}")
             return None, None, None
 
-        DEMUCS_SEGMENT_DURATION_SECONDS = 600  # 10 minutes per segment for GPU efficiency
+        DEMUCS_SEGMENT_DURATION_SECONDS = 600  # 10 minutes per segment
 
         # Check if we should use pre-split segments or split ourselves
         if pre_split_segments:
             print(f"{Fore.GREEN}Using {len(pre_split_segments)} pre-split segments for Demucs.{Style.RESET_ALL}")
             split_audio_paths = pre_split_segments
-            # No need to create a temp dir for splitting, but we might need it for concat_list.txt
             temp_demucs_segments_dir = tempfile.mkdtemp(dir="_temp")
         elif audio_duration > DEMUCS_SEGMENT_DURATION_SECONDS:
             print(f"\n{Fore.YELLOW}Audio duration ({audio_duration:.2f}s) exceeds 10 minutes. Splitting audio for parallel Demucs...{Style.RESET_ALL}\n")
@@ -100,37 +86,43 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
             def process_segment(item):
                 i, segment_path = item
+                # Round-robin assign segments across available GPUs
+                seg_device = device if device else available_devices[i % len(available_devices)]
+
                 segment_base_name = os.path.splitext(os.path.basename(segment_path))[0]
                 segment_vocal_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "vocals.wav")
                 segment_no_vocals_path = os.path.join(demucs_base_out_path, "htdemucs", segment_base_name, "no_vocals.wav")
 
-                # Check if it already exists (maybe from a previous partial run?)
+                # Check if it already exists
                 if os.path.exists(segment_vocal_path) and os.path.getsize(segment_vocal_path) > 0:
                     return i, segment_vocal_path, (segment_no_vocals_path if os.path.exists(segment_no_vocals_path) else None)
 
                 from modules.module_ffmpeg_shared import _find_shared_bin_dir
                 shared_bin = _find_shared_bin_dir()
                 two_stems_args = ["--two-stems", "vocals"]
+                device_arg = ["-d", seg_device]
+
                 if shared_bin and sys.platform == "win32":
                     demucs_cmd = [
                         sys.executable, "-c",
                         f"import os; os.add_dll_directory(r'{shared_bin}'); from demucs.separate import main; main()",
-                        "-n", "htdemucs", *two_stems_args, "-o", demucs_base_out_path, segment_path
+                        "-n", "htdemucs", *two_stems_args, *device_arg, "-o", demucs_base_out_path, segment_path
                     ]
                 else:
-                    demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", *two_stems_args, "-o", demucs_base_out_path, segment_path]
+                    demucs_cmd = [sys.executable, "-m", "demucs.separate", "-n", "htdemucs", *two_stems_args, *device_arg, "-o", demucs_base_out_path, segment_path]
 
+                print(f"{Fore.CYAN}[Segment {i+1}/{len(split_audio_paths)}] Running on {seg_device}...{Style.RESET_ALL}")
                 try:
                     tracked_run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 except subprocess.CalledProcessError as e:
                     err_msg = e.stderr or e.stdout or str(e)
                     print(f"\n{Fore.RED}{'='*70}")
-                    print(f"[FATAL CHUNK ERROR] Demucs failed on Segment {i+1}/{len(split_audio_paths)}")
+                    print(f"[FATAL CHUNK ERROR] Demucs failed on Segment {i+1}/{len(split_audio_paths)} on {seg_device}")
                     print(f"Segment Audio File: {segment_path}")
                     print(f"Command Executed: {' '.join(demucs_cmd)}")
                     print(f"Error Details:\n{err_msg}")
                     print(f"{'='*70}{Style.RESET_ALL}\n")
-                    raise RuntimeError(f"Demucs failed on segment {i+1} ({os.path.basename(segment_path)}): {err_msg[:300]}")
+                    raise RuntimeError(f"Demucs failed on segment {i+1} on {seg_device}: {err_msg[:300]}")
                 except Exception as e:
                     print(f"\n{Fore.RED}[FATAL CHUNK ERROR] Demucs unexpected error on Segment {i+1}: {e}{Style.RESET_ALL}\n")
                     raise
@@ -146,12 +138,12 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 no_vocals = segment_no_vocals_path if (want_instrumental and os.path.exists(segment_no_vocals_path) and os.path.getsize(segment_no_vocals_path) > 0) else None
                 return i, segment_vocal_path, no_vocals
 
-            # Execute in parallel
+            # Execute in parallel across GPUs
             results = [None] * len(split_audio_paths)
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(process_segment, (i, path)): (i, path) for i, path in enumerate(split_audio_paths)}
 
-                with tqdm(total=len(split_audio_paths), desc="Demucs Parallel", unit="seg") as pbar:
+                with tqdm(total=len(split_audio_paths), desc="Demucs Multi-GPU", unit="seg") as pbar:
                     for future in as_completed(futures):
                         i, segment_path = futures[future]
                         idx, vocal_path, no_vocals_path = future.result()
@@ -187,7 +179,6 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 demucs_vocal_wav_path = final_demucs_vocals_temp_path
                 print(f"\n{Fore.GREEN}[OK] All {len(demucs_segment_vocal_paths)} Demucs vocal segments verified and joined successfully.{Style.RESET_ALL}")
 
-                # Same concatenation, for the instrumental/no_vocals segments (if requested and all present)
                 if want_instrumental and len(demucs_segment_no_vocals_paths) == len(demucs_segment_vocal_paths) and all(demucs_segment_no_vocals_paths):
                     no_vocals_concat_list_path = os.path.join(temp_demucs_segments_dir, "concat_list_no_vocals.txt")
                     with open(no_vocals_concat_list_path, "w") as f:
@@ -211,29 +202,31 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                     except subprocess.CalledProcessError as e:
                         print(f"{Fore.YELLOW}Warning: Failed to join instrumental segments, skipping instrumental output: {e}{Style.RESET_ALL}")
         else:
-            # Short file, just run directly
+            # Single chunk/short file execution
+            target_device = device if device else (available_devices[0] if available_devices else "cuda")
             from modules.module_ffmpeg_shared import _find_shared_bin_dir
             shared_bin = _find_shared_bin_dir()
             two_stems_args = ["--two-stems", "vocals"]
+            device_arg = ["-d", target_device]
+
             if shared_bin and sys.platform == "win32":
                 demucs_cmd = [
                     sys.executable, "-c",
                     f"import os; os.add_dll_directory(r'{shared_bin}'); from demucs.separate import main; main()",
-                    "-n", "htdemucs", *two_stems_args, "-o", demucs_base_out_path, temp_audio_wav_path
+                    "-n", "htdemucs", *two_stems_args, *device_arg, "-o", demucs_base_out_path, temp_audio_wav_path
                 ]
             else:
                 demucs_cmd = [
                     sys.executable, "-m", "demucs.separate",
-                    "-n", "htdemucs", *two_stems_args,
+                    "-n", "htdemucs", *two_stems_args, *device_arg,
                     "-o", demucs_base_out_path,
                     temp_audio_wav_path
                 ]
-            print(f"{Fore.MAGENTA}Executing: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
+            print(f"{Fore.MAGENTA}Executing Demucs on {target_device}: {' '.join(demucs_cmd)}\n{Style.RESET_ALL}")
             try:
                 tracked_run(demucs_cmd, check=True, capture_output=True, text=True, encoding='utf-8', errors='replace')
                 actual_name = os.path.splitext(os.path.basename(temp_audio_wav_path))[0]
                 
-                # Check expected locations
                 ht_dir = os.path.join(demucs_base_out_path, "htdemucs")
                 candidate_dirs = [
                     os.path.join(ht_dir, actual_name),
@@ -263,13 +256,10 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
                 print(f"{Fore.RED}Demucs failed!{Style.RESET_ALL}")
                 if e.stderr:
                     print(f"{Fore.RED}Demucs Error Output:\n{e.stderr}{Style.RESET_ALL}")
-
-                # Propagate the failure instead of writing a silence track that would
-                # later be mistaken for a successful (but silent) separation.
                 demucs_vocal_wav_path = None
                 raise
 
-            print(f"\n{Fore.GREEN}[OK] Demucs separation complete.\n{Style.RESET_ALL}")
+            print(f"\n{Fore.GREEN}[OK] Demucs separation complete on {target_device}.\n{Style.RESET_ALL}")
 
         if not demucs_vocal_wav_path or not os.path.exists(demucs_vocal_wav_path) or os.path.getsize(demucs_vocal_wav_path) == 0:
             print(f"{Fore.YELLOW}Warning: Demucs vocals not found or empty at {demucs_vocal_wav_path}.{Style.RESET_ALL}")
@@ -277,11 +267,9 @@ def separate_with_demucs(temp_audio_wav_path, demucs_base_out_path, base_audio_n
 
     except subprocess.CalledProcessError as e:
         print(f"{Fore.RED}Error with demucs separation: {e}{Style.RESET_ALL}")
-        # If there's a CalledProcessError, return None to indicate failure but allow process to continue
         return None, None, temp_demucs_segments_dir
     except Exception as e:
         print(f"{Fore.RED}Unexpected error with demucs separation: {e}{Style.RESET_ALL}")
-        # For other exceptions (like AssertionError from silence), return None to allow process to continue
         return None, None, temp_demucs_segments_dir
 
     return demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir

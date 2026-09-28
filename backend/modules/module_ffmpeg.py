@@ -566,12 +566,20 @@ def execute_super_keyframe_nvenc_export(
     temp_chunk_dir = tempfile.mkdtemp(dir="_temp", prefix="super_kf_")
     concat_list_path = os.path.join(temp_chunk_dir, "concat_list.txt")
     chunk_paths = [os.path.join(temp_chunk_dir, f"part_{i:03d}.mp4") for i in range(actual_chunks)]
-
     try:
-        def build_chunk_cmd(start_time, duration_limit, out_path):
+        from module_cuda import get_available_cuda_devices
+        cuda_devs = get_available_cuda_devices()
+
+        def build_chunk_cmd(chunk_idx, start_time, duration_limit, out_path):
+            # Select target GPU for this chunk
+            gpu_id = 0
+            if len(cuda_devs) > 1:
+                gpu_id = chunk_idx % len(cuda_devs)
+
             cmd = [
                 FFMPEG_EXE, "-loglevel", "error", "-y",
                 "-hwaccel", "cuda",
+                "-hwaccel_device", str(gpu_id),
             ]
             if start_time is not None:
                 cmd.extend(["-ss", f"{start_time:.3f}"])
@@ -589,6 +597,7 @@ def execute_super_keyframe_nvenc_export(
             cmd.extend([
                 "-vf", scale_filter,
                 "-c:v", "h264_nvenc",
+                "-gpu", str(gpu_id),
                 "-preset", "p4",
                 "-tune", "hq"
             ])
@@ -607,7 +616,7 @@ def execute_super_keyframe_nvenc_export(
         for i in range(actual_chunks):
             start_t = None if i == 0 else i * chunk_len
             dur_t = chunk_len if i < (actual_chunks - 1) else None
-            chunk_cmds.append((i, build_chunk_cmd(start_t, dur_t, chunk_paths[i])))
+            chunk_cmds.append((i, build_chunk_cmd(i, start_t, dur_t, chunk_paths[i])))
 
         def run_encode(chunk_idx, cmd):
             print(f"{Fore.MAGENTA}[Super Keyframe] Launching NVENC Chunk {chunk_idx + 1}/{actual_chunks}: {' '.join(cmd)}{Style.RESET_ALL}")

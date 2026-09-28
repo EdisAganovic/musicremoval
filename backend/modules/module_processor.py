@@ -682,34 +682,74 @@ def process_file(input_file, keep_temp=False, duration=None, progress_callback=N
             use_spleeter = model in ["spleeter", "both"] or str(model).startswith("spleeter")
             use_demucs = model in ["demucs", "both"] or "demucs" in str(model)
 
-            if use_spleeter:
-                print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
-                s_start = time.time()
-                update_progress("Running Spleeter", 20 if model == "both" else 15)
-                spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
-                    temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
-                    pre_split_segments=shared_segments, want_instrumental=export_instrumental,
-                    skip_docker_image=skip_docker_image
-                )
-                s_end = time.time()
-                timings['spleeter'] = s_end - s_start
-                print(f"{Fore.GREEN}Spleeter took {timings['spleeter']:.2f}s{Style.RESET_ALL}")
-            else:
-                print(f"{Fore.YELLOW}Skipping Spleeter based on model selection.{Style.RESET_ALL}")
+            # Multi-GPU / Concurrent Model Execution
+            from concurrent.futures import ThreadPoolExecutor
+            from core.gpu_pool import gpu_pool
 
-            if use_demucs:
-                print(f"{Fore.CYAN}Starting Demucs separation...{Style.RESET_ALL}")
-                d_start = time.time()
-                update_progress("Running Demucs", 50 if model == "both" else 15)
-                demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir = separate_with_demucs(
-                    temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext,
-                    max_workers=demucs_workers, pre_split_segments=shared_segments, want_instrumental=export_instrumental
-                )
-                d_end = time.time()
-                timings['demucs'] = d_end - d_start
-                print(f"{Fore.GREEN}Demucs took {timings['demucs']:.2f}s{Style.RESET_ALL}")
+            if use_spleeter and use_demucs:
+                print(f"\n{Fore.CYAN}[Multi-GPU / Concurrent Mode] Executing Demucs (GPU 0) and Spleeter (GPU 1 / Pool) simultaneously...{Style.RESET_ALL}")
+                update_progress("Running Demucs & Spleeter in Parallel", 35)
+                both_start = time.time()
+
+                def run_spleeter_job():
+                    s_t0 = time.time()
+                    vocal_p, inst_p, s_temp = separate_with_spleeter(
+                        temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
+                        pre_split_segments=shared_segments, want_instrumental=export_instrumental,
+                        skip_docker_image=skip_docker_image
+                    )
+                    timings['spleeter'] = time.time() - s_t0
+                    print(f"{Fore.GREEN}[Parallel] Spleeter took {timings['spleeter']:.2f}s{Style.RESET_ALL}")
+                    return vocal_p, inst_p, s_temp
+
+                def run_demucs_job():
+                    d_t0 = time.time()
+                    vocal_p, inst_p, d_temp = separate_with_demucs(
+                        temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext,
+                        max_workers=demucs_workers, pre_split_segments=shared_segments, want_instrumental=export_instrumental
+                    )
+                    timings['demucs'] = time.time() - d_t0
+                    print(f"{Fore.GREEN}[Parallel] Demucs took {timings['demucs']:.2f}s{Style.RESET_ALL}")
+                    return vocal_p, inst_p, d_temp
+
+                with ThreadPoolExecutor(max_workers=2) as parallel_exec:
+                    f_spleeter = parallel_exec.submit(run_spleeter_job)
+                    f_demucs = parallel_exec.submit(run_demucs_job)
+
+                    spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = f_spleeter.result()
+                    demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir = f_demucs.result()
+
+                print(f"{Fore.GREEN}Combined Demucs + Spleeter parallel run finished in {time.time() - both_start:.2f}s{Style.RESET_ALL}")
+
             else:
-                print(f"{Fore.YELLOW}Skipping Demucs based on model selection.{Style.RESET_ALL}")
+                if use_spleeter:
+                    print(f"{Fore.CYAN}Starting Spleeter separation...{Style.RESET_ALL}")
+                    s_start = time.time()
+                    update_progress("Running Spleeter", 15)
+                    spleeter_vocal_wav_path, spleeter_instrumental_wav_path, temp_spleeter_segments_dir = separate_with_spleeter(
+                        temp_audio_wav_path, spleeter_out_path, base_audio_name_no_ext,
+                        pre_split_segments=shared_segments, want_instrumental=export_instrumental,
+                        skip_docker_image=skip_docker_image
+                    )
+                    s_end = time.time()
+                    timings['spleeter'] = s_end - s_start
+                    print(f"{Fore.GREEN}Spleeter took {timings['spleeter']:.2f}s{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.YELLOW}Skipping Spleeter based on model selection.{Style.RESET_ALL}")
+
+                if use_demucs:
+                    print(f"{Fore.CYAN}Starting Demucs separation...{Style.RESET_ALL}")
+                    d_start = time.time()
+                    update_progress("Running Demucs", 15)
+                    demucs_vocal_wav_path, demucs_instrumental_wav_path, temp_demucs_segments_dir = separate_with_demucs(
+                        temp_audio_wav_path, demucs_base_out_path, base_audio_name_no_ext,
+                        max_workers=demucs_workers, pre_split_segments=shared_segments, want_instrumental=export_instrumental
+                    )
+                    d_end = time.time()
+                    timings['demucs'] = d_end - d_start
+                    print(f"{Fore.GREEN}Demucs took {timings['demucs']:.2f}s{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.YELLOW}Skipping Demucs based on model selection.{Style.RESET_ALL}")
 
             # Step 4: Logic for Aligning and Mixing the results
             print(f"{Fore.CYAN}4. Aligning and combining Spleeter (WAV) and Demucs (WAV) vocals...{Style.RESET_ALL}\n")
